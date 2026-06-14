@@ -436,7 +436,6 @@ src/
 
 ## 8. Out of Scope — MVP
 
-- Built-in web scraper (external Python process; app only consumes its output via `POST /api/scrape`)
 - Multi-user authentication
 - Email or calendar integrations
 - Resume builder or cover letter generator
@@ -446,14 +445,187 @@ src/
 
 ---
 
+## 10. Python Scraper
+
+The scraper is a standalone Python process (`scraper/`) that runs incrementally and POSTs each job to `POST /api/scrape`. It is the sole write path for scraped data; the Next.js app never pulls directly from job boards.
+
+---
+
+### 10.1 Architecture Overview
+
+```
+scraper/
+  main.py              — CLI entry point (argparse); orchestrates per-platform runs
+  config.py            — Loads scraper/config.yml (platforms, keywords, max_pages)
+  state.py             — Reads/writes scraper/state.json (incremental cursor)
+  platforms/
+    base.py            — Abstract BaseScraper: stealth browser setup, POST helper
+    linkedin.py        — LinkedIn Jobs scraper
+    indeed.py          — Indeed scraper
+    glassdoor.py       — Glassdoor scraper
+    dice.py            — Dice scraper
+  dedup.py             — Local dedup before hitting the API
+  models.py            — Pydantic models matching the POST /api/scrape payload schema
+  requirements.txt
+  config.yml           — User-editable: platforms, keywords, location, max_pages
+  state.json           — Auto-managed: last-seen job IDs and cursors per platform (gitignored)
+```
+
+---
+
+### 10.2 Incremental Scraping
+
+Each platform stores a cursor in `state.json` so re-runs only fetch new listings:
+
+| Platform | Cursor Strategy |
+|----------|----------------|
+| LinkedIn | Last `date_posted` seen per search query |
+| Indeed | `start` offset + last `external_job_id` batch |
+| Glassdoor | Last page cursor / job ID set |
+| Dice | `datePosted` filter incremented from last run |
+
+On each run, the scraper:
+1. Loads `state.json` to determine where to resume
+2. Scrapes new pages until it hits a job already in `state.json` (or reaches `max_pages`)
+3. POSTs new jobs to the API; updates `state.json` after each successful batch
+4. Exits cleanly — safe to SIGINT mid-run; next run resumes from last saved cursor
+
+**Run modes:**
+```bash
+python main.py                     # All platforms, incremental
+python main.py --platform linkedin  # Single platform
+python main.py --full-refresh       # Ignore cursors, re-scrape everything
+python main.py --dry-run            # Scrape + print payloads; don't POST
+```
+
+---
+
+### 10.3 Bot Detection Bypass
+
+The scraper uses **Playwright** with **playwright-stealth** to render JavaScript-heavy job boards in a real browser context. Key evasion measures:
+
+| Technique | Implementation |
+|-----------|---------------|
+| Stealth browser fingerprint | `playwright-stealth` patches `navigator`, WebGL, canvas fingerprint, and plugin lists |
+| Residential proxy rotation | Proxy URL injected via `config.yml`; rotated per-request via proxy pool |
+| Human-like delays | `random.uniform(2.5, 6.0)` seconds between page navigations; `random.uniform(0.5, 1.5)` between actions |
+| Random user-agent | Rotated from a curated list of real Chrome UA strings per session |
+| Headed mode | Default `headless=False` in dev; `headless=True` only in CI/cron with `--headless` flag |
+| Viewport & locale randomization | Random from common screen resolutions and `en-US`/`en-GB` locales |
+| Session cookies | Persisted to `scraper/session/{platform}.json` so login sessions survive between runs |
+| Rate limiting | Max 1 request per domain per 4 seconds; exponential backoff on 429/503 |
+
+> **Proxy note:** A proxy is strongly recommended for sustained scraping. The scraper works without one in development but will be blocked on sustained runs. Residential proxies (e.g., Bright Data, Oxylabs) provide the best results. Configure in `config.yml` under `proxy.url`.
+
+---
+
+### 10.4 Deduplication
+
+Dedup happens at two layers:
+
+**Layer 1 — Local (before API call):**
+- `state.json` maintains a rolling set of the last 10,000 `external_job_id` values per platform
+- Any job whose `external_job_id` is in the local set is skipped without an API call
+- On `--full-refresh`, the local set is cleared
+
+**Layer 2 — API-side (in `POST /api/scrape`):**
+- Primary: `UNIQUE(external_job_id, source_platform)` — exact match upsert
+- Secondary: fuzzy match on `(company_id, normalized_job_title, job_location)` within a 7-day window — catches cross-platform reposts of the same role
+- Normalized title comparison strips seniority prefixes (`Senior`, `Sr.`, `Lead`) and suffixes (`- Remote`, `(Contract)`) before comparing
+- Response `{ action: 'duplicate_skipped' }` is logged but not retried
+
+**Dedup guarantee:** A job must pass both layers to be inserted. Re-running the scraper on the same day is safe and idempotent.
+
+---
+
+### 10.5 Configuration (`scraper/config.yml`)
+
+```yaml
+api:
+  base_url: http://localhost:3000
+  key: changeme             # Must match API_KEY env var in Next.js app
+
+proxy:
+  enabled: false
+  url: http://user:pass@proxy-host:port   # Residential proxy URL
+
+platforms:
+  linkedin:
+    enabled: true
+    queries:
+      - "data engineer"
+      - "analytics engineer"
+    location: "United States"
+    remote_only: false
+    max_pages: 5
+
+  indeed:
+    enabled: true
+    queries:
+      - "data engineer"
+    location: "Remote"
+    max_pages: 5
+
+  glassdoor:
+    enabled: false
+    queries: []
+    max_pages: 3
+
+  dice:
+    enabled: false
+    queries: []
+    max_pages: 3
+
+scraper:
+  headless: false           # true for cron/CI
+  min_delay_s: 2.5
+  max_delay_s: 6.0
+  max_retries: 3
+```
+
+---
+
+### 10.6 Python Dependencies (`scraper/requirements.txt`)
+
+```
+playwright>=1.44
+playwright-stealth>=1.0
+pydantic>=2.0
+httpx>=0.27          # Async HTTP client for API POSTs
+PyYAML>=6.0
+python-dotenv>=1.0
+```
+
+Install and set up:
+```bash
+cd scraper
+pip install -r requirements.txt
+playwright install chromium
+```
+
+---
+
+### 10.7 Scheduling
+
+For automated incremental runs, add a cron entry (Linux/Mac) or Task Scheduler job (Windows):
+
+```cron
+# Run every 6 hours
+0 */6 * * * cd /path/to/scraper && python main.py >> logs/scraper.log 2>&1
+```
+
+Or use the GitHub Actions workflow (`.github/workflows/scrape.yml`) if the app is deployed — it runs `python main.py --headless` on a schedule and POSTs to the deployed API.
+
+---
+
 ## 9. Open Questions
 
 | # | Question | Status |
 |---|----------|--------|
 | Q1 | Store salary as integer cents or decimal? Cents avoids floating-point issues but requires display division. | Open |
-| Q2 | Will the scraper run on a cron schedule or on demand? Affects indexing strategy for `last_scraped_at`. | Open |
+| Q2 | Will the scraper run on a cron schedule or on demand? Affects indexing strategy for `last_scraped_at`. | **Resolved** — cron every 6h (see §10.7); `last_scraped_at` index recommended. |
 | Q3 | Should `job_description` have a PostgreSQL `tsvector` GIN index for full-text search? Recommended if description search is a primary filter. | Open |
-| Q4 | How should cross-platform duplicates (same job on LinkedIn and Indeed) be surfaced — merged into one row or shown as related? | Open |
+| Q4 | How should cross-platform duplicates (same job on LinkedIn and Indeed) be surfaced — merged into one row or shown as related? | **Resolved** — merged into one row via fuzzy match (§10.4 Layer 2); first platform wins as canonical source. |
 | Q5 | Should the skill gap tracker compare against a static user skill list or parse a resume upload? | Open |
 
 ---
@@ -502,4 +674,4 @@ src/
 
 ---
 
-*End of Document — Job Search Tracker PRD v1.0 — June 2026*
+*End of Document — Job Search Tracker PRD v1.1 — June 2026*
