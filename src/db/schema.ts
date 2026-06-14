@@ -6,6 +6,7 @@ import {
   boolean,
   integer,
   smallint,
+  numeric,
   char,
   date,
   timestamp,
@@ -68,6 +69,10 @@ export const companySizeEnum = pgEnum("company_size_enum", [
   "5000+",
 ]);
 
+// "annual" → salary_min/salary_max (integer cents)
+// "hourly" → hourly_rate_min/hourly_rate_max (numeric dollars)
+export const salaryTypeEnum = pgEnum("salary_type_enum", ["annual", "hourly"]);
+
 // ── companies ────────────────────────────────────────────────────────────────
 
 export const companies = pgTable("companies", {
@@ -99,8 +104,19 @@ export const jobs = pgTable(
     jobType: jobTypeEnum("job_type"),
     experienceLevel: experienceLevelEnum("experience_level"),
     jobDescription: text("job_description"),
-    salaryMin: integer("salary_min"), // cents
-    salaryMax: integer("salary_max"), // cents
+    // Salary — raw fields depend on salary_type:
+    //   annual → salary_min / salary_max (integer cents, e.g. $80k = 8_000_000)
+    //   hourly → hourly_rate_min / hourly_rate_max (numeric dollars, e.g. 45.50)
+    // annual_equivalent_* is always populated on ingest for unified filtering/analytics:
+    //   annual jobs: copy of salary_min / salary_max
+    //   hourly jobs: hourly_rate × 2080 × 100
+    salaryType: salaryTypeEnum("salary_type"),
+    salaryMin: integer("salary_min"),
+    salaryMax: integer("salary_max"),
+    hourlyRateMin: numeric("hourly_rate_min", { precision: 10, scale: 2 }),
+    hourlyRateMax: numeric("hourly_rate_max", { precision: 10, scale: 2 }),
+    annualEquivalentMin: integer("annual_equivalent_min"),
+    annualEquivalentMax: integer("annual_equivalent_max"),
     salaryText: text("salary_text"),
     salaryCurrency: char("salary_currency", { length: 3 }).default("USD"),
     hasApplied: boolean("has_applied").default(false),
@@ -131,7 +147,12 @@ export const jobs = pgTable(
     index("jobs_is_active_idx").on(t.isActive),
     index("jobs_source_platform_idx").on(t.sourcePlatform),
     index("jobs_priority_idx").on(t.priority),
-    // GIN index for full-text search on job_description — add via raw migration after generate
+    index("jobs_last_scraped_at_idx").on(t.lastScrapedAt),
+    // GIN full-text index must be added as a raw SQL migration — Drizzle doesn't
+    // support functional indexes. After `npm run db:generate`, append this to the
+    // generated migration file:
+    //   CREATE INDEX jobs_description_fts_idx ON jobs
+    //   USING GIN (to_tsvector('english', coalesce(job_description, '')));
   ]
 );
 
@@ -212,6 +233,46 @@ export const jobCertifications = pgTable(
   },
   (t) => [primaryKey({ columns: [t.jobId, t.certificationId] })]
 );
+
+// ── user_skills ───────────────────────────────────────────────────────────────
+// One row per skill in the skills table. User toggles has_skill in Settings.
+// Match % per job = COUNT(job_skills where skill in user_skills where has_skill=true and is_required=true)
+//                 / COUNT(job_skills where is_required=true)
+
+export const userSkills = pgTable(
+  "user_skills",
+  {
+    skillId: integer("skill_id")
+      .notNull()
+      .references(() => skills.id, { onDelete: "cascade" }),
+    hasSkill: boolean("has_skill").default(false).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.skillId] })]
+);
+
+// ── job_status_history ────────────────────────────────────────────────────────
+// Written every time interview_stage changes. Powers the recent activity feed.
+
+export const jobStatusHistory = pgTable("job_status_history", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id")
+    .notNull()
+    .references(() => jobs.id, { onDelete: "cascade" }),
+  fromStage: interviewStageEnum("from_stage"),
+  toStage: interviewStageEnum("to_stage").notNull(),
+  changedAt: timestamp("changed_at", { withTimezone: true }).defaultNow(),
+});
+
+// ── resume_versions ───────────────────────────────────────────────────────────
+// Labels-only — no file storage. jobs.resume_version stores the label string.
+
+export const resumeVersions = pgTable("resume_versions", {
+  id: serial("id").primaryKey(),
+  label: text("label").unique().notNull(),
+  date: date("date"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
 
 // ── contacts ──────────────────────────────────────────────────────────────────
 

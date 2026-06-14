@@ -88,11 +88,16 @@ The existing schema is well-structured for manual tracking. To support web scrap
 
 | Field | Type | Why Needed |
 |-------|------|------------|
-| `salary_min` | integer (cents) | Structured salary for range filtering & analytics |
-| `salary_max` | integer (cents) | Upper bound of posted salary range |
-| `salary_text` | text | Raw string from posting (e.g. `$80k–$120k/yr`) for display |
+| `salary_min` | integer (cents) | Annual salary lower bound stored as cents (e.g. $80,000 → 8000000) |
+| `salary_max` | integer (cents) | Annual salary upper bound stored as cents |
+| `hourly_rate_min` | numeric(10,2) | Hourly rate lower bound stored as decimal dollars (e.g. 45.50) |
+| `hourly_rate_max` | numeric(10,2) | Hourly rate upper bound stored as decimal dollars |
+| `annual_equivalent_min` | integer (cents) | Computed on ingest: hourly_rate_min × 2080 × 100. NULL for annual jobs (salary_min is used directly). Enables unified salary range filtering. |
+| `annual_equivalent_max` | integer (cents) | Computed on ingest: hourly_rate_max × 2080 × 100. NULL for annual jobs. |
+| `salary_text` | text | Raw string from posting (e.g. `$80k–$120k/yr` or `$45–$55/hr`) for display |
 | `salary_currency` | char(3) DEFAULT `'USD'` | ISO currency code for multi-region support |
-| `job_description` | text | Full scraped text — needed for display and NLP tag extraction |
+| `salary_type` | salary_type_enum | `annual` or `hourly` — determines which pair of raw fields is populated |
+| `job_description` | text | Full scraped text — needed for display and NLP tag extraction. Has GIN tsvector index for full-text search. |
 | `source_platform` | source_platform_enum | Origin: `linkedin`, `indeed`, `glassdoor`, `dice`, `lever`, `greenhouse`, `workday`, `direct`, `other` |
 | `external_job_id` | text | Platform job ID — enables deduplication on re-scrape |
 | `job_type` | job_type_enum | `full_time`, `part_time`, `contract`, `internship`, `temp`, `freelance` |
@@ -204,7 +209,7 @@ Landing page with an at-a-glance view of the entire job search.
 
 **Recent Activity Feed**
 - Last 10 jobs added (`date_found DESC`)
-- Last 5 status changes (`updated_at DESC` where `interview_stage` changed)
+- Last 5 status changes — sourced from `job_status_history` table (`changed_at DESC`)
 
 > **US-01** — As a job seeker, I want to see my full pipeline at a glance when I open the app.
 > - KPI cards load within 1 second
@@ -237,7 +242,7 @@ Filterable, sortable, paginated table of all jobs.
 - Platform: multi-select `source_platform`
 - Job Type and Experience Level: multi-select
 - Remote toggle, Security Clearance toggle
-- Salary range: dual slider
+- Salary range: unified dual slider in annual terms. For hourly jobs, filters against `annual_equivalent_min`/`annual_equivalent_max` (hourly × 2080). A "Salary Type" toggle (All / Annual / Hourly) lets the user restrict to one type.
 - Skills: tag multi-select (AND logic by default, OR toggle)
 - Date range: `date_posted` or `date_found`
 - Priority: minimum threshold slider
@@ -296,7 +301,7 @@ Trend analysis across the full dataset with date-range and platform filters.
 | Chart | Description |
 |-------|-------------|
 | Skill Demand Over Time | Line chart — top 10 skills by month over `date_posted` |
-| Salary Distribution | Box-and-whisker by `job_type` and `experience_level` |
+| Salary Distribution | Box-and-whisker by `job_type` and `experience_level`. Uses `annual_equivalent_min`/`annual_equivalent_max` for all jobs (hourly normalized to annual via × 2080). Y-axis labeled in $k/yr. |
 | Application Response Rate | % of applied jobs with `heard_back = true`, by platform |
 | Platform Breakdown | Pie chart of jobs by `source_platform` |
 | Remote vs On-site Trend | Stacked area by week over `date_found` |
@@ -322,8 +327,8 @@ List of all companies with job counts and salary aggregates. Company detail page
 
 ### 5.7 Settings `/settings`
 
-- **Resume Versions:** manage named resume variants with label, date, and notes
-- **Skill Gap Tracker:** enter your own skills; system shows match % per saved job
+- **Resume Versions:** labels-only table — name, date, and notes. No file upload. The `resume_version` field on a job stores the label string as a reference. Managed via a `resume_versions` table (`id`, `label`, `date`, `notes`).
+- **Skill Gap Tracker:** displays every skill and technology extracted from saved job listings. Each row shows the skill name, how many jobs require it, and a toggle for "I have this skill." The user's skill list is stored in a `user_skills` table (static, user-managed). A match percentage is computed per job: `(required skills user has) / (total required skills) × 100`.
 - **Scraper Webhook Config:** display `POST /api/scrape` URL and API key
 - **Export:** full dataset download as CSV or JSON
 
@@ -363,7 +368,7 @@ All routes live under `/api/` as Next.js Route Handlers. JSON request and respon
 | `job_link` | Yes | Canonical URL to posting |
 | `job_location` | No | |
 | `is_remote` | No | Defaults false |
-| `job_description` | No | Full text — API extracts tags if provided |
+| `job_description` | No | Full text — `POST /api/scrape` runs server-side tag extraction if `skills`/`software`/`keywords`/`certifications` arrays are absent |
 | `date_posted` | No | ISO date string |
 | `salary_text` | No | Raw salary string; API parses to `salary_min`/`salary_max` if recognizable |
 | `salary_min` / `salary_max` | No | Override parsed salary |
@@ -553,8 +558,12 @@ platforms:
   linkedin:
     enabled: true
     queries:
-      - "data engineer"
-      - "analytics engineer"
+      - "software engineer"
+      - "platform engineer"
+      - "devops engineer"
+      - "site reliability engineer"
+      - "machine learning engineer"
+      - "AI engineer"
     location: "United States"
     remote_only: false
     max_pages: 5
@@ -562,7 +571,10 @@ platforms:
   indeed:
     enabled: true
     queries:
-      - "data engineer"
+      - "software engineer"
+      - "devops engineer"
+      - "machine learning engineer"
+      - "AI engineer"
     location: "Remote"
     max_pages: 5
 
@@ -622,11 +634,11 @@ Or use the GitHub Actions workflow (`.github/workflows/scrape.yml`) if the app i
 
 | # | Question | Status |
 |---|----------|--------|
-| Q1 | Store salary as integer cents or decimal? Cents avoids floating-point issues but requires display division. | Open |
+| Q1 | Store salary as integer cents or decimal? Cents avoids floating-point issues but requires display division. | **Resolved** — annual salaries stored as integer cents (`salary_min`/`salary_max`); hourly rates stored as `numeric(10,2)` (`hourly_rate_min`/`hourly_rate_max`). On ingest, hourly is normalized to annual equivalent cents (`× 2080 × 100`) in `annual_equivalent_min`/`annual_equivalent_max` for unified filtering and analytics. |
 | Q2 | Will the scraper run on a cron schedule or on demand? Affects indexing strategy for `last_scraped_at`. | **Resolved** — cron every 6h (see §10.7); `last_scraped_at` index recommended. |
-| Q3 | Should `job_description` have a PostgreSQL `tsvector` GIN index for full-text search? Recommended if description search is a primary filter. | Open |
+| Q3 | Should `job_description` have a PostgreSQL `tsvector` GIN index for full-text search? Recommended if description search is a primary filter. | **Resolved** — yes; add via raw SQL migration after `db:generate`: `CREATE INDEX jobs_description_search_idx ON jobs USING GIN (to_tsvector('english', coalesce(job_description, '')));` |
 | Q4 | How should cross-platform duplicates (same job on LinkedIn and Indeed) be surfaced — merged into one row or shown as related? | **Resolved** — merged into one row via fuzzy match (§10.4 Layer 2); first platform wins as canonical source. |
-| Q5 | Should the skill gap tracker compare against a static user skill list or parse a resume upload? | Open |
+| Q5 | Should the skill gap tracker compare against a static user skill list or parse a resume upload? | **Resolved** — static user list. All skills/technologies from job listings are displayed in Settings; user toggles which ones they have. Stored in `user_skills` table (`skill_id` FK, `has_skill boolean`). Match % = required skills user has ÷ total required skills per job. |
 
 ---
 
@@ -645,8 +657,11 @@ Or use the GitHub Actions workflow (`.github/workflows/scrape.yml`) if the app i
 | `job_type` | job_type_enum | **NEW** |
 | `experience_level` | experience_level_enum | **NEW** |
 | `job_description` | text | **NEW** |
-| `salary_min` | integer (cents) | **NEW** |
-| `salary_max` | integer (cents) | **NEW** |
+| `salary_min` | integer (cents) | **NEW** — annual only |
+| `salary_max` | integer (cents) | **NEW** — annual only |
+| `hourly_rate_min` | numeric(10,2) | **NEW** — hourly only |
+| `hourly_rate_max` | numeric(10,2) | **NEW** — hourly only |
+| `salary_type` | salary_type_enum | **NEW** — `annual` or `hourly` |
 | `salary_text` | text | **NEW** |
 | `salary_currency` | char(3) DEFAULT 'USD' | **NEW** |
 | `has_applied` | boolean | Existing |
@@ -670,8 +685,16 @@ Or use the GitHub Actions workflow (`.github/workflows/scrape.yml`) if the app i
 
 **Unique constraint:** `UNIQUE(external_job_id, source_platform) WHERE external_job_id IS NOT NULL`
 
-**Recommended indexes:** `(company_id)`, `(interview_stage)`, `(date_found DESC)`, `(is_active)`, `(source_platform)`, `(priority)`, GIN on `to_tsvector('english', job_description)`
+**Recommended indexes:** `(company_id)`, `(interview_stage)`, `(date_found DESC)`, `(is_active)`, `(source_platform)`, `(priority)`, `(last_scraped_at)`, GIN on `to_tsvector('english', coalesce(job_description, ''))`
+
+**New table — `user_skills`:**
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `skill_id` | int FK → skills | |
+| `has_skill` | boolean DEFAULT false | User toggles this in Settings |
+| PRIMARY KEY | `(skill_id)` | One row per skill |
 
 ---
 
-*End of Document — Job Search Tracker PRD v1.1 — June 2026*
+*End of Document — Job Search Tracker PRD v1.3 — June 2026*
