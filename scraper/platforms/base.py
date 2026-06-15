@@ -9,7 +9,6 @@ import httpx
 from ..config import Config
 from ..models import ScrapePayload, ScrapeResponse
 from ..state import ScraperState
-from ..dedup import filter_new
 
 SESSIONS_DIR = Path(__file__).parent.parent / "session"
 UA_LIST = [
@@ -99,7 +98,8 @@ class BaseScraper(ABC):
                 except (httpx.HTTPStatusError, httpx.RequestError) as e:
                     wait = 2 ** attempt
                     print(f"[WARN] POST failed (attempt {attempt+1}): {e}. Retrying in {wait}s")
-                    await asyncio.sleep(wait)
+                    if attempt < self.config.scraper.max_retries - 1:
+                        await asyncio.sleep(wait)
         return None
 
     async def run(self, full_refresh: bool = False) -> int:

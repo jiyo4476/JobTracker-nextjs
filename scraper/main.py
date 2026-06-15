@@ -27,7 +27,7 @@ async def run(args):
         if not cls:
             print(f"[ERROR] Unknown platform: {name}")
             continue
-        scraper = cls(config, state, dry_run=args.dry_run, headless=args.headless)
+        scraper = cls(config, state, dry_run=args.dry_run, headless=True if args.headless else None)
         try:
             count = await scraper.run(full_refresh=args.full_refresh)
             total += count

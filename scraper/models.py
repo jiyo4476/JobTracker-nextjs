@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Literal, Optional
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, Field
 
 
 class ScrapePayload(BaseModel):
@@ -29,10 +29,10 @@ class ScrapePayload(BaseModel):
         "entry", "mid", "senior", "lead", "executive"
     ]] = None
     security_clearance_req: bool = False
-    skills: list[str] = []
-    software: list[str] = []
-    keywords: list[str] = []
-    certifications: list[str] = []
+    skills: list[str] = Field(default_factory=list)
+    software: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    certifications: list[str] = Field(default_factory=list)
 
 
 class ScrapeResponse(BaseModel):

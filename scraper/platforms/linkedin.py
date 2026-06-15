@@ -13,11 +13,11 @@ class LinkedInScraper(BaseScraper):
     async def _scrape(self, context: BrowserContext, platform_cfg, full_refresh: bool) -> int:
         total = 0
         for query in platform_cfg.queries:
-            count = await self._scrape_query(context, query, platform_cfg)
+            count = await self._scrape_query(context, query, platform_cfg, full_refresh)
             total += count
         return total
 
-    async def _scrape_query(self, context, query: str, cfg) -> int:
+    async def _scrape_query(self, context, query: str, cfg, full_refresh: bool) -> int:
         page = await self._new_stealth_page(context)
         processed = 0
 

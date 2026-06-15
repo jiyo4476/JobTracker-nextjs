@@ -41,7 +41,9 @@ class ConcreteScraper(BaseScraper):
 def _make_scraper(enabled=True, dry_run=False) -> ConcreteScraper:
     import tempfile, pathlib
     cfg = _make_config(enabled)
-    state = ScraperState(path=pathlib.Path(tempfile.mktemp(suffix=".json")))
+    fd, tmp = tempfile.mkstemp(suffix=".json")
+    import os; os.close(fd)
+    state = ScraperState(path=pathlib.Path(tmp))
     return ConcreteScraper(cfg, state, dry_run=dry_run, headless=True)
 
 
@@ -87,7 +89,8 @@ async def test_post_job_retries_on_failure():
         call_count += 1
         raise httpx.RequestError("timeout")
 
-    with patch("httpx.AsyncClient") as MockClient:
+    with patch("httpx.AsyncClient") as MockClient, \
+         patch("scraper.platforms.base.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
         instance = AsyncMock()
         instance.__aenter__ = AsyncMock(return_value=instance)
         instance.__aexit__ = AsyncMock(return_value=False)
@@ -98,6 +101,8 @@ async def test_post_job_retries_on_failure():
 
     assert result is None
     assert call_count == scraper.config.scraper.max_retries
+    # sleep only between retries, not after the last one
+    assert mock_sleep.call_count == scraper.config.scraper.max_retries - 1
 
 
 @pytest.mark.asyncio
@@ -112,7 +117,8 @@ async def test_save_session_called_even_when_scrape_raises():
             raise RuntimeError("scrape exploded")
 
     cfg = _make_config()
-    state = ScraperState(path=pathlib.Path(tempfile.mktemp(suffix=".json")))
+    import os; fd, tmp = tempfile.mkstemp(suffix=".json"); os.close(fd)
+    state = ScraperState(path=pathlib.Path(tmp))
     scraper = FailingScraper(cfg, state, headless=True)
 
     mock_context = AsyncMock()
@@ -154,7 +160,8 @@ async def test_mark_seen_not_called_when_post_returns_none():
             return 1
 
     cfg = _make_config()
-    state = ScraperState(path=pathlib.Path(tempfile.mktemp(suffix=".json")))
+    import os; fd, tmp = tempfile.mkstemp(suffix=".json"); os.close(fd)
+    state = ScraperState(path=pathlib.Path(tmp))
     scraper = OneShotScraper(cfg, state, dry_run=True, headless=True)
 
     mock_context = AsyncMock()
