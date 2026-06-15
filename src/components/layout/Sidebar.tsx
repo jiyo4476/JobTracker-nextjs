@@ -15,7 +15,7 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname()
   return (
-    <aside className="w-60 min-h-screen bg-slate-900 text-slate-100 flex flex-col flex-shrink-0">
+    <aside aria-label="Main navigation" className="w-60 min-h-screen bg-slate-900 text-slate-100 flex flex-col flex-shrink-0">
       <div className="p-6 border-b border-slate-700">
         <h1 className="text-base font-bold">Job Tracker</h1>
         <p className="text-xs text-slate-400 mt-0.5">Personal search dashboard</p>
@@ -27,6 +27,7 @@ export function Sidebar() {
             <Link
               key={href}
               href={href}
+              aria-current={active ? 'page' : undefined}
               className={cn(
                 'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
                 active

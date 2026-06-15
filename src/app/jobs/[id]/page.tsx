@@ -2,7 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 
-export default function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: _id } = await params // eslint-disable-line @typescript-eslint/no-unused-vars
   return (
     <div className="p-8">
       <div className="flex items-start justify-between mb-6">

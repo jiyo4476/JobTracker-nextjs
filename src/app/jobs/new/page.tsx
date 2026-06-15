@@ -10,6 +10,7 @@ export default function NewJobPage() {
       <PageHeader title="Add Job" description="Manually add a job listing to track" />
       <Card>
         <CardContent className="pt-6 space-y-5">
+        <form action="/api/jobs" method="post">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Company *</label>
@@ -44,6 +45,7 @@ export default function NewJobPage() {
               Cancel
             </a>
           </div>
+        </form>
         </CardContent>
       </Card>
     </div>

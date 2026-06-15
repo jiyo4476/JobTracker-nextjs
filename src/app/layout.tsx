@@ -12,8 +12,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body className="flex h-screen bg-slate-50 overflow-hidden">
+        <Sidebar />
         <Providers>
-          <Sidebar />
           <main className="flex-1 overflow-y-auto">
             {children}
           </main>
