@@ -30,21 +30,26 @@ export async function GET(req: NextRequest) {
   const isActive = searchParams.get('is_active')
   if (isActive !== null) filters.push(eq(jobs.isActive, isActive === 'true'))
 
-  const salaryMin = searchParams.get('salary_min')
-  if (salaryMin) filters.push(gte(jobs.annualEquivalentMin, parseInt(salaryMin)))
+  const salaryMinRaw = searchParams.get('salary_min')
+  const salaryMinVal = salaryMinRaw ? parseInt(salaryMinRaw) : NaN
+  if (!isNaN(salaryMinVal)) filters.push(gte(jobs.annualEquivalentMin, salaryMinVal))
 
-  const salaryMax = searchParams.get('salary_max')
-  if (salaryMax) filters.push(lte(jobs.annualEquivalentMax, parseInt(salaryMax)))
+  const salaryMaxRaw = searchParams.get('salary_max')
+  const salaryMaxVal = salaryMaxRaw ? parseInt(salaryMaxRaw) : NaN
+  if (!isNaN(salaryMaxVal)) filters.push(lte(jobs.annualEquivalentMax, salaryMaxVal))
 
-  const priorityMin = searchParams.get('priority_min')
-  if (priorityMin) filters.push(gte(jobs.priority, parseInt(priorityMin) as Parameters<typeof gte>[1]))
+  const priorityMinRaw = searchParams.get('priority_min')
+  const priorityMinVal = priorityMinRaw ? parseInt(priorityMinRaw) : NaN
+  if (!isNaN(priorityMinVal)) filters.push(gte(jobs.priority, priorityMinVal as Parameters<typeof gte>[1]))
 
-  const q = searchParams.get('q')
+  const q = searchParams.get('q')?.slice(0, 200)
   if (q) {
+    // Escape LIKE special chars so user input doesn't accidentally match everything
+    const escaped = q.replace(/[%_\\]/g, (c) => `\\${c}`)
     filters.push(
       or(
-        ilike(jobs.jobTitle, `%${q}%`),
-        ilike(companies.name, `%${q}%`)
+        ilike(jobs.jobTitle, `%${escaped}%`),
+        ilike(companies.name, `%${escaped}%`)
       )
     )
   }
