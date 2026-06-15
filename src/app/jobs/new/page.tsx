@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -27,23 +28,23 @@ export default function NewJobPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Location</label>
-              <Input placeholder="e.g. Austin, TX or Remote" />
+              <label htmlFor="location" className="block text-sm font-medium text-slate-700 mb-1.5">Location</label>
+              <Input id="location" name="location" placeholder="e.g. Austin, TX or Remote" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Salary Range</label>
-              <Input placeholder="e.g. $120k–$160k/yr" />
+              <label htmlFor="salaryRange" className="block text-sm font-medium text-slate-700 mb-1.5">Salary Range</label>
+              <Input id="salaryRange" name="salaryRange" placeholder="e.g. $120k–$160k/yr" />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Job Description</label>
-            <Textarea placeholder="Paste the full job description here…" className="min-h-[180px]" />
+            <label htmlFor="jobDescription" className="block text-sm font-medium text-slate-700 mb-1.5">Job Description</label>
+            <Textarea id="jobDescription" name="jobDescription" placeholder="Paste the full job description here…" className="min-h-[180px]" />
           </div>
           <div className="flex gap-3 pt-2">
             <Button type="submit">Save Job</Button>
-            <a href="/jobs" className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 h-9 text-sm font-medium text-slate-900 hover:bg-slate-50 transition-colors">
+            <Link href="/jobs" className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 h-9 text-sm font-medium text-slate-900 hover:bg-slate-50 transition-colors">
               Cancel
-            </a>
+            </Link>
           </div>
         </form>
         </CardContent>
