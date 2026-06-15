@@ -13,17 +13,17 @@ export default function NewJobPage() {
         <form action="/api/jobs" method="post">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Company *</label>
-              <Input placeholder="e.g. Acme Corp" />
+              <label htmlFor="company" className="block text-sm font-medium text-slate-700 mb-1.5">Company *</label>
+              <Input id="company" name="company" placeholder="e.g. Acme Corp" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Job Title *</label>
-              <Input placeholder="e.g. Senior Software Engineer" />
+              <label htmlFor="jobTitle" className="block text-sm font-medium text-slate-700 mb-1.5">Job Title *</label>
+              <Input id="jobTitle" name="jobTitle" placeholder="e.g. Senior Software Engineer" />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Job Link *</label>
-            <Input type="url" placeholder="https://..." />
+            <label htmlFor="jobLink" className="block text-sm font-medium text-slate-700 mb-1.5">Job Link *</label>
+            <Input id="jobLink" name="jobLink" type="url" placeholder="https://..." />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
