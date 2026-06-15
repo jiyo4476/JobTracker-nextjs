@@ -3,7 +3,8 @@ import asyncio, random, json
 from abc import ABC, abstractmethod
 from pathlib import Path
 from playwright.async_api import async_playwright, BrowserContext, Page
-from playwright_stealth import stealth_async
+from playwright_stealth import Stealth as _Stealth
+_stealth = _Stealth()
 import httpx
 from ..config import Config
 from ..models import ScrapePayload, ScrapeResponse
@@ -63,7 +64,7 @@ class BaseScraper(ABC):
 
     async def _new_stealth_page(self, context: BrowserContext) -> Page:
         page = await context.new_page()
-        await stealth_async(page)
+        await _stealth.apply_stealth_async(page)
         return page
 
     async def _save_session(self, context: BrowserContext) -> None:

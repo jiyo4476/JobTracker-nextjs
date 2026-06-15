@@ -1,30 +1,50 @@
-import pytest
 from unittest.mock import MagicMock
+import pytest
 from scraper.dedup import filter_new
 from scraper.models import ScrapePayload
 
 
-def make_payload(job_id: str) -> ScrapePayload:
+def _payload(job_id: str, platform: str = "linkedin") -> ScrapePayload:
     return ScrapePayload(
-        source_platform="linkedin",
+        source_platform=platform,  # type: ignore[arg-type]
         external_job_id=job_id,
         company_name="Acme",
         job_title="Engineer",
-        job_link=f"https://linkedin.com/jobs/view/{job_id}/"
+        job_link=f"https://example.com/job/{job_id}",
     )
 
 
-def test_filter_new_removes_seen():
+def test_filters_seen_ids():
     state = MagicMock()
-    state.is_seen.side_effect = lambda plat, jid: jid in {"1", "2"}
-    jobs = [make_payload("1"), make_payload("2"), make_payload("3")]
+    state.is_seen.side_effect = lambda p, jid: jid in {"1", "2"}
+    jobs = [_payload("1"), _payload("2"), _payload("3")]
     result = filter_new("linkedin", jobs, state)
-    assert len(result) == 1
-    assert result[0].external_job_id == "3"
+    assert [j.external_job_id for j in result] == ["3"]
 
 
-def test_filter_new_empty():
+def test_empty_input():
     state = MagicMock()
     state.is_seen.return_value = False
-    result = filter_new("linkedin", [], state)
-    assert result == []
+    assert filter_new("linkedin", [], state) == []
+
+
+def test_all_new():
+    state = MagicMock()
+    state.is_seen.return_value = False
+    jobs = [_payload("a"), _payload("b")]
+    assert len(filter_new("linkedin", jobs, state)) == 2
+
+
+def test_all_seen():
+    state = MagicMock()
+    state.is_seen.return_value = True
+    jobs = [_payload("x"), _payload("y")]
+    assert filter_new("linkedin", jobs, state) == []
+
+
+def test_calls_is_seen_with_correct_platform():
+    state = MagicMock()
+    state.is_seen.return_value = False
+    _payload_indeed = _payload("42")
+    filter_new("indeed", [_payload_indeed], state)
+    state.is_seen.assert_called_once_with("indeed", "42")
