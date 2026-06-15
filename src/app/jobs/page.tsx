@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
@@ -11,9 +12,12 @@ export default function JobsPage() {
         title="Jobs"
         description="Browse and manage your saved job listings"
         action={
-          <a href="/jobs/new" className="inline-flex items-center justify-center rounded-md bg-slate-900 text-white px-4 h-9 text-sm font-medium hover:bg-slate-700 transition-colors">
+          <Link
+            href="/jobs/new"
+            className="inline-flex items-center justify-center rounded-md bg-slate-900 text-white px-4 h-9 text-sm font-medium hover:bg-slate-700 transition-colors"
+          >
             + Add Job
-          </a>
+          </Link>
         }
       />
       <div className="flex gap-3 mb-4">
