@@ -98,3 +98,76 @@ async def test_post_job_retries_on_failure():
 
     assert result is None
     assert call_count == scraper.config.scraper.max_retries
+
+
+@pytest.mark.asyncio
+async def test_save_session_called_even_when_scrape_raises():
+    """_save_session must be in finally so cookies persist even on scrape error."""
+    import pathlib, tempfile
+
+    class FailingScraper(BaseScraper):
+        platform = "test"
+
+        async def _scrape(self, context, platform_cfg, full_refresh):
+            raise RuntimeError("scrape exploded")
+
+    cfg = _make_config()
+    state = ScraperState(path=pathlib.Path(tempfile.mktemp(suffix=".json")))
+    scraper = FailingScraper(cfg, state, headless=True)
+
+    mock_context = AsyncMock()
+    mock_context.storage_state = AsyncMock(return_value={"cookies": [], "origins": []})
+    mock_context.browser = MagicMock()
+    mock_context.browser.close = AsyncMock()
+
+    mock_pw = AsyncMock()
+    mock_pw.__aenter__ = AsyncMock(return_value=mock_pw)
+    mock_pw.__aexit__ = AsyncMock(return_value=False)
+
+    with patch.object(scraper, "_build_context", return_value=mock_context), \
+         patch("scraper.platforms.base.async_playwright", return_value=mock_pw):
+        with pytest.raises(RuntimeError, match="scrape exploded"):
+            await scraper.run()
+
+    mock_context.storage_state.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_mark_seen_not_called_when_post_returns_none():
+    """state.mark_seen must NOT be called if post_job returns None (dry run or error)."""
+    import pathlib, tempfile
+
+    class OneShotScraper(BaseScraper):
+        platform = "test"
+
+        async def _scrape(self, context, platform_cfg, full_refresh):
+            payload = ScrapePayload(
+                source_platform="test",
+                external_job_id="abc",
+                company_name="Acme",
+                job_title="Dev",
+                job_link="https://example.com",
+            )
+            result = await self.post_job(payload)
+            if result:
+                self.state.mark_seen(self.platform, [payload.external_job_id])
+            return 1
+
+    cfg = _make_config()
+    state = ScraperState(path=pathlib.Path(tempfile.mktemp(suffix=".json")))
+    scraper = OneShotScraper(cfg, state, dry_run=True, headless=True)
+
+    mock_context = AsyncMock()
+    mock_context.storage_state = AsyncMock(return_value={"cookies": [], "origins": []})
+    mock_context.browser = MagicMock()
+    mock_context.browser.close = AsyncMock()
+
+    mock_pw = AsyncMock()
+    mock_pw.__aenter__ = AsyncMock(return_value=mock_pw)
+    mock_pw.__aexit__ = AsyncMock(return_value=False)
+
+    with patch.object(scraper, "_build_context", return_value=mock_context), \
+         patch("scraper.platforms.base.async_playwright", return_value=mock_pw):
+        await scraper.run()
+
+    assert not state.has_seen("test", "abc")

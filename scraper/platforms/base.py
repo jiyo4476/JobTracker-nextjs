@@ -72,8 +72,8 @@ class BaseScraper(ABC):
         self._session_file.write_text(json.dumps(storage))
 
     async def _human_delay(self, min_s: float | None = None, max_s: float | None = None) -> None:
-        lo = min_s or self.config.scraper.min_delay_s
-        hi = max_s or self.config.scraper.max_delay_s
+        lo = min_s if min_s is not None else self.config.scraper.min_delay_s
+        hi = max_s if max_s is not None else self.config.scraper.max_delay_s
         await asyncio.sleep(random.uniform(lo, hi))
 
     async def post_job(self, payload: ScrapePayload) -> ScrapeResponse | None:
@@ -117,8 +117,8 @@ class BaseScraper(ABC):
             context = await self._build_context(pw)
             try:
                 total = await self._scrape(context, platform_cfg, full_refresh)
-                await self._save_session(context)
             finally:
+                await self._save_session(context)
                 await context.browser.close()
 
         return total

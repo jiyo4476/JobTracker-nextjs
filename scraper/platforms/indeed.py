@@ -13,11 +13,11 @@ class IndeedScraper(BaseScraper):
     async def _scrape(self, context: BrowserContext, platform_cfg, full_refresh: bool) -> int:
         total = 0
         for query in platform_cfg.queries:
-            count = await self._scrape_query(context, query, platform_cfg)
+            count = await self._scrape_query(context, query, platform_cfg, full_refresh)
             total += count
         return total
 
-    async def _scrape_query(self, context, query: str, cfg) -> int:
+    async def _scrape_query(self, context, query: str, cfg, full_refresh: bool) -> int:
         page = await self._new_stealth_page(context)
         processed = 0
         start_offset = 0 if full_refresh else (int(self.state.get_cursor(self.platform) or 0))
@@ -58,7 +58,8 @@ class IndeedScraper(BaseScraper):
                 self.state.set_cursor(self.platform, str(start + self.RESULTS_PER_PAGE))
 
         finally:
-            await page.close()
+            if page:
+                await page.close()
 
         return processed
 
@@ -106,8 +107,9 @@ class IndeedScraper(BaseScraper):
         return jobs
 
     async def _fetch_detail(self, context: BrowserContext, job_link: str) -> dict | None:
-        page = await self._new_stealth_page(context)
+        page = None
         try:
+            page = await self._new_stealth_page(context)
             await page.goto(job_link)
             await self._human_delay(1.0, 2.5)
 
@@ -121,4 +123,5 @@ class IndeedScraper(BaseScraper):
             print(f"[WARN] Failed to fetch Indeed detail {job_link}: {e}")
             return None
         finally:
-            await page.close()
+            if page:
+                await page.close()
