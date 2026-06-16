@@ -1,0 +1,56 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/db'
+import { requireApiKey } from '@/lib/auth'
+import { companyPatchSchema } from '@/lib/schemas'
+import { companies, jobs } from '@/db/schema'
+import { eq } from 'drizzle-orm'
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const companyId = parseInt(id)
+  if (isNaN(companyId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
+
+  const [company] = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1)
+  if (!company) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const companyJobs = await db
+    .select({
+      id: jobs.id,
+      jobTitle: jobs.jobTitle,
+      interviewStage: jobs.interviewStage,
+      salaryMin: jobs.salaryMin,
+      salaryMax: jobs.salaryMax,
+      dateFound: jobs.dateFound,
+    })
+    .from(jobs)
+    .where(eq(jobs.companyId, companyId))
+
+  return NextResponse.json({ ...company, jobs: companyJobs })
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!requireApiKey(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { id } = await params
+  const companyId = parseInt(id)
+  if (isNaN(companyId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
+
+  let body: unknown
+  try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
+
+  const parsed = companyPatchSchema.safeParse(body)
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+
+  const d = parsed.data
+  await db.update(companies).set({
+    ...(d.name !== undefined && { name: d.name }),
+    ...(d.website !== undefined && { website: d.website }),
+    ...(d.industry !== undefined && { industry: d.industry }),
+    ...(d.hq_location !== undefined && { hqLocation: d.hq_location }),
+    ...(d.glassdoor_url !== undefined && { glassdoorUrl: d.glassdoor_url }),
+    ...(d.linkedin_url !== undefined && { linkedinUrl: d.linkedin_url }),
+    ...(d.notes !== undefined && { notes: d.notes }),
+  }).where(eq(companies.id, companyId))
+
+  return NextResponse.json({ success: true })
+}
