@@ -5,9 +5,16 @@ import { eq, sql, and, gte, lte } from 'drizzle-orm'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
-  const from = searchParams.get('from')
-  const to = searchParams.get('to')
-  const platform = searchParams.get('platform')
+  const fromRaw = searchParams.get('from')
+  const toRaw = searchParams.get('to')
+  const platformRaw = searchParams.get('platform')
+
+  const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+  const from = fromRaw && ISO_DATE.test(fromRaw) ? fromRaw : null
+  const to = toRaw && ISO_DATE.test(toRaw) ? toRaw : null
+
+  const ALLOWED_PLATFORMS = new Set(['linkedin','indeed','glassdoor','dice','lever','greenhouse','workday','angellist','direct','other'])
+  const platform = platformRaw && ALLOWED_PLATFORMS.has(platformRaw) ? platformRaw : null
 
   const dateFilters = []
   if (from) dateFilters.push(gte(jobs.dateFound, from))

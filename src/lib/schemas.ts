@@ -64,6 +64,18 @@ export const jobPatchSchema = z.object({
   application_deadline: z.string().optional(),
 }).strict()
 
+export const manualJobSchema = z.object({
+  job_title: z.string().min(1),
+  job_link: z.string().url().optional(),
+  job_location: z.string().optional(),
+  is_remote: z.boolean().optional(),
+  company_id: z.number().int().positive().optional(),
+  notes: z.string().optional(),
+  job_type: jobTypeEnum.optional(),
+  experience_level: experienceLevelEnum.optional(),
+  priority: z.number().int().min(1).max(5).optional(),
+}).strict()
+
 export const companyPatchSchema = z.object({
   name: z.string().optional(),
   website: z.string().url().optional(),
