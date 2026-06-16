@@ -61,6 +61,6 @@ export async function GET() {
     onsiteCount,
     stageCounts,
   })
-  res.headers.set('Cache-Control', 's-maxage=60, stale-while-revalidate')
+  res.headers.set('Cache-Control', 's-maxage=60, stale-while-revalidate=60')
   return res
 }

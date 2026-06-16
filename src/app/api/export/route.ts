@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
+import { requireApiKey } from '@/lib/auth'
 import { jobs, companies } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 
 export async function GET(req: NextRequest) {
+  if (!requireApiKey(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   const { searchParams } = new URL(req.url)
   const format = searchParams.get('format') ?? 'json'
 
@@ -41,7 +45,9 @@ export async function GET(req: NextRequest) {
     ]
     const escape = (v: unknown) => {
       if (v == null) return ''
-      const s = String(v)
+      let s = String(v)
+      // Neutralize spreadsheet formula injection (Excel/Sheets)
+      if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`
       return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
     }
     const csvLines = [

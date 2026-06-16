@@ -93,6 +93,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
   const d = parsed.data
+
+  // Recompute annual equivalents when salary fields change
+  let annualEquivalentMin: number | undefined
+  let annualEquivalentMax: number | undefined
+  const salaryType = d.salary_type
+  if (salaryType === 'hourly') {
+    if (d.hourly_rate_min !== undefined) annualEquivalentMin = Math.round(d.hourly_rate_min * 2080 * 100)
+    if (d.hourly_rate_max !== undefined) annualEquivalentMax = Math.round(d.hourly_rate_max * 2080 * 100)
+  } else if (salaryType === 'annual') {
+    if (d.salary_min !== undefined) annualEquivalentMin = d.salary_min
+    if (d.salary_max !== undefined) annualEquivalentMax = d.salary_max
+  }
+
   await db.update(jobs).set({
     ...(d.job_title !== undefined && { jobTitle: d.job_title }),
     ...(d.job_location !== undefined && { jobLocation: d.job_location }),
@@ -120,6 +133,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     ...(d.referral !== undefined && { referral: d.referral }),
     ...(d.cover_letter_submitted !== undefined && { coverLetterSubmitted: d.cover_letter_submitted }),
     ...(d.application_deadline !== undefined && { applicationDeadline: d.application_deadline }),
+    ...(annualEquivalentMin !== undefined && { annualEquivalentMin }),
+    ...(annualEquivalentMax !== undefined && { annualEquivalentMax }),
     updatedAt: new Date(),
   }).where(eq(jobs.id, jobId))
 

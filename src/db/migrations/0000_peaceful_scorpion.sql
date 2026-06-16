@@ -163,5 +163,5 @@ CREATE INDEX "jobs_date_found_idx" ON "jobs" USING btree ("date_found");--> stat
 CREATE INDEX "jobs_is_active_idx" ON "jobs" USING btree ("is_active");--> statement-breakpoint
 CREATE INDEX "jobs_source_platform_idx" ON "jobs" USING btree ("source_platform");--> statement-breakpoint
 CREATE INDEX "jobs_priority_idx" ON "jobs" USING btree ("priority");--> statement-breakpoint
-CREATE INDEX "jobs_last_scraped_at_idx" ON "jobs" USING btree ("last_scraped_at");
-CREATE INDEX IF NOT EXISTS jobs_description_search_idx ON jobs USING GIN (to_tsvector('english', coalesce(job_description, '')));
+CREATE INDEX "jobs_last_scraped_at_idx" ON "jobs" USING btree ("last_scraped_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS jobs_description_search_idx ON jobs USING GIN (to_tsvector('english', coalesce(job_description, '')));--> statement-breakpoint
