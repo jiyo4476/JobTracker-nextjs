@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { manualJobSchema } from '@/lib/schemas'
-import { jobs, companies } from '@/db/schema'
-import { eq, and, ilike, or, gte, lte, count, desc } from 'drizzle-orm'
+import { jobs, companies, jobSkills } from '@/db/schema'
+import { eq, and, ilike, or, gte, lte, count, desc, inArray, sql } from 'drizzle-orm'
 import {
   sourcePlatformEnum, jobTypeEnum, experienceLevelEnum, interviewStageEnum,
 } from '@/lib/schemas'
@@ -48,7 +48,19 @@ export async function GET(req: NextRequest) {
 
   const priorityMinRaw = searchParams.get('priority_min')
   const priorityMinVal = priorityMinRaw ? parseInt(priorityMinRaw) : NaN
-  if (!isNaN(priorityMinVal)) filters.push(gte(jobs.priority, priorityMinVal as Parameters<typeof gte>[1]))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (!isNaN(priorityMinVal)) filters.push(gte(jobs.priority, priorityMinVal as any))
+
+  const skillIdsRaw = searchParams.get('skill_ids')
+  if (skillIdsRaw) {
+    const skillIds = skillIdsRaw.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n))
+    if (skillIds.length > 0) {
+      filters.push(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        inArray(jobs.id, db.select({ id: jobSkills.jobId }).from(jobSkills).where(inArray(jobSkills.skillId, skillIds))) as any
+      )
+    }
+  }
 
   const q = searchParams.get('q')?.slice(0, 200)
   if (q) {
