@@ -1,17 +1,20 @@
-# CLAUDE.md
+# CLAUDE.md — Next.js App & API
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance for the Next.js application and its API route handlers.  
+For the Python scraper, see [`scraper/.claude/CLAUDE.md`](../scraper/.claude/CLAUDE.md).
+
+---
 
 ## Project Status
 
-This is a **pre-implementation** Next.js application. The full PRD is in `Job_Search_Tracker_PRD.md`. The Dockerfile is ready; the application code does not exist yet.
+**Pre-implementation.** The full PRD is in `.claude/Job_Search_Tracker_PRD.md`. The Dockerfile is ready; application code does not exist yet.
 
 ---
 
 ## Commands
 
 ```bash
-npm run dev          # Start dev server on http://localhost:3000
+npm run dev          # Dev server → http://localhost:3000
 npm run build        # Production build
 npm run start        # Run production build locally
 npm run lint         # ESLint
@@ -20,13 +23,11 @@ npm run db:migrate   # Run pending migrations against PostgreSQL
 npm run db:studio    # Open Drizzle Studio (DB browser)
 ```
 
-These commands don't exist yet — add them to `package.json` when scaffolding.
+Add these to `package.json` when scaffolding.
 
 ---
 
-## Architecture
-
-### Stack
+## Stack
 
 | Layer | Choice |
 |-------|--------|
@@ -37,9 +38,11 @@ These commands don't exist yet — add them to `package.json` when scaffolding.
 | Client data | TanStack Query (caching, optimistic updates) |
 | Tables | TanStack Table |
 | Charts | Recharts |
-| Validation | Zod (shared between API handlers and forms) |
+| Validation | Zod (shared between route handlers and forms) |
 
-### Directory Layout
+---
+
+## Directory Layout
 
 ```
 src/
@@ -55,7 +58,7 @@ src/
       page.tsx                — Companies list
       [id]/page.tsx           — Company detail
     settings/page.tsx         — Resume versions, skill gap, export
-    api/                      — Next.js Route Handlers
+    api/                      — Next.js Route Handlers (see below)
   db/
     schema.ts                 — Drizzle table definitions and all ENUMs
     migrations/               — Auto-generated SQL (committed)
@@ -64,56 +67,120 @@ src/
   types/                      — Shared TypeScript types derived from Drizzle schema
 ```
 
-### Database Schema (key design decisions)
+---
 
-- **`jobs` table** is the central entity. Salary stored as integer cents (`salary_min`, `salary_max`) alongside a `salary_text` raw display string.
-- **`companies` table** normalizes company names to prevent duplicates (`'Google'` vs `'Google LLC'`). `jobs.company_id` FK replaces the old `company_name` text column.
-- **Lookup + junction pattern**: `skills`, `software`, `keywords`, `certifications` are lookup tables with junction tables (`job_skills` etc.). `job_skills` and `job_certifications` have an `is_required boolean` to distinguish required vs. preferred.
-- **Dedup key**: `UNIQUE(external_job_id, source_platform) WHERE external_job_id IS NOT NULL` on `jobs`. Fuzzy secondary check by `(company_id, job_title)` within 7 days for cross-platform dupes.
-- **Soft delete**: `DELETE /api/jobs/[id]` sets `is_active = false` and `deleted_at`, never hard-deletes.
+## API Routes (`src/app/api/`)
 
-### ENUMs
+`POST`, `PATCH`, and `DELETE` routes require `Authorization: Bearer <API_KEY>`.
 
-All defined in `db/schema.ts` and must exist in Postgres before inserts:
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | `/api/jobs` | List with filter/sort/pagination. Params: `page`, `limit`, `stage`, `platform`, `job_type`, `experience_level`, `is_remote`, `is_active`, `skill_ids`, `salary_min`, `salary_max`, `priority_min`, `q` |
+| POST | `/api/jobs` | Create job (manual entry) |
+| GET | `/api/jobs/[id]` | Single job with skills, software, keywords, certs, contacts |
+| PATCH | `/api/jobs/[id]` | Partial update of any job fields |
+| DELETE | `/api/jobs/[id]` | Soft delete → sets `is_active = false`, `deleted_at` |
+| GET | `/api/jobs/[id]/description` | Return `job_description` only (keeps list queries fast) |
+| GET | `/api/stats` | Dashboard aggregates: stage counts, top skills, weekly counts, remote % |
+| GET | `/api/analytics` | Time-series data for analytics charts |
+| GET | `/api/skills` | All skills with usage count |
+| GET | `/api/software` | All software with usage count |
+| GET | `/api/certifications` | All certifications with usage count |
+| GET | `/api/companies` | Companies list with job counts and avg salary |
+| GET | `/api/companies/[id]` | Single company with linked jobs |
+| PATCH | `/api/companies/[id]` | Update company metadata |
+| POST | `/api/scrape` | Scraper webhook — upsert + dedup; returns `{ action, job_id }` |
+| GET | `/api/export` | Full dataset download (`?format=csv\|json`) |
 
-- `interview_stage_enum`: `not_applied | applied | phone_screen | technical_screen | onsite | offer_received | rejected | withdrawn`
-- `source_platform_enum`: `linkedin | indeed | glassdoor | dice | lever | greenhouse | workday | angellist | direct | other`
-- `job_type_enum`: `full_time | part_time | contract | internship | temp | freelance`
-- `experience_level_enum`: `entry | mid | senior | lead | executive`
-- `company_size_enum`: `1-10 | 11-50 | 51-200 | 201-500 | 501-1000 | 1001-5000 | 5000+`
+### Scraper Webhook: `POST /api/scrape`
 
-### API Routes (all under `src/app/api/`)
+The Python scraper calls this endpoint. The handler must:
 
-Protected routes (`POST`, `PATCH`, `DELETE`) require `Authorization: Bearer <API_KEY>`.
+1. Lookup by `(external_job_id, source_platform)` → update if found
+2. Fuzzy check by `(company_id, job_title)` within 7 days → link and skip if matched
+3. Otherwise insert; upsert company; upsert lookup tags via `INSERT ... ON CONFLICT DO NOTHING`
+4. If `skills`/`software`/`keywords`/`certifications` arrays are empty but `job_description` is present, run server-side NLP tag extraction
+5. Return `{ action: 'created' | 'updated' | 'duplicate_skipped', job_id }`
 
-Key non-obvious routes:
-- `POST /api/scrape` — external Python scraper webhook. Handles upsert+dedup and returns `{ action: 'created' | 'updated' | 'duplicate_skipped', job_id }`.
-- `GET /api/jobs/[id]/description` — returns `job_description` only, keeping list queries fast.
-- `GET /api/stats` — pre-aggregated dashboard data (stage counts, top skills, weekly counts, remote %).
-- `GET /api/export?format=csv|json` — full dataset export.
+---
 
-### Data Flow
+## Database Schema
 
-External Python scraper → `POST /api/scrape` → Drizzle upsert into PostgreSQL → TanStack Query calls `GET /api/*` → Route handlers return typed JSON → React components with optimistic updates via `PATCH`.
+### ENUMs (define in `db/schema.ts` before any inserts)
 
-### Zod Validation
+| Enum | Values |
+|------|--------|
+| `interview_stage_enum` | `not_applied \| applied \| phone_screen \| technical_screen \| onsite \| offer_received \| rejected \| withdrawn` |
+| `source_platform_enum` | `linkedin \| indeed \| glassdoor \| dice \| lever \| greenhouse \| workday \| angellist \| direct \| other` |
+| `job_type_enum` | `full_time \| part_time \| contract \| internship \| temp \| freelance` |
+| `experience_level_enum` | `entry \| mid \| senior \| lead \| executive` |
+| `company_size_enum` | `1-10 \| 11-50 \| 51-200 \| 201-500 \| 501-1000 \| 1001-5000 \| 5000+` |
+| `salary_type_enum` | `annual \| hourly` |
 
-Define schemas once and share between:
+### Key Design Decisions
+
+- **`jobs`** is the central entity. Salary stored as integer cents (`salary_min`, `salary_max`) for annual; `hourly_rate_min`/`hourly_rate_max` as `numeric(10,2)`. `annual_equivalent_min`/`annual_equivalent_max` are computed on ingest (`hourly × 2080 × 100`) for unified salary filtering. `salary_text` stores the raw display string.
+- **`companies`** normalizes company names. `jobs.company_id` FK replaces free-text `company_name`. Old `company_name` column kept nullable during migration, then dropped after backfill.
+- **Lookup + junction pattern**: `skills`, `software`, `keywords`, `certifications` are lookup tables. Junction tables (`job_skills`, `job_software`, etc.) have a composite PK. `job_skills` and `job_certifications` add `is_required boolean` to distinguish required vs. preferred.
+- **Dedup key**: `UNIQUE(external_job_id, source_platform) WHERE external_job_id IS NOT NULL` on `jobs`.
+- **Soft delete**: `DELETE /api/jobs/[id]` sets `is_active = false` and `deleted_at` — never hard-deletes.
+- **`job_description`** has a GIN tsvector index for full-text search.
+
+### Additional Tables
+
+- **`contacts`**: `(id, job_id FK, name, email, phone, role, contacted_at, notes)` — recruiters/hiring managers per job
+- **`resume_versions`**: `(id, label, date, notes)` — resume variant labels referenced from `jobs.resume_version`
+- **`user_skills`**: user's personal skill list for the skill gap tracker in Settings
+- **`job_status_history`**: records stage changes for the Recent Activity feed
+
+---
+
+## Zod Validation
+
+Define schemas once in `src/lib/` and share between:
 1. API route handler input validation
 2. React Hook Form schemas
-3. TypeScript type inference (`z.infer<typeof schema>`)
+3. TypeScript type inference via `z.infer<typeof schema>`
 
-### Environment Variables
+---
+
+## Data Flow
+
+```
+Python scraper → POST /api/scrape
+  → Drizzle upsert into PostgreSQL
+    → TanStack Query → GET /api/*
+      → Route handlers return typed JSON
+        → React components with optimistic updates via PATCH
+```
+
+---
+
+## Environment Variables
 
 ```
 DATABASE_URL=postgresql://...
-API_KEY=...                   # Bearer token for scraper webhook
+API_KEY=...        # Bearer token for scraper webhook and protected routes
 ```
 
 ---
 
 ## Deployment
 
-- App → Vercel (zero-config; `NEXT_TELEMETRY_DISABLED=1` set in Dockerfile)
-- DB → Railway or Supabase (managed PostgreSQL 16)
-- Dockerfile uses a 3-stage build (deps → builder → runner) with a non-root `nextjs` user and `output: 'standalone'` required in `next.config.ts`
+- **App** → Vercel (zero-config). Set `NEXT_TELEMETRY_DISABLED=1`.
+- **DB** → Railway or Supabase (managed PostgreSQL 16).
+- Dockerfile: 3-stage build (deps → builder → runner), non-root `nextjs` user, `output: 'standalone'` required in `next.config.ts`.
+
+---
+
+## Pages (7 total, shared left nav sidebar)
+
+| Route | Page | Key Notes |
+|-------|------|-----------|
+| `/` | Dashboard | KPI cards, funnel chart, top-15 skills, weekly area chart, remote donut, recent activity feed |
+| `/jobs` | Jobs List | TanStack Table; filter panel; URL-persisted filter state; bulk actions |
+| `/jobs/[id]` | Job Detail | Inline editing; notes auto-save on blur; optimistic stage updates |
+| `/jobs/new` \| `/jobs/[id]/edit` | Add/Edit Job | Full form; tag inputs with autocomplete |
+| `/analytics` | Analytics | Skill demand over time, salary box-and-whisker, response rate, platform breakdown |
+| `/companies` | Companies | List with job counts and salary aggregates |
+| `/settings` | Settings | Resume versions, skill gap tracker, scraper config display, CSV/JSON export |
