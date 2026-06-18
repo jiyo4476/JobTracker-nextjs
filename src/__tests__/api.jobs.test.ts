@@ -20,60 +20,54 @@ const mockJobRows = [
   { id: 2, jobTitle: 'Product Manager', companyName: 'Beta Corp', isRemote: false, interviewStage: 'applied' },
 ]
 
+function makeSelectChain(result: unknown) {
+  const chain: Record<string, unknown> = {}
+  const terminal = Promise.resolve(result)
+  // make the chain thenable so await works at any depth
+  Object.assign(terminal, {
+    from: vi.fn(() => chain),
+    leftJoin: vi.fn(() => chain),
+    where: vi.fn(() => chain),
+    orderBy: vi.fn(() => chain),
+    limit: vi.fn(() => chain),
+    offset: vi.fn(() => terminal),
+  })
+  Object.assign(chain, {
+    from: vi.fn(() => chain),
+    leftJoin: vi.fn(() => chain),
+    where: vi.fn(() => chain),
+    orderBy: vi.fn(() => chain),
+    limit: vi.fn(() => chain),
+    offset: vi.fn(() => terminal),
+    then: terminal.then.bind(terminal),
+    catch: terminal.catch.bind(terminal),
+    finally: terminal.finally.bind(terminal),
+  })
+  return chain
+}
+
 describe('GET /api/jobs', () => {
   beforeEach(() => {
     vi.clearAllMocks()
 
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
 
-    let selectCallCount = 0
-    mockDb.select.mockImplementation(() => ({
-      from: vi.fn().mockReturnValue({
-        leftJoin: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            // For count query
-            then: undefined,
-            limit: vi.fn().mockReturnValue({
-              offset: vi.fn().mockResolvedValue(mockJobRows),
-            }),
-            // Count query returns total
-            [Symbol.iterator]: undefined,
-          }),
-          limit: vi.fn().mockReturnValue({
-            offset: vi.fn().mockResolvedValue(mockJobRows),
-          }),
-        }),
-      }),
-    }))
-
-    // Override to handle count vs list differently
-    selectCallCount = 0
+    let callCount = 0
     mockDb.select.mockImplementation(() => {
-      selectCallCount++
-      if (selectCallCount === 1) {
-        // count query
-        return {
-          from: vi.fn().mockReturnValue({
-            leftJoin: vi.fn().mockReturnValue({
-              where: vi.fn().mockResolvedValue([{ total: 2 }]),
-            }),
-          }),
-        }
+      callCount++
+      if (callCount === 1) {
+        // count query — resolves immediately after .where()
+        const countChain: Record<string, unknown> = {}
+        const countResult = Promise.resolve([{ total: 2 }])
+        Object.assign(countChain, {
+          from: vi.fn(() => countChain),
+          leftJoin: vi.fn(() => countChain),
+          where: vi.fn(() => countResult),
+        })
+        return countChain
       }
-      // list query
-      return {
-        from: vi.fn().mockReturnValue({
-          leftJoin: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockReturnValue({
-                limit: vi.fn().mockReturnValue({
-                  offset: vi.fn().mockResolvedValue(mockJobRows),
-                }),
-              }),
-            }),
-          }),
-        }),
-      }
+      // list query — needs orderBy → limit → offset
+      return makeSelectChain(mockJobRows)
     })
   })
 

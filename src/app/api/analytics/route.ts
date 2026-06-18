@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
   const dateFilters = []
   if (from) dateFilters.push(gte(jobs.dateFound, from))
   if (to) dateFilters.push(lte(jobs.dateFound, to))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (platform) dateFilters.push(eq(jobs.sourcePlatform, platform as any))
   const where = dateFilters.length > 0 ? and(...dateFilters) : undefined
 

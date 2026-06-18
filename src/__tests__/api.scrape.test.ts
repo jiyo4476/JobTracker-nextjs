@@ -52,41 +52,86 @@ function makeRequest(body: unknown, auth = true) {
   return req
 }
 
+function makeInsertMock(opts: { returning?: unknown[]; withConflictUpdate?: boolean }) {
+  const valuesChain: Record<string, unknown> = {
+    onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+    onConflictDoUpdate: vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue(opts.returning ?? []),
+    }),
+    returning: vi.fn().mockResolvedValue(opts.returning ?? []),
+  }
+  return {
+    values: vi.fn().mockReturnValue(valuesChain),
+  }
+}
+
+function makeSelectChain(limitResults: unknown[][]) {
+  let callCount = 0
+  return () => ({
+    from: vi.fn().mockReturnValue({
+      where: vi.fn().mockReturnValue({
+        limit: vi.fn().mockImplementation(() => {
+          const result = limitResults[callCount] ?? []
+          callCount++
+          return Promise.resolve(result)
+        }),
+        // fuzzy query uses .where().where().limit() — allow extra where
+        where: vi.fn().mockReturnValue({
+          limit: vi.fn().mockImplementation(() => {
+            const result = limitResults[callCount] ?? []
+            callCount++
+            return Promise.resolve(result)
+          }),
+        }),
+      }),
+    }),
+  })
+}
+
 function setupDbMocks(scenario: 'created' | 'updated' | 'duplicate') {
   const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
 
-  // company is now resolved via INSERT onConflictDoUpdate, not SELECT
-  const insertReturning = (rows: object[]) => ({
-    values: vi.fn().mockReturnValue({
-      onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
-      onConflictDoUpdate: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue(rows),
-      }),
-      returning: vi.fn().mockResolvedValue(rows),
+  mockDb.update = vi.fn().mockReturnValue({
+    set: vi.fn().mockReturnValue({
+      where: vi.fn().mockResolvedValue(undefined),
     }),
   })
 
   if (scenario === 'updated') {
-    // exact match found on first select
+    let insertCallCount = 0
+    mockDb.insert.mockImplementation(() => {
+      insertCallCount++
+      // first insert = company upsert
+      if (insertCallCount === 1) {
+        return makeInsertMock({ returning: [{ id: 1 }], withConflictUpdate: true })
+      }
+      return makeInsertMock({ returning: [{ id: 99 }] })
+    })
+
     let selectCallCount = 0
     mockDb.select.mockImplementation(() => ({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
           limit: vi.fn().mockImplementation(() => {
             selectCallCount++
-            if (selectCallCount === 1) return Promise.resolve([{ id: 99 }]) // exact match
+            // exact match query returns a hit
+            if (selectCallCount === 1) return Promise.resolve([{ id: 99 }])
             return Promise.resolve([])
+          }),
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue([]),
           }),
         }),
       }),
     }))
-    mockDb.insert.mockReturnValue(insertReturning([{ id: 1 }]))  // company upsert → companyId=1
-    mockDb.update.mockReturnValue({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue(undefined),
-      }),
-    })
   } else if (scenario === 'duplicate') {
+    let insertCallCount = 0
+    mockDb.insert.mockImplementation(() => {
+      insertCallCount++
+      if (insertCallCount === 1) return makeInsertMock({ returning: [{ id: 1 }], withConflictUpdate: true })
+      return makeInsertMock({ returning: [] })
+    })
+
     let selectCallCount = 0
     mockDb.select.mockImplementation(() => ({
       from: vi.fn().mockReturnValue({
@@ -96,28 +141,35 @@ function setupDbMocks(scenario: 'created' | 'updated' | 'duplicate') {
             if (selectCallCount === 1) return Promise.resolve([]) // no exact match
             return Promise.resolve([{ id: 88 }]) // fuzzy match
           }),
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockImplementation(() => {
+              selectCallCount++
+              return Promise.resolve([{ id: 88 }])
+            }),
+          }),
         }),
       }),
     }))
-    mockDb.insert.mockReturnValue(insertReturning([{ id: 1 }]))  // company upsert
   } else {
-    // created — no exact match, no fuzzy match
+    // created
+    let insertCallCount = 0
+    mockDb.insert.mockImplementation(() => {
+      insertCallCount++
+      if (insertCallCount === 1) return makeInsertMock({ returning: [{ id: 1 }], withConflictUpdate: true })
+      if (insertCallCount === 2) return makeInsertMock({ returning: [{ id: 42 }] })
+      return makeInsertMock({ returning: [] })
+    })
+
     mockDb.select.mockImplementation(() => ({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([]), // no matches
+          limit: vi.fn().mockResolvedValue([]),
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue([]),
+          }),
         }),
       }),
     }))
-    mockDb.insert.mockReturnValue({
-      values: vi.fn().mockReturnValue({
-        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
-        onConflictDoUpdate: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([{ id: 42 }]),
-        }),
-        returning: vi.fn().mockResolvedValue([{ id: 42 }]),
-      }),
-    })
   }
 }
 

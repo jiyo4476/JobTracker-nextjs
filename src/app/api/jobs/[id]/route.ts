@@ -4,7 +4,7 @@ import { requireApiKey } from '@/lib/auth'
 import { jobPatchSchema } from '@/lib/schemas'
 import {
   jobs, companies, skills, software as softwareTable, keywords, certifications,
-  jobSkills, jobSoftware, jobKeywords, jobCertifications, contacts,
+  jobSkills, jobSoftware, jobKeywords, jobCertifications, contacts, jobStatusHistory,
 } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 
@@ -94,6 +94,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const d = parsed.data
 
+  // Track stage change for activity feed
+  if (d.interview_stage !== undefined) {
+    const [current] = await db
+      .select({ interviewStage: jobs.interviewStage })
+      .from(jobs)
+      .where(eq(jobs.id, jobId))
+      .limit(1)
+    if (current && current.interviewStage !== d.interview_stage) {
+      await db.insert(jobStatusHistory).values({
+        jobId,
+        fromStage: current.interviewStage,
+        toStage: d.interview_stage,
+      })
+    }
+  }
+
   // Recompute annual equivalents when salary fields change
   let annualEquivalentMin: number | undefined
   let annualEquivalentMax: number | undefined
@@ -148,6 +164,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const jobId = parseInt(id)
   if (isNaN(jobId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
 
-  await db.update(jobs).set({ isActive: false, updatedAt: new Date() }).where(eq(jobs.id, jobId))
+  await db.update(jobs).set({ isActive: false, deletedAt: new Date(), updatedAt: new Date() }).where(eq(jobs.id, jobId))
   return NextResponse.json({ success: true })
 }
