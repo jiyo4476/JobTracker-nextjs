@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
 
   const priorityMinRaw = searchParams.get('priority_min')
   const priorityMinVal = priorityMinRaw ? parseInt(priorityMinRaw) : NaN
-  if (!isNaN(priorityMinVal)) filters.push(gte(jobs.priority, priorityMinVal as Parameters<typeof gte>[1]))
+  if (!isNaN(priorityMinVal)) filters.push(gte(jobs.priority, priorityMinVal as any))
 
   const q = searchParams.get('q')?.slice(0, 200)
   if (q) {

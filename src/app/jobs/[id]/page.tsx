@@ -1,9 +1,50 @@
+'use client'
+
+import { useParams, useRouter } from 'next/navigation'
+import { useRef } from 'react'
+import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
+import { useJob, usePatchJob, useDeleteJob } from '@/lib/queries'
 
-export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id: _id } = await params // eslint-disable-line @typescript-eslint/no-unused-vars
+const STAGE_OPTIONS = [
+  { value: 'not_applied', label: 'Not Applied' },
+  { value: 'applied', label: 'Applied' },
+  { value: 'phone_screen', label: 'Phone Screen' },
+  { value: 'technical_screen', label: 'Technical Screen' },
+  { value: 'onsite', label: 'Onsite' },
+  { value: 'offer_received', label: 'Offer Received' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'withdrawn', label: 'Withdrawn' },
+]
+
+function formatSalary(min: number | null, max: number | null, type: string | null, text: string | null): string {
+  if (text) return text
+  if (!min && !max) return '—'
+  const fmt = (v: number) =>
+    type === 'hourly'
+      ? `$${v.toFixed(0)}/hr`
+      : `$${(v / 100).toLocaleString()}`
+  if (min && max) return `${fmt(min)} – ${fmt(max)}`
+  if (min) return `${fmt(min)}+`
+  return `up to ${fmt(max!)}`
+}
+
+function formatDate(d: string | null | undefined): string {
+  if (!d) return '—'
+  return new Date(d).toLocaleDateString()
+}
+
+function labelify(s: string | null | undefined): string {
+  if (!s) return '—'
+  return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+function SkeletonLayout() {
   return (
     <div className="p-8">
       <div className="flex items-start justify-between mb-6">
@@ -12,9 +53,9 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           <Skeleton className="h-4 w-40" />
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm">Mark Applied</Button>
-          <Button size="sm">Update Stage</Button>
-          <Button variant="outline" size="sm">Open Posting</Button>
+          <Skeleton className="h-9 w-28" />
+          <Skeleton className="h-9 w-28" />
+          <Skeleton className="h-9 w-28" />
         </div>
       </div>
       <div className="grid grid-cols-5 gap-6">
@@ -40,9 +81,9 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         </div>
         <div className="col-span-2 space-y-4">
           <Card>
-            <CardHeader><CardTitle className="text-sm">Details</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-sm">Status</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm">
-              {['Company', 'Location', 'Salary', 'Type', 'Experience', 'Platform', 'Priority', 'Status', 'Date Posted'].map(label => (
+              {['Stage', 'Applied', 'Priority', 'Salary', 'Location', 'Type', 'Experience', 'Platform', 'Date Found'].map(label => (
                 <div key={label} className="flex justify-between items-center">
                   <span className="text-slate-500">{label}</span>
                   <Skeleton className="h-4 w-28" />
@@ -52,19 +93,263 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           </Card>
           <Card>
             <CardHeader><CardTitle className="text-sm">Notes</CardTitle></CardHeader>
-            <CardContent>
-              <Skeleton className="h-28 w-full" />
-            </CardContent>
+            <CardContent><Skeleton className="h-28 w-full" /></CardContent>
           </Card>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function JobDetailPage() {
+  const { id } = useParams<{ id: string }>()
+  const router = useRouter()
+  const { data: job, isLoading } = useJob(id)
+  const patchJob = usePatchJob()
+  const deleteJob = useDeleteJob()
+  const notesRef = useRef<HTMLTextAreaElement>(null)
+
+  if (isLoading) return <SkeletonLayout />
+
+  if (!job) {
+    return (
+      <div className="p-8 text-center">
+        <p className="text-lg font-medium mb-2">Job not found</p>
+        <Link href="/jobs" className="text-sm text-blue-600 underline">Back to jobs</Link>
+      </div>
+    )
+  }
+
+  const salary = formatSalary(job.salaryMin, job.salaryMax, job.salaryType, job.salaryText)
+  const allTags = [
+    ...job.skills.map(s => ({ ...s, group: 'skill' })),
+    ...job.software.map(s => ({ ...s, group: 'software' })),
+    ...job.keywords.map(k => ({ ...k, group: 'keyword' })),
+    ...job.certifications.map(c => ({ ...c, group: 'cert' })),
+  ]
+
+  function handleMarkApplied() {
+    patchJob.mutate({
+      id,
+      body: {
+        has_applied: true,
+        date_applied: new Date().toISOString().slice(0, 10),
+        interview_stage: 'applied',
+      },
+    })
+  }
+
+  function handleStageChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    patchJob.mutate({ id, body: { interview_stage: e.target.value } })
+  }
+
+  function handleNotesBlur() {
+    const value = notesRef.current?.value ?? ''
+    if (value !== (job?.notes ?? '')) {
+      patchJob.mutate({ id, body: { notes: value } })
+    }
+  }
+
+  function handleDelete() {
+    deleteJob.mutate(id, { onSuccess: () => router.push('/jobs') })
+  }
+
+  function handlePriorityClick(star: number) {
+    patchJob.mutate({ id, body: { priority: star } })
+  }
+
+  return (
+    <div className="p-8">
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h1 className="text-xl font-semibold">{job.jobTitle}</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{job.companyName ?? '—'}</p>
+        </div>
+        <div className="flex gap-2">
+          {!job.hasApplied && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleMarkApplied}
+              disabled={patchJob.isPending}
+            >
+              Mark Applied
+            </Button>
+          )}
+          {job.jobLink && (
+            <a
+              href={job.jobLink}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center h-7 px-3 text-xs rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-medium transition-colors"
+            >
+              Open Posting
+            </a>
+          )}
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleDelete}
+            disabled={deleteJob.isPending}
+          >
+            Delete
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-5 gap-6">
+        {/* Left 3 cols */}
+        <div className="col-span-3 space-y-4">
           <Card>
-            <CardHeader><CardTitle className="text-sm">Contacts</CardTitle></CardHeader>
-            <CardContent className="space-y-2">
-              {Array.from({ length: 2 }).map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-              <Button variant="outline" size="sm" className="w-full mt-2">+ Add Contact</Button>
+            <CardHeader><CardTitle className="text-sm">Job Description</CardTitle></CardHeader>
+            <CardContent>
+              {job.jobDescription ? (
+                <p className="text-sm whitespace-pre-wrap leading-relaxed">{job.jobDescription}</p>
+              ) : (
+                <p className="text-sm text-slate-400 italic">No description available.</p>
+              )}
             </CardContent>
           </Card>
+
+          {allTags.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle className="text-sm">Skills & Tags</CardTitle></CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-1.5">
+                  {job.skills.map(s => (
+                    <Badge key={`skill-${s.id}`}>{s.name}</Badge>
+                  ))}
+                  {job.software.map(s => (
+                    <Badge key={`sw-${s.id}`} variant="secondary">{s.name}</Badge>
+                  ))}
+                  {job.keywords.map(k => (
+                    <Badge key={`kw-${k.id}`} variant="secondary">{k.name}</Badge>
+                  ))}
+                  {job.certifications.map(c => (
+                    <Badge key={`cert-${c.id}`} variant="warning">{c.name}</Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader><CardTitle className="text-sm">Notes</CardTitle></CardHeader>
+            <CardContent>
+              <Textarea
+                ref={notesRef}
+                defaultValue={job.notes ?? ''}
+                onBlur={handleNotesBlur}
+                placeholder="Add notes…"
+                className="min-h-28 resize-y text-sm"
+              />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right 2 cols */}
+        <div className="col-span-2 space-y-4">
+          <Card>
+            <CardHeader><CardTitle className="text-sm">Status</CardTitle></CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Stage</span>
+                <select
+                  value={job.interviewStage ?? 'not_applied'}
+                  onChange={handleStageChange}
+                  className="text-sm border rounded px-2 py-1 bg-background"
+                >
+                  {STAGE_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Applied</span>
+                <span>{job.hasApplied ? (job.dateApplied ? formatDate(job.dateApplied) : 'Yes') : 'No'}</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Priority</span>
+                <div className="flex gap-0.5">
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <button
+                      key={star}
+                      onClick={() => handlePriorityClick(star)}
+                      className={cn(
+                        'text-lg leading-none',
+                        star <= (job.priority ?? 0) ? 'text-amber-400' : 'text-slate-300'
+                      )}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Salary</span>
+                <span>{salary}</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Location</span>
+                <span>
+                  {job.jobLocation ?? '—'}
+                  {job.isRemote && <Badge variant="secondary" className="ml-1 text-xs">Remote</Badge>}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Type</span>
+                <span>{labelify(job.jobType)}</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Experience</span>
+                <span>{labelify(job.experienceLevel)}</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Platform</span>
+                <span>{labelify(job.sourcePlatform)}</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Date Found</span>
+                <span>{formatDate(job.dateFound)}</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Date Posted</span>
+                <span>{formatDate(job.datePosted)}</span>
+              </div>
+
+              {job.securityClearanceReq && (
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Clearance</span>
+                  <Badge variant="destructive" className="text-xs">Required</Badge>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {job.contacts.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle className="text-sm">Contacts</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                {job.contacts.map(c => (
+                  <div key={c.id} className="text-sm border rounded p-2 space-y-0.5">
+                    <p className="font-medium">{c.name}</p>
+                    {c.title && <p className="text-slate-500">{c.title}</p>}
+                    {c.email && <p className="text-slate-500">{c.email}</p>}
+                    {c.phone && <p className="text-slate-500">{c.phone}</p>}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

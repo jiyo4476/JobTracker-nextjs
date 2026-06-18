@@ -24,7 +24,7 @@ describe('GET /api/jobs', () => {
   beforeEach(() => {
     vi.clearAllMocks()
 
-    const mockDb = db as Record<string, ReturnType<typeof vi.fn>>
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
 
     let selectCallCount = 0
     mockDb.select.mockImplementation(() => ({
@@ -65,8 +65,10 @@ describe('GET /api/jobs', () => {
         from: vi.fn().mockReturnValue({
           leftJoin: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockReturnValue({
-                offset: vi.fn().mockResolvedValue(mockJobRows),
+              orderBy: vi.fn().mockReturnValue({
+                limit: vi.fn().mockReturnValue({
+                  offset: vi.fn().mockResolvedValue(mockJobRows),
+                }),
               }),
             }),
           }),
