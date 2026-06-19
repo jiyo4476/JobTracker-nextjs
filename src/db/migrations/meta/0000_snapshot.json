@@ -1,5 +1,5 @@
 {
-  "id": "d5bb9fde-b423-4bd3-8afb-7610451be49e",
+  "id": "f855b0ef-efeb-4e1c-9ddc-b3957bcbafbb",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -142,6 +142,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "email": {
           "name": "email",
           "type": "text",
@@ -150,6 +156,12 @@
         },
         "phone": {
           "name": "phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "linkedin_url": {
+          "name": "linkedin_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -171,6 +183,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -701,6 +720,12 @@
         "application_deadline": {
           "name": "application_deadline",
           "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "posting_md_path": {
+          "name": "posting_md_path",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
