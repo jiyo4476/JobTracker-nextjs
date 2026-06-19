@@ -35,8 +35,9 @@ export async function GET(req: NextRequest) {
   const isRemote = searchParams.get('is_remote')
   if (isRemote !== null) filters.push(eq(jobs.isRemote, isRemote === 'true'))
 
+  // Default to active-only; pass ?is_active=false to include soft-deleted jobs
   const isActive = searchParams.get('is_active')
-  if (isActive !== null) filters.push(eq(jobs.isActive, isActive === 'true'))
+  filters.push(eq(jobs.isActive, isActive === null ? true : isActive === 'true'))
 
   const salaryMinRaw = searchParams.get('salary_min')
   const salaryMinVal = salaryMinRaw ? parseInt(salaryMinRaw) : NaN
