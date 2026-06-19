@@ -48,3 +48,8 @@ scraper/logs/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Claude workspace and local settings
+.claude/worktrees/
+.claude/settings.local.json
+
