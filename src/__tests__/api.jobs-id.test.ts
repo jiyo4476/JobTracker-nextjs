@@ -20,6 +20,7 @@ vi.mock('@/db/schema', () => ({
   jobSoftware: {},
   jobKeywords: {},
   jobCertifications: {},
+  jobStatusHistory: {},
   contacts: {},
 }))
 
@@ -129,6 +130,8 @@ describe('PATCH /api/jobs/[id]', () => {
   it('returns 200 on success', async () => {
     vi.mocked(requireApiKey).mockReturnValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    // select is called to read current stage for history tracking
+    mockDb.select.mockReturnValue(makeChain([{ interviewStage: 'not_applied' }]))
     mockDb.update.mockReturnValue(makeChain(undefined))
 
     const { PATCH } = await import('@/app/api/jobs/[id]/route')
@@ -136,6 +139,20 @@ describe('PATCH /api/jobs/[id]', () => {
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json).toHaveProperty('success', true)
+  })
+
+  it('inserts stage history row when interview_stage changes', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    // current stage is applied; we're changing to phone_screen
+    mockDb.select.mockReturnValue(makeChain([{ interviewStage: 'applied' }]))
+    mockDb.update.mockReturnValue(makeChain(undefined))
+    mockDb.insert.mockReturnValue(makeChain([]))
+
+    const { PATCH } = await import('@/app/api/jobs/[id]/route')
+    const res = await PATCH(makeReq('1', { interview_stage: 'phone_screen' }), makeParams('1'))
+    expect(res.status).toBe(200)
+    expect(mockDb.insert).toHaveBeenCalled()
   })
 })
 
