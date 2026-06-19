@@ -12,6 +12,10 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { StageBadge } from '@/components/jobs/StageBadge'
 import { useJobs, useDeleteJob, type JobListItem } from '@/lib/queries'
@@ -43,6 +47,7 @@ export default function JobsPage() {
   const [platform, setPlatform] = useState('')
   const [jobType, setJobType] = useState('')
   const [isRemote, setIsRemote] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function handleSearch(val: string) {
@@ -118,11 +123,7 @@ export default function JobsPage() {
           size="sm"
           className="text-red-500 hover:text-red-700 h-7 px-2"
           disabled={deleteJob.isPending}
-          onClick={() => {
-            if (confirm('Delete this job?')) {
-              deleteJob.mutate(info.row.original.id)
-            }
-          }}
+          onClick={() => setDeleteTarget(info.row.original.id)}
         >
           Delete
         </Button>
@@ -271,6 +272,30 @@ export default function JobsPage() {
           </div>
         </div>
       </Card>
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this job?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The listing will be soft-deleted and hidden from the default view. You can restore it later with the API.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => {
+                if (deleteTarget !== null) {
+                  deleteJob.mutate(deleteTarget)
+                  setDeleteTarget(null)
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

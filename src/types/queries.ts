@@ -92,7 +92,7 @@ export interface JobListItem {
   jobTitle: string
   jobLink: string | null
   jobLocation: string | null
-  isRemote: boolean
+  isRemote: boolean | null
   sourcePlatform: string | null
   jobType: string | null
   experienceLevel: string | null
@@ -126,7 +126,13 @@ export interface JobsParams {
   stage?: string
   platform?: string
   job_type?: string
+  experience_level?: string
   is_remote?: string
+  is_active?: string
+  skill_ids?: string
+  salary_min?: number
+  salary_max?: number
+  priority_min?: number
 }
 
 export interface StatsResponse {

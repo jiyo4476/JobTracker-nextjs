@@ -3,7 +3,7 @@ import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { manualJobSchema } from '@/lib/schemas'
 import { jobs, companies, jobSkills } from '@/db/schema'
-import { eq, and, ilike, or, gte, lte, count, desc, inArray } from 'drizzle-orm'
+import { eq, and, ilike, or, gte, lte, count, desc, sql } from 'drizzle-orm'
 import {
   sourcePlatformEnum, jobTypeEnum, experienceLevelEnum, interviewStageEnum,
 } from '@/lib/schemas'
@@ -49,6 +49,7 @@ export async function GET(req: NextRequest) {
 
   const priorityMinRaw = searchParams.get('priority_min')
   const priorityMinVal = priorityMinRaw ? parseInt(priorityMinRaw) : NaN
+  // Drizzle infers `priority` from the smallint enum column; cast needed at TS level only
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (!isNaN(priorityMinVal)) filters.push(gte(jobs.priority, priorityMinVal as any))
 
@@ -56,9 +57,13 @@ export async function GET(req: NextRequest) {
   if (skillIdsRaw) {
     const skillIds = skillIdsRaw.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n))
     if (skillIds.length > 0) {
+      // Use EXISTS so the planner can use the jobSkills index rather than building a full subquery set
       filters.push(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        inArray(jobs.id, db.select({ id: jobSkills.jobId }).from(jobSkills).where(inArray(jobSkills.skillId, skillIds))) as any
+        sql`EXISTS (
+          SELECT 1 FROM ${jobSkills}
+          WHERE ${jobSkills.jobId} = ${jobs.id}
+            AND ${jobSkills.skillId} = ANY(ARRAY[${sql.join(skillIds.map(id => sql`${id}`), sql`, `)}]::int[])
+        )`
       )
     }
   }
@@ -154,6 +159,7 @@ export async function POST(req: NextRequest) {
       jobType: b.job_type,
       experienceLevel: b.experience_level,
       priority: b.priority,
+      salaryText: b.salary_text,
       dateFound: new Date().toISOString().slice(0, 10),
     })
     .returning({ id: jobs.id })

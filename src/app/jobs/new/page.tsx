@@ -40,6 +40,7 @@ export default function NewJobPage() {
   const [jobType, setJobType] = useState('')
   const [experienceLevel, setExperienceLevel] = useState('')
   const [priority, setPriority] = useState<string>('')
+  const [salaryText, setSalaryText] = useState('')
   const [notes, setNotes] = useState('')
   const [titleError, setTitleError] = useState('')
   const [submitError, setSubmitError] = useState('')
@@ -62,6 +63,7 @@ export default function NewJobPage() {
     if (jobType) body.job_type = jobType
     if (experienceLevel) body.experience_level = experienceLevel
     if (priority) body.priority = Number(priority)
+    if (salaryText.trim()) body.salary_text = salaryText.trim()
     if (notes.trim()) body.notes = notes.trim()
 
     try {
@@ -201,6 +203,16 @@ export default function NewJobPage() {
                   </button>
                 )}
               </div>
+            </div>
+
+            <div>
+              <label htmlFor="salaryText" className={labelClass}>Salary</label>
+              <Input
+                id="salaryText"
+                value={salaryText}
+                onChange={(e) => setSalaryText(e.target.value)}
+                placeholder="e.g. $120k–$160k/yr"
+              />
             </div>
 
             <div>

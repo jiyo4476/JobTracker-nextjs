@@ -74,6 +74,7 @@ export const manualJobSchema = z.object({
   job_type: jobTypeEnum.optional(),
   experience_level: experienceLevelEnum.optional(),
   priority: z.number().int().min(1).max(5).optional(),
+  salary_text: z.string().optional(),
 }).strict()
 
 export const companyPatchSchema = z.object({
