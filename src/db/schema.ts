@@ -129,6 +129,7 @@ export const jobs = pgTable(
     isActive: boolean("is_active").default(true),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     applicationDeadline: date("application_deadline"),
+    postingMdPath: text("posting_md_path"),
     securityClearanceReq: boolean("security_clearance_req").default(false),
     priority: smallint("priority"), // 1–5
     referral: boolean("referral").default(false),
@@ -282,9 +283,12 @@ export const contacts = pgTable("contacts", {
     .notNull()
     .references(() => jobs.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
+  title: text("title"),
   email: text("email"),
   phone: text("phone"),
+  linkedinUrl: text("linkedin_url"),
   role: text("role"),
   contactedAt: date("contacted_at"),
   notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });

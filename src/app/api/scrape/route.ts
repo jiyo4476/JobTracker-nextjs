@@ -110,6 +110,7 @@ export async function POST(req: NextRequest) {
         annualEquivalentMin,
         annualEquivalentMax,
         salaryText: data.salary_text,
+        postingMdPath: data.posting_md_path,
         securityClearanceReq: data.security_clearance_req,
         datePosted: data.date_posted,
         dateFound: new Date().toISOString().slice(0, 10),

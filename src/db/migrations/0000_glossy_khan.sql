@@ -28,11 +28,14 @@ CREATE TABLE "contacts" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"job_id" integer NOT NULL,
 	"name" text NOT NULL,
+	"title" text,
 	"email" text,
 	"phone" text,
+	"linkedin_url" text,
 	"role" text,
 	"contacted_at" date,
-	"notes" text
+	"notes" text,
+	"created_at" timestamp with time zone DEFAULT now()
 );
 --> statement-breakpoint
 CREATE TABLE "job_certifications" (
@@ -100,6 +103,7 @@ CREATE TABLE "jobs" (
 	"is_active" boolean DEFAULT true,
 	"deleted_at" timestamp with time zone,
 	"application_deadline" date,
+	"posting_md_path" text,
 	"security_clearance_req" boolean DEFAULT false,
 	"priority" smallint,
 	"referral" boolean DEFAULT false,
@@ -164,4 +168,4 @@ CREATE INDEX "jobs_is_active_idx" ON "jobs" USING btree ("is_active");--> statem
 CREATE INDEX "jobs_source_platform_idx" ON "jobs" USING btree ("source_platform");--> statement-breakpoint
 CREATE INDEX "jobs_priority_idx" ON "jobs" USING btree ("priority");--> statement-breakpoint
 CREATE INDEX "jobs_last_scraped_at_idx" ON "jobs" USING btree ("last_scraped_at");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS jobs_description_search_idx ON jobs USING GIN (to_tsvector('english', coalesce(job_description, '')));--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS jobs_description_search_idx ON jobs USING GIN (to_tsvector('english', coalesce(job_description, '')));
