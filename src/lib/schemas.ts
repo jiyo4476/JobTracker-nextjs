@@ -28,6 +28,9 @@ export const scrapePayloadSchema = z.object({
   hourly_rate_max: z.number().optional(),
   job_type: jobTypeEnum.optional(),
   experience_level: experienceLevelEnum.optional(),
+  posting_md_path: z.string()
+    .regex(/^[a-z0-9_-]+\/[a-z0-9_.-]+\.md$/i, 'Must be in the form platform/job_id.md')
+    .optional(),
   security_clearance_req: z.boolean().default(false),
   skills: z.array(z.string()).default([]),
   software: z.array(z.string()).default([]),

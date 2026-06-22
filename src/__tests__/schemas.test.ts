@@ -69,6 +69,27 @@ describe('scrapePayloadSchema', () => {
   it('fails with an invalid job_type enum value', () => {
     expect(scrapePayloadSchema.safeParse({ ...validPayload, job_type: 'gig' }).success).toBe(false)
   })
+
+  it('accepts a valid posting_md_path', () => {
+    expect(scrapePayloadSchema.safeParse({ ...validPayload, posting_md_path: 'linkedin/123456.md' }).success).toBe(true)
+  })
+
+  it('accepts posting_md_path being absent (optional)', () => {
+    const result = scrapePayloadSchema.safeParse(validPayload)
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.posting_md_path).toBeUndefined()
+  })
+
+  it('rejects posting_md_path with path traversal', () => {
+    expect(scrapePayloadSchema.safeParse({ ...validPayload, posting_md_path: '../etc/passwd' }).success).toBe(false)
+    expect(scrapePayloadSchema.safeParse({ ...validPayload, posting_md_path: 'linkedin/../secret.md' }).success).toBe(false)
+  })
+
+  it('rejects posting_md_path that does not match platform/job_id.md format', () => {
+    expect(scrapePayloadSchema.safeParse({ ...validPayload, posting_md_path: 'no-slash.md' }).success).toBe(false)
+    expect(scrapePayloadSchema.safeParse({ ...validPayload, posting_md_path: 'linkedin/123456.txt' }).success).toBe(false)
+    expect(scrapePayloadSchema.safeParse({ ...validPayload, posting_md_path: 'too/many/segments.md' }).success).toBe(false)
+  })
 })
 
 describe('jobPatchSchema', () => {
