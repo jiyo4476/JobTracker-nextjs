@@ -4,8 +4,8 @@ import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { useSkills } from '@/lib/queries'
 import { ResumeVersionsSettings } from './ResumeVersionsSettings'
+import { SkillGapSettings } from './SkillGapSettings'
 
 async function handleExport(format: 'json' | 'csv', setLoading: (v: boolean) => void) {
   setLoading(true)
@@ -26,7 +26,6 @@ async function handleExport(format: 'json' | 'csv', setLoading: (v: boolean) => 
 }
 
 export default function SettingsPage() {
-  const { data: skills = [], isLoading: skillsLoading } = useSkills()
   const [jsonLoading, setJsonLoading] = useState(false)
   const [csvLoading, setCsvLoading] = useState(false)
 
@@ -36,34 +35,7 @@ export default function SettingsPage() {
 
       <ResumeVersionsSettings />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Skill Gap Analysis</CardTitle>
-          <p className="text-sm text-slate-500">
-            Skills seen across all job listings. Checkbox tracking coming soon.
-          </p>
-        </CardHeader>
-        <CardContent>
-          {skillsLoading ? (
-            <p className="text-sm text-slate-400">Loading skills…</p>
-          ) : (
-            <div className="space-y-1">
-              {skills.map((skill) => (
-                <div
-                  key={skill.id}
-                  className="flex items-center justify-between py-2 px-1 hover:bg-slate-50 rounded"
-                >
-                  <div className="flex items-center gap-3">
-                    <input type="checkbox" disabled className="h-4 w-4 rounded opacity-40 cursor-not-allowed" />
-                    <span className="text-sm">{skill.name}</span>
-                  </div>
-                  <span className="text-xs text-slate-400">{skill.jobCount ?? 0} jobs</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <SkillGapSettings />
 
       <Card>
         <CardHeader><CardTitle>Export Data</CardTitle></CardHeader>
