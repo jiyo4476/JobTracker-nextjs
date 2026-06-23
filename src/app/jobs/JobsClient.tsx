@@ -22,6 +22,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { StageBadge } from '@/components/jobs/StageBadge'
 import { useJobs, useDeleteJob, usePatchJob, type JobListItem } from '@/lib/queries'
 import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 
 const col = createColumnHelper<JobListItem>()
 
@@ -125,29 +126,50 @@ export default function JobsClient() {
 
   async function handleBulkDelete() {
     setBulkPending(true)
-    try {
-      await Promise.all(selectedIds.map(id => deleteJob.mutateAsync(id)))
-      setRowSelection({})
+    const results = await Promise.allSettled(selectedIds.map(id => deleteJob.mutateAsync(id)))
+    const failed = results.filter(r => r.status === 'rejected').length
+    const succeeded = results.length - failed
+    setBulkPending(false)
+    setBulkDeleteOpen(false)
+    if (succeeded > 0) {
+      // Remove only successfully deleted rows from selection
+      const succeededIds = new Set(
+        selectedIds.filter((_, i) => results[i].status === 'fulfilled').map(String)
+      )
+      setRowSelection(prev => {
+        const next = { ...prev }
+        for (const id of succeededIds) delete next[id]
+        return next
+      })
       qc.invalidateQueries({ queryKey: ['jobs'] })
-    } finally {
-      setBulkPending(false)
-      setBulkDeleteOpen(false)
     }
+    if (failed > 0) toast.error(`${failed} deletion${failed !== 1 ? 's' : ''} failed`)
+    else toast.success(`Deleted ${succeeded} job${succeeded !== 1 ? 's' : ''}`)
   }
 
   async function handleBulkStage() {
     if (!bulkStage) return
     setBulkPending(true)
-    try {
-      await Promise.all(
-        selectedIds.map(id => patchJob.mutateAsync({ id, body: { interview_stage: bulkStage } }))
+    const results = await Promise.allSettled(
+      selectedIds.map(id => patchJob.mutateAsync({ id, body: { interview_stage: bulkStage } }))
+    )
+    const failed = results.filter(r => r.status === 'rejected').length
+    const succeeded = results.length - failed
+    setBulkPending(false)
+    if (succeeded > 0) {
+      const succeededIds = new Set(
+        selectedIds.filter((_, i) => results[i].status === 'fulfilled').map(String)
       )
-      setRowSelection({})
+      setRowSelection(prev => {
+        const next = { ...prev }
+        for (const id of succeededIds) delete next[id]
+        return next
+      })
       setBulkStage('')
       qc.invalidateQueries({ queryKey: ['jobs'] })
-    } finally {
-      setBulkPending(false)
     }
+    if (failed > 0) toast.error(`${failed} update${failed !== 1 ? 's' : ''} failed`)
+    else toast.success(`Updated ${succeeded} job${succeeded !== 1 ? 's' : ''}`)
   }
 
   const allRows = data?.jobs ?? []
@@ -169,7 +191,7 @@ export default function JobsClient() {
       id: 'select',
       header: () => (
         <Checkbox
-          checked={allSelected}
+          checked={allSelected ? true : someSelected ? 'indeterminate' : false}
           onCheckedChange={(v) => toggleAll(!!v)}
           aria-label="Select all"
         />
@@ -486,7 +508,7 @@ export default function JobsClient() {
       </AlertDialog>
 
       {/* Bulk delete dialog */}
-      <AlertDialog open={bulkDeleteOpen} onOpenChange={(open) => { if (!open) setBulkDeleteOpen(false) }}>
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {selectedIds.length} job{selectedIds.length !== 1 ? 's' : ''}?</AlertDialogTitle>
