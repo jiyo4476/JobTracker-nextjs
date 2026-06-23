@@ -82,12 +82,25 @@ function formFromContact(contact: Contact): ContactFormState {
   }
 }
 
-function contactPayload(form: ContactFormState) {
+// For create: strip all empty optional fields
+function contactCreatePayload(form: ContactFormState) {
   return Object.fromEntries(
     Object.entries(form)
       .map(([key, value]) => [key, value.trim()])
       .filter(([, value]) => value !== '')
   )
+}
+
+// For patch: keep empty strings so users can clear optional fields.
+// linkedin_url is excluded when empty because URL validation rejects it.
+function contactPatchPayload(form: ContactFormState): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const [key, raw] of Object.entries(form)) {
+    const value = raw.trim()
+    if (key === 'linkedin_url' && value === '') continue
+    result[key] = value
+  }
+  return result
 }
 
 function SkeletonLayout() {
@@ -221,7 +234,7 @@ export default function JobDetailPage() {
 
   function handleCreateContact(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    const body = contactPayload(contactForm)
+    const body = contactCreatePayload(contactForm)
     if (!body.name) return
     createContact.mutate(
       { jobId: id, body },
@@ -242,7 +255,7 @@ export default function JobDetailPage() {
   function handlePatchContact(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (editingContactId === null) return
-    const body = contactPayload(editingContactForm)
+    const body = contactPatchPayload(editingContactForm)
     if (!body.name) return
     patchContact.mutate(
       { jobId: id, contactId: editingContactId, body },
