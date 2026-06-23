@@ -120,34 +120,33 @@ export async function POST(req: NextRequest) {
 
     const jobId = newJob.id
 
-    // 6. Upsert tags (skills, software, keywords, certifications)
-    async function upsertTags(
+    // 6. Upsert tags (skills, software, keywords, certifications).
+    // One batch INSERT per tag type rather than one round-trip per tag name.
+    async function upsertLookup(
       names: string[],
       lookupTable: typeof skills | typeof softwareTable | typeof keywords | typeof certifications,
-      junctionInsert: (tagId: number) => Promise<void>
     ) {
-      for (const name of names) {
-        const [tag] = await db
-          .insert(lookupTable)
-          .values({ name })
-          .onConflictDoUpdate({ target: lookupTable.name, set: { name } })
-          .returning({ id: lookupTable.id })
-        if (tag) await junctionInsert(tag.id)
-      }
+      if (names.length === 0) return []
+      return db
+        .insert(lookupTable)
+        .values(names.map(name => ({ name })))
+        .onConflictDoUpdate({ target: lookupTable.name, set: { name: lookupTable.name } })
+        .returning({ id: lookupTable.id })
     }
 
-    await upsertTags(data.skills, skills, async (skillId) => {
-      await db.insert(jobSkills).values({ jobId, skillId }).onConflictDoNothing()
-    })
-    await upsertTags(data.software, softwareTable, async (softwareId) => {
-      await db.insert(jobSoftware).values({ jobId, softwareId }).onConflictDoNothing()
-    })
-    await upsertTags(data.keywords, keywords, async (keywordId) => {
-      await db.insert(jobKeywords).values({ jobId, keywordId }).onConflictDoNothing()
-    })
-    await upsertTags(data.certifications, certifications, async (certificationId) => {
-      await db.insert(jobCertifications).values({ jobId, certificationId }).onConflictDoNothing()
-    })
+    const [skillRows, softwareRows, keywordRows, certRows] = await Promise.all([
+      upsertLookup(data.skills, skills),
+      upsertLookup(data.software, softwareTable),
+      upsertLookup(data.keywords, keywords),
+      upsertLookup(data.certifications, certifications),
+    ])
+
+    await Promise.all([
+      skillRows.length > 0 && db.insert(jobSkills).values(skillRows.map(r => ({ jobId, skillId: r.id }))).onConflictDoNothing(),
+      softwareRows.length > 0 && db.insert(jobSoftware).values(softwareRows.map(r => ({ jobId, softwareId: r.id }))).onConflictDoNothing(),
+      keywordRows.length > 0 && db.insert(jobKeywords).values(keywordRows.map(r => ({ jobId, keywordId: r.id }))).onConflictDoNothing(),
+      certRows.length > 0 && db.insert(jobCertifications).values(certRows.map(r => ({ jobId, certificationId: r.id }))).onConflictDoNothing(),
+    ])
 
     return NextResponse.json({ action: 'created', job_id: jobId }, { status: 201 })
   } catch (err) {
