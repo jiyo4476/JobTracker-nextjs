@@ -123,13 +123,23 @@ describe('PATCH /api/resume-versions/[id]', () => {
   it('returns 200 on success', async () => {
     vi.mocked(requireApiKey).mockReturnValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
-    mockDb.update.mockReturnValue(makeChain(undefined))
+    mockDb.update.mockReturnValue(makeChain([{ id: 1 }]))
 
     const { PATCH } = await import('@/app/api/resume-versions/[id]/route')
     const res = await PATCH(makeReq('http://localhost/api/resume-versions/1', { label: 'v2' }, true, 'PATCH'), makeParams('1'))
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json).toHaveProperty('success', true)
+  })
+
+  it('returns 404 when id not found', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    mockDb.update.mockReturnValue(makeChain([]))
+
+    const { PATCH } = await import('@/app/api/resume-versions/[id]/route')
+    const res = await PATCH(makeReq('http://localhost/api/resume-versions/999', { label: 'v2' }, true, 'PATCH'), makeParams('999'))
+    expect(res.status).toBe(404)
   })
 })
 

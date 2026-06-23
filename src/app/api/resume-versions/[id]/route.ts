@@ -19,12 +19,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
   const d = parsed.data
-  await db.update(resumeVersions).set({
+  const updated = await db.update(resumeVersions).set({
     ...(d.label !== undefined && { label: d.label }),
     ...(d.date !== undefined && { date: d.date }),
     ...(d.notes !== undefined && { notes: d.notes }),
-  }).where(eq(resumeVersions.id, resumeVersionId))
+  }).where(eq(resumeVersions.id, resumeVersionId)).returning({ id: resumeVersions.id })
 
+  if (updated.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json({ success: true })
 }
 
