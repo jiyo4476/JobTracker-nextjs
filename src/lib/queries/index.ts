@@ -6,7 +6,7 @@ import type {
   ActivityItem,
   CompanyRow, CompanyDetail,
   JobDetail, JobListItem, JobsResponse, JobsParams,
-  LookupItem, StatsResponse,
+  LookupItem, StatsResponse, UserSkill,
   AnalyticsParams, AnalyticsResponse,
 } from '@/types/queries'
 
@@ -16,7 +16,7 @@ export type {
   CompanyRow, CompanyDetail,
   Contact,
   JobDetail, JobListItem, JobsResponse, JobsParams,
-  LookupItem, StatsResponse,
+  LookupItem, StatsResponse, UserSkill,
   AnalyticsParams, AnalyticsResponse,
   SkillDemandRow, SalaryDistributionRow, PlatformBreakdownRow, RemoteVsOnsiteRow,
 } from '@/types/queries'
@@ -135,6 +135,35 @@ export function useSkills() {
   return useQuery<LookupItem[]>({
     queryKey: ['skills'],
     queryFn: () => api.get<LookupItem[]>('/skills'),
+  })
+}
+
+export function useUserSkills() {
+  return useQuery<UserSkill[]>({
+    queryKey: ['user-skills'],
+    queryFn: () => api.get<UserSkill[]>('/user-skills'),
+  })
+}
+
+export function useCreateUserSkill() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { skill_id?: number; name?: string }) => api.post('/user-skills', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['user-skills'] })
+      qc.invalidateQueries({ queryKey: ['skills'] })
+    },
+  })
+}
+
+export function useDeleteUserSkill() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (skillId: number) => api.delete(`/user-skills/${skillId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['user-skills'] })
+      qc.invalidateQueries({ queryKey: ['skills'] })
+    },
   })
 }
 

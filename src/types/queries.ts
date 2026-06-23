@@ -41,6 +41,12 @@ export interface LookupItem {
   jobCount?: number
 }
 
+export type UserSkill = {
+  skillId: number
+  name: string
+  hasSkill: boolean | null
+}
+
 export type JobDetail = {
   id: number
   jobTitle: string
