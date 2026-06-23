@@ -10,11 +10,18 @@ vi.mock('@/db', () => ({
 }))
 
 vi.mock('@/db/schema', () => ({
-  contacts: {},
+  contacts: { id: 'contacts.id', jobId: 'contacts.jobId', createdAt: 'contacts.createdAt' },
+}))
+
+vi.mock('drizzle-orm', () => ({
+  and: vi.fn((...conditions: unknown[]) => ({ op: 'and', conditions })),
+  asc: vi.fn((column: unknown) => ({ op: 'asc', column })),
+  eq: vi.fn((column: unknown, value: unknown) => ({ op: 'eq', column, value })),
 }))
 
 import { requireApiKey } from '@/lib/auth'
 import { db } from '@/db'
+import { and } from 'drizzle-orm'
 
 function makeChain(result: unknown) {
   const chain: Record<string, unknown> = {}
@@ -118,6 +125,14 @@ describe('PATCH /api/jobs/[id]/contacts/[contactId]', () => {
     expect(res.status).toBe(404)
   })
 
+  it('returns 400 for empty body', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+
+    const { PATCH } = await import('@/app/api/jobs/[id]/contacts/[contactId]/route')
+    const res = await PATCH(makeReq('http://localhost/api/jobs/1/contacts/1', {}, true, 'PATCH'), makeParams('1', '1') as { params: Promise<{ id: string; contactId: string }> })
+    expect(res.status).toBe(400)
+  })
+
   it('returns 200 on success', async () => {
     vi.mocked(requireApiKey).mockReturnValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
@@ -128,6 +143,10 @@ describe('PATCH /api/jobs/[id]/contacts/[contactId]', () => {
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json).toHaveProperty('success', true)
+    expect(and).toHaveBeenCalledWith(
+      { op: 'eq', column: 'contacts.id', value: 1 },
+      { op: 'eq', column: 'contacts.jobId', value: 1 }
+    )
   })
 })
 
@@ -170,5 +189,9 @@ describe('DELETE /api/jobs/[id]/contacts/[contactId]', () => {
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json).toHaveProperty('success', true)
+    expect(and).toHaveBeenCalledWith(
+      { op: 'eq', column: 'contacts.id', value: 1 },
+      { op: 'eq', column: 'contacts.jobId', value: 1 }
+    )
   })
 })

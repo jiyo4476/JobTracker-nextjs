@@ -3,7 +3,7 @@ import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { contactPatchSchema } from '@/lib/schemas'
 import { contacts } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string; contactId: string }> }) {
   if (!requireApiKey(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -30,7 +30,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     ...(d.role !== undefined && { role: d.role }),
     ...(d.contacted_at !== undefined && { contactedAt: d.contacted_at }),
     ...(d.notes !== undefined && { notes: d.notes }),
-  }).where(eq(contacts.id, cId)).returning({ id: contacts.id })
+  }).where(and(eq(contacts.id, cId), eq(contacts.jobId, jobId))).returning({ id: contacts.id })
 
   if (result.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json({ success: true })
@@ -44,7 +44,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const cId = parseInt(contactId)
   if (isNaN(jobId) || isNaN(cId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
 
-  const result = await db.delete(contacts).where(eq(contacts.id, cId)).returning({ id: contacts.id })
+  const result = await db.delete(contacts).where(and(eq(contacts.id, cId), eq(contacts.jobId, jobId))).returning({ id: contacts.id })
 
   if (result.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json({ success: true })

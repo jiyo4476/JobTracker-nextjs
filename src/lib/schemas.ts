@@ -91,7 +91,10 @@ export const contactCreateSchema = z.object({
   notes: z.string().optional(),
 }).strict()
 
-export const contactPatchSchema = contactCreateSchema.partial()
+export const contactPatchSchema = contactCreateSchema.partial().refine(
+  value => Object.keys(value).length > 0,
+  { message: 'At least one field is required' }
+)
 
 export const companyPatchSchema = z.object({
   name: z.string().optional(),
