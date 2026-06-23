@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { jobs, companies } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
+
+const EXPORT_LIMIT = 10_000
 
 export async function GET(req: NextRequest) {
   if (!requireApiKey(req)) {
@@ -36,6 +38,8 @@ export async function GET(req: NextRequest) {
     })
     .from(jobs)
     .leftJoin(companies, eq(jobs.companyId, companies.id))
+    .orderBy(desc(jobs.dateFound))
+    .limit(EXPORT_LIMIT)
 
   if (format === 'csv') {
     const headers = [
@@ -58,9 +62,12 @@ export async function GET(req: NextRequest) {
       headers: {
         'Content-Type': 'text/csv',
         'Content-Disposition': 'attachment; filename=jobs.csv',
+        'X-Export-Limit': String(EXPORT_LIMIT),
       },
     })
   }
 
-  return NextResponse.json(rows)
+  const res = NextResponse.json(rows)
+  res.headers.set('X-Export-Limit', String(EXPORT_LIMIT))
+  return res
 }

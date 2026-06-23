@@ -3,7 +3,7 @@ import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { companyPatchSchema } from '@/lib/schemas'
 import { companies, jobs } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -23,7 +23,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       dateFound: jobs.dateFound,
     })
     .from(jobs)
-    .where(eq(jobs.companyId, companyId))
+    .where(and(eq(jobs.companyId, companyId), eq(jobs.isActive, true)))
+    .orderBy(desc(jobs.dateFound))
+    .limit(50)
 
   return NextResponse.json({ ...company, jobs: companyJobs })
 }
