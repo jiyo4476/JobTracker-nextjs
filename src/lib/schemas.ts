@@ -29,7 +29,7 @@ export const scrapePayloadSchema = z.object({
   job_type: jobTypeEnum.optional(),
   experience_level: experienceLevelEnum.optional(),
   posting_md_path: z.string()
-    .regex(/^[a-z0-9_-]+\/[a-z0-9_.-]+\.md$/i, 'Must be in the form platform/job_id.md')
+    .regex(/^[a-z0-9_-]+\/[a-z0-9_.-]+\.md$/, 'Must be in the form platform/job_id.md (lowercase only)')
     .optional(),
   security_clearance_req: z.boolean().default(false),
   skills: z.array(z.string()).default([]),

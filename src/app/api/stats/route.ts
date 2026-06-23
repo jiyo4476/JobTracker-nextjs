@@ -21,7 +21,7 @@ export async function GET() {
       inArray(jobs.interviewStage, ['phone_screen', 'technical_screen', 'onsite'])
     ),
     db.select({ staleListings: count() }).from(jobs).where(
-      and(eq(jobs.isActive, false), eq(jobs.hasApplied, false))
+      and(eq(jobs.isActive, true), eq(jobs.hasApplied, false))
     ),
     db.select({
       name: skills.name,
