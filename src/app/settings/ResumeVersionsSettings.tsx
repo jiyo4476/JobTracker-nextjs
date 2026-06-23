@@ -105,7 +105,10 @@ export function ResumeVersionsSettings() {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>Resume Versions</CardTitle>
-          <Button size="sm" variant="outline" disabled={pending} onClick={() => setShowForm(value => !value)}>
+          <Button size="sm" variant="outline" disabled={pending} onClick={() => {
+              if (showForm) setForm(emptyForm)
+              setShowForm(v => !v)
+            }}>
             {showForm ? 'Cancel' : 'Add version'}
           </Button>
         </div>
