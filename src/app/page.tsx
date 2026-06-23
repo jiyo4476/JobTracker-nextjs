@@ -23,7 +23,8 @@ function ChartSkeleton({ height }: { height: string }) {
 function relativeTime(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime()
   const mins = Math.floor(diffMs / 60_000)
-  if (mins < 60) return `${Math.max(mins, 1)} min ago`
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins} min ago`
   const hours = Math.floor(mins / 60)
   if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
   const days = Math.floor(hours / 24)
@@ -32,7 +33,7 @@ function relativeTime(iso: string): string {
 
 export default function DashboardPage() {
   const { data, isLoading, isError } = useStats()
-  const { data: activityData, isLoading: activityLoading } = useActivity()
+  const { data: activityData, isLoading: activityLoading, isError: activityError } = useActivity()
 
   const kpiValues = data
     ? [data.totalJobs, data.applied, data.activeInterviews, data.staleListings]
@@ -163,6 +164,10 @@ export default function DashboardPage() {
                 <Skeleton key={i} className="h-10 w-full" />
               ))}
             </div>
+          ) : activityError ? (
+            <p className="text-sm text-red-500 py-4 text-center">
+              Failed to load activity.
+            </p>
           ) : !activityData || activityData.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">
               No stage changes recorded yet.
