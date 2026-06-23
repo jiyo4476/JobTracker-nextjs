@@ -148,7 +148,8 @@ export function useUserSkills() {
 export function useCreateUserSkill() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { skill_id?: number; name?: string }) => api.post('/user-skills', body),
+    mutationFn: (body: { skill_id: number; name?: never } | { name: string; skill_id?: never }) =>
+      api.post('/user-skills', body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['user-skills'] })
       qc.invalidateQueries({ queryKey: ['skills'] })

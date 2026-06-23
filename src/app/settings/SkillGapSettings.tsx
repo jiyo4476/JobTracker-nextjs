@@ -40,10 +40,12 @@ export function SkillGapSettings() {
     skill => skill.name.toLowerCase() === skillInput.trim().toLowerCase()
   )
 
+  const isAlreadyAdded = selectedSkill ? userSkillIds.has(selectedSkill.id) : false
+
   function handleAddSkill(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const value = skillInput.trim()
-    if (!value) return
+    if (!value || isAlreadyAdded) return
 
     createUserSkill.mutate(
       selectedSkill ? { skill_id: selectedSkill.id } : { name: value },
@@ -74,14 +76,14 @@ export function SkillGapSettings() {
                 placeholder="Add a skill"
               />
               <datalist id="skill-options">
-                {skills.map(skill => (
+                {skills.filter(skill => !userSkillIds.has(skill.id)).map(skill => (
                   <option key={skill.id} value={skill.name} />
                 ))}
               </datalist>
               <Button
                 type="submit"
                 size="sm"
-                disabled={createUserSkill.isPending || !skillInput.trim()}
+                disabled={createUserSkill.isPending || !skillInput.trim() || isAlreadyAdded}
               >
                 {createUserSkill.isPending ? 'Adding...' : 'Add'}
               </Button>
