@@ -273,4 +273,13 @@ describe('POST /api/scrape', () => {
     expect(res.status).toBe(201)
     expect(vi.mocked(extractTags)).not.toHaveBeenCalled()
   })
+
+  it('does not call extractTags when description is absent and tag arrays are empty', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    setupDbMocks('created')
+    const { POST } = await import('@/app/api/scrape/route')
+    const res = await POST(makeRequest(validBody))
+    expect(res.status).toBe(201)
+    expect(vi.mocked(extractTags)).not.toHaveBeenCalled()
+  })
 })

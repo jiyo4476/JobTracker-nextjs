@@ -30,24 +30,33 @@ const KEYWORDS = [
   'series C',
 ]
 
-function matchTerms(description: string, terms: string[]): string[] {
-  const matched: string[] = []
-  for (const term of terms) {
-    // Escape special regex chars in the term
-    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const pattern = new RegExp(`(?<![\\w])${escaped}(?![\\w])`, 'i')
-    if (pattern.test(description)) {
-      matched.push(term)
-    }
-  }
-  return matched
+function escapeRegExp(term: string): string {
+  return term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function compileTerms(terms: string[]) {
+  return terms.map(term => ({
+    term,
+    pattern: new RegExp(`(?<![\\w])${escapeRegExp(term)}(?![\\w])`, 'i'),
+  }))
+}
+
+const SKILL_PATTERNS = compileTerms(SKILLS)
+const SOFTWARE_PATTERNS = compileTerms(SOFTWARE)
+const CERTIFICATION_PATTERNS = compileTerms(CERTIFICATIONS)
+const KEYWORD_PATTERNS = compileTerms(KEYWORDS)
+
+function matchTerms(description: string, terms: ReturnType<typeof compileTerms>): string[] {
+  return terms
+    .filter(({ pattern }) => pattern.test(description))
+    .map(({ term }) => term)
 }
 
 export function extractTags(description: string): ExtractedTags {
   return {
-    skills: matchTerms(description, SKILLS),
-    software: matchTerms(description, SOFTWARE),
-    keywords: matchTerms(description, KEYWORDS),
-    certifications: matchTerms(description, CERTIFICATIONS),
+    skills: matchTerms(description, SKILL_PATTERNS),
+    software: matchTerms(description, SOFTWARE_PATTERNS),
+    keywords: matchTerms(description, KEYWORD_PATTERNS),
+    certifications: matchTerms(description, CERTIFICATION_PATTERNS),
   }
 }
