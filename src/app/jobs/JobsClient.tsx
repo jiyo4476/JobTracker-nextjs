@@ -25,6 +25,7 @@ const col = createColumnHelper<JobListItem>()
 
 function formatSalary(min: number | null, max: number | null): string {
   if (!min && !max) return '—'
+  // Salary values are stored as cents; divide by 100 for dollars, then 1,000 for "k".
   const k = (v: number) => `$${Math.round(v / 100_000)}k`
   if (min && max) return `${k(min)}–${k(max)}`
   if (min) return `${k(min)}+`
@@ -39,6 +40,7 @@ function formatDate(d: string | null): string {
 const STAGES = ['', 'not_applied', 'applied', 'phone_screen', 'technical_screen', 'onsite', 'offer_received', 'rejected', 'withdrawn']
 const PLATFORMS = ['', 'linkedin', 'indeed', 'glassdoor', 'dice', 'lever', 'greenhouse', 'workday', 'angellist', 'direct', 'other']
 const JOB_TYPES = ['', 'full_time', 'part_time', 'contract', 'internship', 'temp', 'freelance']
+const EXTRA_FILTER_PARAMS = ['salary_min', 'salary_max', 'priority_min', 'skill_ids'] as const
 
 export default function JobsClient() {
   const searchParams = useSearchParams()
@@ -60,6 +62,12 @@ export default function JobsClient() {
   useEffect(() => {
     setInputQ(urlQ)
   }, [urlQ])
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    }
+  }, [])
 
   function updateParams(updates: Record<string, string>) {
     const next = new URLSearchParams(searchParams.toString())
@@ -176,7 +184,14 @@ export default function JobsClient() {
   const total = data?.total ?? 0
   const totalPages = data?.totalPages ?? 1
 
-  const hasFilters = !!(urlQ || stage || platform || jobType || isRemote)
+  const hasFilters = !!(
+    urlQ ||
+    stage ||
+    platform ||
+    jobType ||
+    isRemote ||
+    EXTRA_FILTER_PARAMS.some(param => searchParams.has(param))
+  )
 
   return (
     <div className="p-8">
