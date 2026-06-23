@@ -4,9 +4,16 @@
 const BASE = "/api";
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const apiKey = process.env.NEXT_PUBLIC_API_KEY;
+  const headers = new Headers(init?.headers);
+  headers.set("Content-Type", "application/json");
+  if (apiKey && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${apiKey}`);
+  }
+
   const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...init?.headers },
     ...init,
+    headers,
   });
   if (!res.ok) throw new Error(`API error ${res.status}: ${path}`);
   return res.json() as Promise<T>;

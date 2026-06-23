@@ -1,15 +1,24 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { useJob, usePatchJob, useDeleteJob } from '@/lib/queries'
+import {
+  useJob,
+  usePatchJob,
+  useDeleteJob,
+  useCreateContact,
+  usePatchContact,
+  useDeleteContact,
+  type Contact,
+} from '@/lib/queries'
 
 const STAGE_OPTIONS = [
   { value: 'not_applied', label: 'Not Applied' },
@@ -42,6 +51,43 @@ function formatDate(d: string | null | undefined): string {
 function labelify(s: string | null | undefined): string {
   if (!s) return '—'
   return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+type ContactFormState = {
+  name: string
+  title: string
+  email: string
+  phone: string
+  linkedin_url: string
+  notes: string
+}
+
+const emptyContactForm: ContactFormState = {
+  name: '',
+  title: '',
+  email: '',
+  phone: '',
+  linkedin_url: '',
+  notes: '',
+}
+
+function formFromContact(contact: Contact): ContactFormState {
+  return {
+    name: contact.name,
+    title: contact.title ?? '',
+    email: contact.email ?? '',
+    phone: contact.phone ?? '',
+    linkedin_url: contact.linkedinUrl ?? '',
+    notes: contact.notes ?? '',
+  }
+}
+
+function contactPayload(form: ContactFormState) {
+  return Object.fromEntries(
+    Object.entries(form)
+      .map(([key, value]) => [key, value.trim()])
+      .filter(([, value]) => value !== '')
+  )
 }
 
 function SkeletonLayout() {
@@ -107,7 +153,14 @@ export default function JobDetailPage() {
   const { data: job, isLoading } = useJob(id)
   const patchJob = usePatchJob()
   const deleteJob = useDeleteJob()
+  const createContact = useCreateContact()
+  const patchContact = usePatchContact()
+  const deleteContact = useDeleteContact()
   const notesRef = useRef<HTMLTextAreaElement>(null)
+  const [showContactForm, setShowContactForm] = useState(false)
+  const [contactForm, setContactForm] = useState<ContactFormState>(emptyContactForm)
+  const [editingContactId, setEditingContactId] = useState<number | null>(null)
+  const [editingContactForm, setEditingContactForm] = useState<ContactFormState>(emptyContactForm)
 
   if (isLoading) return <SkeletonLayout />
 
@@ -157,6 +210,57 @@ export default function JobDetailPage() {
   function handlePriorityClick(star: number) {
     patchJob.mutate({ id, body: { priority: star } })
   }
+
+  function updateContactField(field: keyof ContactFormState, value: string) {
+    setContactForm(current => ({ ...current, [field]: value }))
+  }
+
+  function updateEditingContactField(field: keyof ContactFormState, value: string) {
+    setEditingContactForm(current => ({ ...current, [field]: value }))
+  }
+
+  function handleCreateContact(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const body = contactPayload(contactForm)
+    if (!body.name) return
+    createContact.mutate(
+      { jobId: id, body },
+      {
+        onSuccess: () => {
+          setContactForm(emptyContactForm)
+          setShowContactForm(false)
+        },
+      }
+    )
+  }
+
+  function startEditingContact(contact: Contact) {
+    setEditingContactId(contact.id)
+    setEditingContactForm(formFromContact(contact))
+  }
+
+  function handlePatchContact(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (editingContactId === null) return
+    const body = contactPayload(editingContactForm)
+    if (!body.name) return
+    patchContact.mutate(
+      { jobId: id, contactId: editingContactId, body },
+      {
+        onSuccess: () => {
+          setEditingContactId(null)
+          setEditingContactForm(emptyContactForm)
+        },
+      }
+    )
+  }
+
+  function handleDeleteContact(contactId: number) {
+    deleteContact.mutate({ jobId: id, contactId })
+  }
+
+  const contactMutationPending =
+    createContact.isPending || patchContact.isPending || deleteContact.isPending
 
   return (
     <div className="p-8">
@@ -335,21 +439,154 @@ export default function JobDetailPage() {
             </CardContent>
           </Card>
 
-          {job.contacts.length > 0 && (
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Contacts</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                {job.contacts.map(c => (
-                  <div key={c.id} className="text-sm border rounded p-2 space-y-0.5">
-                    <p className="font-medium">{c.name}</p>
-                    {c.title && <p className="text-slate-500">{c.title}</p>}
-                    {c.email && <p className="text-slate-500">{c.email}</p>}
-                    {c.phone && <p className="text-slate-500">{c.phone}</p>}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm">Contacts</CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowContactForm(value => !value)}
+                  disabled={contactMutationPending}
+                >
+                  {showContactForm ? 'Cancel' : 'Add contact'}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {showContactForm && (
+                <form onSubmit={handleCreateContact} className="space-y-2 rounded border p-3">
+                  <Input
+                    value={contactForm.name}
+                    onChange={e => updateContactField('name', e.target.value)}
+                    placeholder="Name"
+                    required
+                  />
+                  <Input
+                    value={contactForm.title}
+                    onChange={e => updateContactField('title', e.target.value)}
+                    placeholder="Title"
+                  />
+                  <Input
+                    value={contactForm.email}
+                    onChange={e => updateContactField('email', e.target.value)}
+                    placeholder="Email"
+                    type="email"
+                  />
+                  <Input
+                    value={contactForm.phone}
+                    onChange={e => updateContactField('phone', e.target.value)}
+                    placeholder="Phone"
+                  />
+                  <Input
+                    value={contactForm.linkedin_url}
+                    onChange={e => updateContactField('linkedin_url', e.target.value)}
+                    placeholder="LinkedIn URL"
+                    type="url"
+                  />
+                  <Textarea
+                    value={contactForm.notes}
+                    onChange={e => updateContactField('notes', e.target.value)}
+                    placeholder="Notes"
+                    className="min-h-20 text-sm"
+                  />
+                  <Button size="sm" type="submit" disabled={createContact.isPending || !contactForm.name.trim()}>
+                    {createContact.isPending ? 'Adding...' : 'Add contact'}
+                  </Button>
+                </form>
+              )}
+
+              {job.contacts.length === 0 ? (
+                <p className="text-sm text-slate-400 py-2">No contacts yet.</p>
+              ) : (
+                job.contacts.map(c => (
+                  <div key={c.id} className="text-sm border rounded p-3 space-y-2">
+                    {editingContactId === c.id ? (
+                      <form onSubmit={handlePatchContact} className="space-y-2">
+                        <Input
+                          value={editingContactForm.name}
+                          onChange={e => updateEditingContactField('name', e.target.value)}
+                          placeholder="Name"
+                          required
+                        />
+                        <Input
+                          value={editingContactForm.title}
+                          onChange={e => updateEditingContactField('title', e.target.value)}
+                          placeholder="Title"
+                        />
+                        <Input
+                          value={editingContactForm.email}
+                          onChange={e => updateEditingContactField('email', e.target.value)}
+                          placeholder="Email"
+                          type="email"
+                        />
+                        <Input
+                          value={editingContactForm.phone}
+                          onChange={e => updateEditingContactField('phone', e.target.value)}
+                          placeholder="Phone"
+                        />
+                        <Input
+                          value={editingContactForm.linkedin_url}
+                          onChange={e => updateEditingContactField('linkedin_url', e.target.value)}
+                          placeholder="LinkedIn URL"
+                          type="url"
+                        />
+                        <Textarea
+                          value={editingContactForm.notes}
+                          onChange={e => updateEditingContactField('notes', e.target.value)}
+                          placeholder="Notes"
+                          className="min-h-20 text-sm"
+                        />
+                        <div className="flex gap-2">
+                          <Button size="sm" type="submit" disabled={patchContact.isPending || !editingContactForm.name.trim()}>
+                            {patchContact.isPending ? 'Saving...' : 'Save'}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            type="button"
+                            onClick={() => setEditingContactId(null)}
+                            disabled={patchContact.isPending}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </form>
+                    ) : (
+                      <>
+                        <div className="space-y-0.5">
+                          <p className="font-medium">{c.name}</p>
+                          {c.title && <p className="text-slate-500">{c.title}</p>}
+                          {c.email && <p className="text-slate-500">{c.email}</p>}
+                          {c.phone && <p className="text-slate-500">{c.phone}</p>}
+                          {c.linkedinUrl && (
+                            <a href={c.linkedinUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                              LinkedIn
+                            </a>
+                          )}
+                          {c.notes && <p className="text-slate-500 whitespace-pre-wrap">{c.notes}</p>}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" onClick={() => startEditingContact(c)}>
+                            Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-500 hover:text-red-700"
+                            onClick={() => handleDeleteContact(c.id)}
+                            disabled={deleteContact.isPending}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
+                ))
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
