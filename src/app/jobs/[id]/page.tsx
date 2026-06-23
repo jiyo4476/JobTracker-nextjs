@@ -563,7 +563,12 @@ export default function JobDetailPage() {
                           {c.email && <p className="text-slate-500">{c.email}</p>}
                           {c.phone && <p className="text-slate-500">{c.phone}</p>}
                           {c.linkedinUrl && (
-                            <a href={c.linkedinUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                            <a
+                              href={c.linkedinUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline"
+                            >
                               LinkedIn
                             </a>
                           )}
