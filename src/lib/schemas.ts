@@ -80,6 +80,15 @@ export const manualJobSchema = z.object({
   salary_text: z.string().optional(),
 }).strict()
 
+export const userSkillCreateSchema = z
+  .object({
+    skill_id: z.number().int().positive().optional(),
+    name: z.string().min(1).optional(),
+  })
+  .refine((d) => d.skill_id !== undefined || d.name !== undefined, {
+    message: 'Either skill_id or name must be provided',
+  })
+
 export const companyPatchSchema = z.object({
   name: z.string().optional(),
   website: z.string().url().optional(),
