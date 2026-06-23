@@ -172,7 +172,7 @@ describe('DELETE /api/jobs/[id]', () => {
   it('returns 200 on soft delete', async () => {
     vi.mocked(requireApiKey).mockReturnValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
-    mockDb.update.mockReturnValue(makeChain(undefined))
+    mockDb.update.mockReturnValue(makeChain([{ id: 1 }]))
 
     const { DELETE } = await import('@/app/api/jobs/[id]/route')
     const req = new NextRequest('http://localhost/api/jobs/1', {
@@ -185,10 +185,24 @@ describe('DELETE /api/jobs/[id]', () => {
     expect(json).toHaveProperty('success', true)
   })
 
+  it('returns 404 when job is not found', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    mockDb.update.mockReturnValue(makeChain([]))
+
+    const { DELETE } = await import('@/app/api/jobs/[id]/route')
+    const req = new NextRequest('http://localhost/api/jobs/999', {
+      method: 'DELETE',
+      headers: { authorization: 'Bearer test-key' },
+    })
+    const res = await DELETE(req, makeParams('999'))
+    expect(res.status).toBe(404)
+  })
+
   it('calls db.update (soft delete, not hard delete)', async () => {
     vi.mocked(requireApiKey).mockReturnValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
-    mockDb.update.mockReturnValue(makeChain(undefined))
+    mockDb.update.mockReturnValue(makeChain([{ id: 1 }]))
 
     const { DELETE } = await import('@/app/api/jobs/[id]/route')
     const req = new NextRequest('http://localhost/api/jobs/1', {
