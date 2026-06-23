@@ -446,7 +446,10 @@ export default function JobDetailPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setShowContactForm(value => !value)}
+                  onClick={() => {
+                    if (showContactForm) setContactForm(emptyContactForm)
+                    setShowContactForm(v => !v)
+                  }}
                   disabled={contactMutationPending}
                 >
                   {showContactForm ? 'Cancel' : 'Add contact'}
