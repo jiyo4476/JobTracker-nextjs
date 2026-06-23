@@ -6,6 +6,16 @@ vi.mock('@/lib/auth', () => ({
   requireApiKey: vi.fn(),
 }))
 
+// Mock nlp-extract
+vi.mock('@/lib/nlp-extract', () => ({
+  extractTags: vi.fn().mockReturnValue({
+    skills: ['Python', 'Docker'],
+    software: ['GitHub'],
+    keywords: ['remote'],
+    certifications: [],
+  }),
+}))
+
 // Mock db
 vi.mock('@/db', () => ({
   db: {
@@ -31,6 +41,7 @@ vi.mock('@/db/schema', () => ({
 
 import { requireApiKey } from '@/lib/auth'
 import { db } from '@/db'
+import { extractTags } from '@/lib/nlp-extract'
 
 const validBody = {
   source_platform: 'linkedin',
@@ -234,5 +245,41 @@ describe('POST /api/scrape', () => {
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json.action).toBe('duplicate_skipped')
+  })
+
+  it('calls extractTags and uses extracted tags when all tag arrays are empty but job_description is present', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    setupDbMocks('created')
+    const { POST } = await import('@/app/api/scrape/route')
+    const bodyWithDescription = {
+      ...validBody,
+      job_description: 'We need Python and Docker experience. Remote friendly. GitHub required.',
+    }
+    const res = await POST(makeRequest(bodyWithDescription))
+    expect(res.status).toBe(201)
+    expect(vi.mocked(extractTags)).toHaveBeenCalledWith(bodyWithDescription.job_description)
+  })
+
+  it('does not call extractTags when tag arrays are already populated', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    setupDbMocks('created')
+    const { POST } = await import('@/app/api/scrape/route')
+    const bodyWithTags = {
+      ...validBody,
+      job_description: 'We need Python experience.',
+      skills: ['TypeScript'],
+    }
+    const res = await POST(makeRequest(bodyWithTags))
+    expect(res.status).toBe(201)
+    expect(vi.mocked(extractTags)).not.toHaveBeenCalled()
+  })
+
+  it('does not call extractTags when description is absent and tag arrays are empty', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    setupDbMocks('created')
+    const { POST } = await import('@/app/api/scrape/route')
+    const res = await POST(makeRequest(validBody))
+    expect(res.status).toBe(201)
+    expect(vi.mocked(extractTags)).not.toHaveBeenCalled()
   })
 })

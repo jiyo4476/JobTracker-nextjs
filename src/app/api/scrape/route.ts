@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { scrapePayloadSchema } from '@/lib/schemas'
+import { extractTags } from '@/lib/nlp-extract'
 import {
   companies, jobs, skills, software as softwareTable, keywords, certifications,
   jobSkills, jobSoftware, jobKeywords, jobCertifications,
@@ -25,7 +26,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
-  const data = parsed.data
+  // NLP fallback: if all tag arrays are empty but description is present, extract tags
+  const allTagsEmpty =
+    parsed.data.skills.length === 0 &&
+    parsed.data.software.length === 0 &&
+    parsed.data.keywords.length === 0 &&
+    parsed.data.certifications.length === 0
+
+  const extracted = allTagsEmpty && parsed.data.job_description
+    ? extractTags(parsed.data.job_description)
+    : null
+
+  const data = {
+    ...parsed.data,
+    skills: extracted ? extracted.skills : parsed.data.skills,
+    software: extracted ? extracted.software : parsed.data.software,
+    keywords: extracted ? extracted.keywords : parsed.data.keywords,
+    certifications: extracted ? extracted.certifications : parsed.data.certifications,
+  }
 
   try {
     // 1. Upsert company — use onConflictDoUpdate to guarantee a row is always returned
