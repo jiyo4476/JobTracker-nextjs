@@ -80,6 +80,19 @@ export const manualJobSchema = z.object({
   salary_text: z.string().optional(),
 }).strict()
 
+export const contactCreateSchema = z.object({
+  name: z.string().min(1),
+  title: z.string().optional(),
+  email: z.string().email().optional(),
+  phone: z.string().optional(),
+  linkedin_url: z.string().url().optional(),
+  role: z.string().optional(),
+  contacted_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  notes: z.string().optional(),
+}).strict()
+
+export const contactPatchSchema = contactCreateSchema.partial()
+
 export const companyPatchSchema = z.object({
   name: z.string().optional(),
   website: z.string().url().optional(),
