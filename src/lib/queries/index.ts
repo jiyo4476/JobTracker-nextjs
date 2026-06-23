@@ -88,6 +88,46 @@ export function useDeleteJob() {
   })
 }
 
+export function useCreateContact() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ jobId, body }: { jobId: string | number; body: Record<string, unknown> }) =>
+      api.post(`/jobs/${jobId}/contacts`, body),
+    onSuccess: (_data, { jobId }) => {
+      qc.invalidateQueries({ queryKey: ['job', String(jobId)] })
+    },
+  })
+}
+
+export function usePatchContact() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      jobId,
+      contactId,
+      body,
+    }: {
+      jobId: string | number
+      contactId: string | number
+      body: Record<string, unknown>
+    }) => api.patch(`/jobs/${jobId}/contacts/${contactId}`, body),
+    onSuccess: (_data, { jobId }) => {
+      qc.invalidateQueries({ queryKey: ['job', String(jobId)] })
+    },
+  })
+}
+
+export function useDeleteContact() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ jobId, contactId }: { jobId: string | number; contactId: string | number }) =>
+      api.delete(`/jobs/${jobId}/contacts/${contactId}`),
+    onSuccess: (_data, { jobId }) => {
+      qc.invalidateQueries({ queryKey: ['job', String(jobId)] })
+    },
+  })
+}
+
 export function useJobs(params: JobsParams = {}) {
   const qs = new URLSearchParams()
   if (params.page) qs.set('page', String(params.page))
