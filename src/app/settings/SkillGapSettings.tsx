@@ -130,6 +130,11 @@ export function SkillGapSettings() {
                   <span className="text-xs text-slate-400">{skill.jobCount ?? 0} jobs</span>
                 </div>
               ))}
+              {skillGaps.length > 20 && (
+                <p className="text-xs text-slate-400 text-center pt-1">
+                  +{skillGaps.length - 20} more skills not shown
+                </p>
+              )}
             </div>
           )}
         </div>
