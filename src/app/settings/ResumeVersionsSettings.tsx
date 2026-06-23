@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { type FormEvent, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,12 +33,24 @@ function formFromVersion(version: ResumeVersion): ResumeVersionForm {
   }
 }
 
-function payloadFromForm(form: ResumeVersionForm) {
+// For create: strip all empty optional fields
+function createPayload(form: ResumeVersionForm) {
   return Object.fromEntries(
     Object.entries(form)
       .map(([key, value]) => [key, value.trim()])
       .filter(([, value]) => value !== '')
   )
+}
+
+// For patch: keep empty notes to allow clearing; strip empty date (invalid format)
+function patchPayload(form: ResumeVersionForm) {
+  const result: Record<string, string> = {}
+  for (const [key, raw] of Object.entries(form)) {
+    const value = raw.trim()
+    if (key === 'date' && value === '') continue  // date format rejects empty string
+    result[key] = value
+  }
+  return result
 }
 
 function formatDate(date: string | null) {
@@ -70,9 +82,9 @@ export function ResumeVersionsSettings() {
     setEditingForm(current => ({ ...current, [field]: value }))
   }
 
-  function handleCreate(e: React.FormEvent<HTMLFormElement>) {
+  function handleCreate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    const body = payloadFromForm(form)
+    const body = createPayload(form)
     if (!body.label) return
     createVersion.mutate(body, {
       onSuccess: () => {
@@ -87,10 +99,10 @@ export function ResumeVersionsSettings() {
     setEditingForm(formFromVersion(version))
   }
 
-  function handlePatch(e: React.FormEvent<HTMLFormElement>) {
+  function handlePatch(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (editingId === null) return
-    const body = payloadFromForm(editingForm)
+    const body = patchPayload(editingForm)
     if (!body.label) return
     patchVersion.mutate({ id: editingId, body }, {
       onSuccess: () => {
