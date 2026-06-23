@@ -110,16 +110,35 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
-  // Recompute annual equivalents when salary fields change
+  // Recompute annual equivalents when salary fields change.
+  // If salary_type isn't in the patch, read it from the DB so we don't
+  // corrupt annual_equivalent_* when only a rate field is updated.
   let annualEquivalentMin: number | undefined
   let annualEquivalentMax: number | undefined
-  const salaryType = d.salary_type
-  if (salaryType === 'hourly') {
-    if (d.hourly_rate_min !== undefined) annualEquivalentMin = Math.round(d.hourly_rate_min * 2080 * 100)
-    if (d.hourly_rate_max !== undefined) annualEquivalentMax = Math.round(d.hourly_rate_max * 2080 * 100)
-  } else if (salaryType === 'annual') {
-    if (d.salary_min !== undefined) annualEquivalentMin = d.salary_min
-    if (d.salary_max !== undefined) annualEquivalentMax = d.salary_max
+  const salaryFieldsChanged =
+    d.salary_type !== undefined ||
+    d.hourly_rate_min !== undefined ||
+    d.hourly_rate_max !== undefined ||
+    d.salary_min !== undefined ||
+    d.salary_max !== undefined
+
+  if (salaryFieldsChanged) {
+    let salaryType = d.salary_type
+    if (salaryType === undefined) {
+      const [cur] = await db
+        .select({ salaryType: jobs.salaryType })
+        .from(jobs)
+        .where(eq(jobs.id, jobId))
+        .limit(1)
+      salaryType = cur?.salaryType ?? undefined
+    }
+    if (salaryType === 'hourly') {
+      if (d.hourly_rate_min !== undefined) annualEquivalentMin = Math.round(d.hourly_rate_min * 2080 * 100)
+      if (d.hourly_rate_max !== undefined) annualEquivalentMax = Math.round(d.hourly_rate_max * 2080 * 100)
+    } else if (salaryType === 'annual') {
+      if (d.salary_min !== undefined) annualEquivalentMin = d.salary_min
+      if (d.salary_max !== undefined) annualEquivalentMax = d.salary_max
+    }
   }
 
   await db.update(jobs).set({
@@ -164,6 +183,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const jobId = parseInt(id)
   if (isNaN(jobId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
 
-  await db.update(jobs).set({ isActive: false, deletedAt: new Date(), updatedAt: new Date() }).where(eq(jobs.id, jobId))
+  const result = await db
+    .update(jobs)
+    .set({ isActive: false, deletedAt: new Date(), updatedAt: new Date() })
+    .where(eq(jobs.id, jobId))
+    .returning({ id: jobs.id })
+
+  if (result.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json({ success: true })
 }
