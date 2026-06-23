@@ -178,6 +178,16 @@ export interface RemoteVsOnsiteRow {
   onsite: number
 }
 
+export interface ActivityItem {
+  id: number
+  jobId: number
+  jobTitle: string
+  companyName: string | null
+  fromStage: string | null
+  toStage: string
+  changedAt: string
+}
+
 export interface AnalyticsResponse {
   skillDemandOverTime: SkillDemandRow[]
   salaryDistribution: SalaryDistributionRow[]
