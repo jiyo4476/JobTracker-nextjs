@@ -96,6 +96,15 @@ export const contactPatchSchema = contactCreateSchema.partial().refine(
   { message: 'At least one field is required' }
 )
 
+export const userSkillCreateSchema = z
+  .object({
+    skill_id: z.number().int().positive().optional(),
+    name: z.string().min(1).optional(),
+  })
+  .refine((d) => d.skill_id !== undefined || d.name !== undefined, {
+    message: 'Either skill_id or name must be provided',
+  })
+
 export const companyPatchSchema = z.object({
   name: z.string().optional(),
   website: z.string().url().optional(),
@@ -105,3 +114,15 @@ export const companyPatchSchema = z.object({
   linkedin_url: z.string().url().optional(),
   notes: z.string().optional(),
 })
+
+export const resumeVersionCreateSchema = z.object({
+  label: z.string().min(1),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be ISO date (YYYY-MM-DD)').optional(),
+  notes: z.string().optional(),
+}).strict()
+
+export const resumeVersionPatchSchema = z.object({
+  label: z.string().min(1).optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be ISO date (YYYY-MM-DD)').optional(),
+  notes: z.string().optional(),
+}).strict()
