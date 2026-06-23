@@ -130,9 +130,9 @@ export default function EditJobPage({ params }: { params: Promise<{ id: string }
   }, [job, reset])
 
   async function onSubmit(values: JobPatchFormValues) {
-    // Strip undefined values so PATCH only sends changed fields
+    // Strip undefined values while preserving intentional empty-string clears.
     const body = Object.fromEntries(
-      Object.entries(values).filter(([, v]) => v !== undefined && v !== '')
+      Object.entries(values).filter(([, v]) => v !== undefined)
     ) as Record<string, unknown>
 
     try {
