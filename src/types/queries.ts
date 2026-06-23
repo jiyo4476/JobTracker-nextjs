@@ -41,6 +41,14 @@ export interface LookupItem {
   jobCount?: number
 }
 
+export type ResumeVersion = {
+  id: number
+  label: string
+  date: string | null
+  notes: string | null
+  createdAt: string
+}
+
 export type UserSkill = {
   skillId: number
   name: string

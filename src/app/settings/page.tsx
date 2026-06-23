@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { ResumeVersionsSettings } from './ResumeVersionsSettings'
 import { SkillGapSettings } from './SkillGapSettings'
 
 async function handleExport(format: 'json' | 'csv', setLoading: (v: boolean) => void) {
@@ -32,17 +33,7 @@ export default function SettingsPage() {
     <div className="p-8 max-w-4xl space-y-8">
       <PageHeader title="Settings" description="Configure your job search tracker" />
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Resume Versions</CardTitle>
-            <Button size="sm" disabled>+ Add Version</Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-slate-500">Resume version tracking coming soon.</p>
-        </CardContent>
-      </Card>
+      <ResumeVersionsSettings />
 
       <SkillGapSettings />
 
