@@ -7,7 +7,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { useStats } from '@/lib/queries'
+import { useStats, useActivity } from '@/lib/queries'
+import { StageBadge } from '@/components/jobs/StageBadge'
 
 const KPI_LABELS = ['Total Jobs', 'Applied', 'Active Interviews', 'Stale Listings'] as const
 
@@ -19,8 +20,19 @@ function ChartSkeleton({ height }: { height: string }) {
   return <Skeleton className={`${height} w-full`} />
 }
 
+function relativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diffMs / 60_000)
+  if (mins < 60) return `${Math.max(mins, 1)} min ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
+  const days = Math.floor(hours / 24)
+  return `${days} day${days === 1 ? '' : 's'} ago`
+}
+
 export default function DashboardPage() {
   const { data, isLoading, isError } = useStats()
+  const { data: activityData, isLoading: activityLoading } = useActivity()
 
   const kpiValues = data
     ? [data.totalJobs, data.applied, data.activeInterviews, data.staleListings]
@@ -141,6 +153,43 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader><CardTitle className="text-sm">Recent Activity</CardTitle></CardHeader>
+        <CardContent>
+          {activityLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          ) : !activityData || activityData.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              No stage changes recorded yet.
+            </p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {activityData.map((item) => (
+                <li key={item.id} className="flex items-center gap-3 py-2.5 text-sm">
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium">{item.jobTitle}</span>
+                    {item.companyName && (
+                      <span className="text-slate-500"> at <span className="font-medium">{item.companyName}</span></span>
+                    )}
+                    <span className="text-slate-500"> moved from </span>
+                    {item.fromStage ? <StageBadge stage={item.fromStage} /> : <span className="text-slate-400 text-xs">—</span>}
+                    <span className="text-slate-500 mx-1">→</span>
+                    <StageBadge stage={item.toStage} />
+                  </div>
+                  <span className="text-xs text-slate-400 whitespace-nowrap flex-shrink-0">
+                    {relativeTime(item.changedAt)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

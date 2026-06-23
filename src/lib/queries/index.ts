@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import type {
+  ActivityItem,
   CompanyRow, CompanyDetail,
   JobDetail, JobListItem, JobsResponse, JobsParams,
   LookupItem, StatsResponse,
@@ -11,6 +12,7 @@ import type {
 
 // Re-export all types so consumers can import from '@/lib/queries' unchanged
 export type {
+  ActivityItem,
   CompanyRow, CompanyDetail,
   Contact,
   JobDetail, JobListItem, JobsResponse, JobsParams,
@@ -118,6 +120,14 @@ export function useAnalytics(params?: AnalyticsParams) {
   return useQuery<AnalyticsResponse>({
     queryKey: ['analytics', params],
     queryFn: () => api.get<AnalyticsResponse>(`/analytics${query ? `?${query}` : ''}`),
+  })
+}
+
+export function useActivity() {
+  return useQuery<ActivityItem[]>({
+    queryKey: ['activity'],
+    queryFn: () => api.get<ActivityItem[]>('/activity'),
+    staleTime: 30_000,
   })
 }
 
