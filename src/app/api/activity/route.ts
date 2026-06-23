@@ -20,15 +20,19 @@ export async function GET() {
     .orderBy(desc(jobStatusHistory.changedAt))
     .limit(20)
 
-  const data = rows.map((r) => ({
-    id: r.id,
-    jobId: r.jobId,
-    jobTitle: r.jobTitle,
-    companyName: r.companyName ?? null,
-    fromStage: r.fromStage ?? null,
-    toStage: r.toStage,
-    changedAt: r.changedAt ? r.changedAt.toISOString() : new Date().toISOString(),
-  }))
+  const data = rows.map((r) => {
+    if (!r.changedAt) throw new Error(`Activity row ${r.id} is missing changedAt`)
+
+    return {
+      id: r.id,
+      jobId: r.jobId,
+      jobTitle: r.jobTitle,
+      companyName: r.companyName ?? null,
+      fromStage: r.fromStage ?? null,
+      toStage: r.toStage,
+      changedAt: r.changedAt.toISOString(),
+    }
+  })
 
   const res = NextResponse.json(data)
   res.headers.set('Cache-Control', 's-maxage=30, stale-while-revalidate=30')
