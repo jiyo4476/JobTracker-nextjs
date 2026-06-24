@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { jobPatchSchema } from '@/lib/schemas'
-import { logger } from '@/lib/logger'
+import { logger, serializeError } from '@/lib/logger'
 import {
   jobs, companies, skills, software as softwareTable, keywords, certifications,
   jobSkills, jobSoftware, jobKeywords, jobCertifications, contacts, jobStatusHistory,
@@ -175,7 +175,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     updatedAt: new Date(),
   }).where(eq(jobs.id, jobId))
   } catch (err) {
-    logger.error('PATCH /api/jobs/[id] failed', { jobId, err: String(err) })
+    logger.error('PATCH /api/jobs/[id] failed', { jobId, ...serializeError(err) })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { contactCreateSchema } from '@/lib/schemas'
-import { logger } from '@/lib/logger'
+import { logger, serializeError } from '@/lib/logger'
 import { contacts } from '@/db/schema'
 import { eq, asc } from 'drizzle-orm'
 
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     logger.info('contact created', { contactId: row.id, jobId })
     return NextResponse.json(row, { status: 201 })
   } catch (err) {
-    logger.error('POST /api/jobs/[id]/contacts failed', { jobId, err: String(err) })
+    logger.error('POST /api/jobs/[id]/contacts failed', { jobId, ...serializeError(err) })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

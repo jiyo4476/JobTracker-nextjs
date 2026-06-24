@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { manualJobSchema } from '@/lib/schemas'
-import { logger } from '@/lib/logger'
+import { logger, serializeError } from '@/lib/logger'
 import { jobs, companies, jobSkills } from '@/db/schema'
 import { eq, and, ilike, or, gte, lte, count, desc, sql } from 'drizzle-orm'
 import {
@@ -83,7 +83,11 @@ export async function GET(req: NextRequest) {
 
   const where = filters.length > 0 ? and(...filters) : undefined
 
-  logger.debug('GET /api/jobs', { page, limit, stage, platform, jobType, expLevel, isRemote, q })
+  logger.debug('GET /api/jobs', {
+    page, limit, stage, platform, jobType, expLevel, isRemote,
+    hasQuery: q != null && q.length > 0,
+    queryLength: q != null ? q.length : undefined,
+  })
 
   const [{ total }] = await db
     .select({ total: count() })
@@ -171,7 +175,7 @@ export async function POST(req: NextRequest) {
     logger.info('job created manually', { jobId: newJob.id, title: b.job_title })
     return NextResponse.json({ job_id: newJob.id }, { status: 201 })
   } catch (err) {
-    logger.error('POST /api/jobs failed', { err: String(err) })
+    logger.error('POST /api/jobs failed', serializeError(err))
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

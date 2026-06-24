@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logger'
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const start = Date.now()
   const reqId = req.headers.get('x-request-id') ?? crypto.randomUUID()
   const { method, nextUrl } = req
@@ -21,10 +21,10 @@ export function middleware(req: NextRequest) {
 
   res.headers.set('x-request-id', reqId)
 
-  // Next.js middleware cannot observe the final response status from downstream
-  // handlers, so we log what we know at egress time.
-  const ms = Date.now() - start
-  reqLogger.info('request processed', { durationMs: ms })
+  // Next.js proxy cannot observe the final response status from downstream
+  // handlers. durationMs here is proxy-only, not end-to-end request latency.
+  const middlewareDurationMs = Date.now() - start
+  reqLogger.info('request processed', { middlewareDurationMs })
 
   return res
 }

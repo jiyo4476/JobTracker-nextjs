@@ -37,10 +37,14 @@ function emit(level: LogLevel, msg: string, ctx?: Record<string, unknown>) {
     ...ctx,
   }
   const line = JSON.stringify(entry)
-  if (level === 'error' || level === 'warn') {
-    process.stderr.write(line + '\n')
+  // console.* works in both the Node.js runtime (API routes) and the Edge
+  // Runtime (middleware). process.stdout/stderr are Node.js-only.
+  if (level === 'error') {
+    console.error(line)
+  } else if (level === 'warn') {
+    console.warn(line)
   } else {
-    process.stdout.write(line + '\n')
+    console.log(line)
   }
 }
 
@@ -69,3 +73,14 @@ function makeLogger(defaults: Record<string, unknown> = {}): Logger {
 }
 
 export const logger = makeLogger()
+
+/**
+ * Serialize an unknown caught value into structured fields for error logging.
+ * Preserves message, name, and stack rather than collapsing to String(err).
+ */
+export function serializeError(err: unknown): Record<string, unknown> {
+  if (err instanceof Error) {
+    return { errName: err.name, errMsg: err.message, stack: err.stack }
+  }
+  return { err: String(err) }
+}

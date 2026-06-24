@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { companyPatchSchema } from '@/lib/schemas'
-import { logger } from '@/lib/logger'
+import { logger, serializeError } from '@/lib/logger'
 import { companies, jobs } from '@/db/schema'
 import { and, desc, eq } from 'drizzle-orm'
 
@@ -56,7 +56,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ...(d.notes !== undefined && { notes: d.notes }),
     }).where(eq(companies.id, companyId))
   } catch (err) {
-    logger.error('PATCH /api/companies/[id] failed', { companyId, err: String(err) })
+    logger.error('PATCH /api/companies/[id] failed', { companyId, ...serializeError(err) })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 

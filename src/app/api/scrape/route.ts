@@ -3,7 +3,7 @@ import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { scrapePayloadSchema } from '@/lib/schemas'
 import { extractTags } from '@/lib/nlp-extract'
-import { logger } from '@/lib/logger'
+import { logger, serializeError } from '@/lib/logger'
 import {
   companies, jobs, skills, software as softwareTable, keywords, certifications,
   jobSkills, jobSoftware, jobKeywords, jobCertifications,
@@ -181,7 +181,7 @@ export async function POST(req: NextRequest) {
     logger.info('scrape: job created', { jobId, platform: data.source_platform, company: data.company_name })
     return NextResponse.json({ action: 'created', job_id: jobId }, { status: 201 })
   } catch (err) {
-    logger.error('scrape webhook failed', { err: String(err) })
+    logger.error('scrape webhook failed', serializeError(err))
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
