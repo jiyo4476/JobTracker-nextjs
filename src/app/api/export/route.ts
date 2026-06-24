@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
+import { logger } from '@/lib/logger'
 import { jobs, companies } from '@/db/schema'
 import { desc, eq } from 'drizzle-orm'
 
@@ -12,6 +13,8 @@ export async function GET(req: NextRequest) {
   }
   const { searchParams } = new URL(req.url)
   const format = searchParams.get('format') ?? 'json'
+
+  logger.info('export requested', { format })
 
   const rows = await db
     .select({

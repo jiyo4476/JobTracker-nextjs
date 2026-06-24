@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { contactCreateSchema } from '@/lib/schemas'
+import { logger } from '@/lib/logger'
 import { contacts } from '@/db/schema'
 import { eq, asc } from 'drizzle-orm'
 
@@ -34,17 +35,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const d = parsed.data
 
-  const [row] = await db.insert(contacts).values({
-    jobId,
-    name: d.name,
-    ...(d.title !== undefined && { title: d.title }),
-    ...(d.email !== undefined && { email: d.email }),
-    ...(d.phone !== undefined && { phone: d.phone }),
-    ...(d.linkedin_url !== undefined && { linkedinUrl: d.linkedin_url }),
-    ...(d.role !== undefined && { role: d.role }),
-    ...(d.contacted_at !== undefined && { contactedAt: d.contacted_at }),
-    ...(d.notes !== undefined && { notes: d.notes }),
-  }).returning()
+  try {
+    const [row] = await db.insert(contacts).values({
+      jobId,
+      name: d.name,
+      ...(d.title !== undefined && { title: d.title }),
+      ...(d.email !== undefined && { email: d.email }),
+      ...(d.phone !== undefined && { phone: d.phone }),
+      ...(d.linkedin_url !== undefined && { linkedinUrl: d.linkedin_url }),
+      ...(d.role !== undefined && { role: d.role }),
+      ...(d.contacted_at !== undefined && { contactedAt: d.contacted_at }),
+      ...(d.notes !== undefined && { notes: d.notes }),
+    }).returning()
 
-  return NextResponse.json(row, { status: 201 })
+    logger.info('contact created', { contactId: row.id, jobId })
+    return NextResponse.json(row, { status: 201 })
+  } catch (err) {
+    logger.error('POST /api/jobs/[id]/contacts failed', { jobId, err: String(err) })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { contactPatchSchema } from '@/lib/schemas'
+import { logger } from '@/lib/logger'
 import { contacts } from '@/db/schema'
 import { and, eq } from 'drizzle-orm'
 
@@ -33,6 +34,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }).where(and(eq(contacts.id, cId), eq(contacts.jobId, jobId))).returning({ id: contacts.id })
 
   if (result.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  logger.info('contact updated', { contactId: cId, jobId })
   return NextResponse.json({ success: true })
 }
 
@@ -47,5 +49,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const result = await db.delete(contacts).where(and(eq(contacts.id, cId), eq(contacts.jobId, jobId))).returning({ id: contacts.id })
 
   if (result.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  logger.info('contact deleted', { contactId: cId, jobId })
   return NextResponse.json({ success: true })
 }

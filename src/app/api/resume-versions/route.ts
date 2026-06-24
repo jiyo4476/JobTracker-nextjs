@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { resumeVersionCreateSchema } from '@/lib/schemas'
+import { logger } from '@/lib/logger'
 import { resumeVersions } from '@/db/schema'
 import { desc } from 'drizzle-orm'
 
@@ -19,11 +20,17 @@ export async function POST(req: NextRequest) {
   const parsed = resumeVersionCreateSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  const [row] = await db.insert(resumeVersions).values({
-    label: parsed.data.label,
-    date: parsed.data.date ?? null,
-    notes: parsed.data.notes ?? null,
-  }).returning()
+  try {
+    const [row] = await db.insert(resumeVersions).values({
+      label: parsed.data.label,
+      date: parsed.data.date ?? null,
+      notes: parsed.data.notes ?? null,
+    }).returning()
 
-  return NextResponse.json(row, { status: 201 })
+    logger.info('resume version created', { id: row.id, label: row.label })
+    return NextResponse.json(row, { status: 201 })
+  } catch (err) {
+    logger.error('POST /api/resume-versions failed', { err: String(err) })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }

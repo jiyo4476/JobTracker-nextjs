@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { manualJobSchema } from '@/lib/schemas'
+import { logger } from '@/lib/logger'
 import { jobs, companies, jobSkills } from '@/db/schema'
 import { eq, and, ilike, or, gte, lte, count, desc, sql } from 'drizzle-orm'
 import {
@@ -82,6 +83,8 @@ export async function GET(req: NextRequest) {
 
   const where = filters.length > 0 ? and(...filters) : undefined
 
+  logger.debug('GET /api/jobs', { page, limit, stage, platform, jobType, expLevel, isRemote, q })
+
   const [{ total }] = await db
     .select({ total: count() })
     .from(jobs)
@@ -147,22 +150,28 @@ export async function POST(req: NextRequest) {
   }
 
   const b = parsed.data
-  const [newJob] = await db
-    .insert(jobs)
-    .values({
-      jobTitle: b.job_title,
-      jobLink: b.job_link,
-      jobLocation: b.job_location,
-      isRemote: b.is_remote,
-      companyId: b.company_id,
-      notes: b.notes,
-      jobType: b.job_type,
-      experienceLevel: b.experience_level,
-      priority: b.priority,
-      salaryText: b.salary_text,
-      dateFound: new Date().toISOString().slice(0, 10),
-    })
-    .returning({ id: jobs.id })
+  try {
+    const [newJob] = await db
+      .insert(jobs)
+      .values({
+        jobTitle: b.job_title,
+        jobLink: b.job_link,
+        jobLocation: b.job_location,
+        isRemote: b.is_remote,
+        companyId: b.company_id,
+        notes: b.notes,
+        jobType: b.job_type,
+        experienceLevel: b.experience_level,
+        priority: b.priority,
+        salaryText: b.salary_text,
+        dateFound: new Date().toISOString().slice(0, 10),
+      })
+      .returning({ id: jobs.id })
 
-  return NextResponse.json({ job_id: newJob.id }, { status: 201 })
+    logger.info('job created manually', { jobId: newJob.id, title: b.job_title })
+    return NextResponse.json({ job_id: newJob.id }, { status: 201 })
+  } catch (err) {
+    logger.error('POST /api/jobs failed', { err: String(err) })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }

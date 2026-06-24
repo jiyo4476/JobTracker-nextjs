@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { userSkillCreateSchema } from '@/lib/schemas'
+import { logger } from '@/lib/logger'
 import { userSkills, skills } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 
@@ -49,5 +50,6 @@ export async function POST(req: NextRequest) {
     .values({ skillId, hasSkill: false })
     .onConflictDoNothing()
 
+  logger.info('user skill added', { skillId })
   return NextResponse.json({ success: true, skillId }, { status: 201 })
 }

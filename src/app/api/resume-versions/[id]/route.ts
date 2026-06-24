@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { resumeVersionPatchSchema } from '@/lib/schemas'
+import { logger } from '@/lib/logger'
 import { resumeVersions } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 
@@ -26,6 +27,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }).where(eq(resumeVersions.id, resumeVersionId)).returning({ id: resumeVersions.id })
 
   if (updated.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  logger.info('resume version updated', { resumeVersionId })
   return NextResponse.json({ success: true })
 }
 
@@ -39,5 +41,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const deleted = await db.delete(resumeVersions).where(eq(resumeVersions.id, resumeVersionId)).returning()
   if (deleted.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  logger.info('resume version deleted', { resumeVersionId })
   return NextResponse.json({ success: true })
 }

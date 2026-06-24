@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { jobPatchSchema } from '@/lib/schemas'
+import { logger } from '@/lib/logger'
 import {
   jobs, companies, skills, software as softwareTable, keywords, certifications,
   jobSkills, jobSoftware, jobKeywords, jobCertifications, contacts, jobStatusHistory,
@@ -141,6 +142,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
+  try {
   await db.update(jobs).set({
     ...(d.job_title !== undefined && { jobTitle: d.job_title }),
     ...(d.job_location !== undefined && { jobLocation: d.job_location }),
@@ -172,7 +174,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     ...(annualEquivalentMax !== undefined && { annualEquivalentMax }),
     updatedAt: new Date(),
   }).where(eq(jobs.id, jobId))
+  } catch (err) {
+    logger.error('PATCH /api/jobs/[id] failed', { jobId, err: String(err) })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 
+  logger.info('job updated', { jobId, fields: Object.keys(d) })
   return NextResponse.json({ success: true })
 }
 
@@ -190,5 +197,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     .returning({ id: jobs.id })
 
   if (result.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  logger.info('job soft-deleted', { jobId })
   return NextResponse.json({ success: true })
 }
