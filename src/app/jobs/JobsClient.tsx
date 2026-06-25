@@ -13,13 +13,16 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { StageBadge } from '@/components/jobs/StageBadge'
-import { useJobs, useDeleteJob, type JobListItem } from '@/lib/queries'
+import { useJobs, useDeleteJob, usePatchJob, type JobListItem } from '@/lib/queries'
+import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 
 const col = createColumnHelper<JobListItem>()
 
@@ -45,6 +48,7 @@ const EXTRA_FILTER_PARAMS = ['salary_min', 'salary_max', 'priority_min', 'skill_
 export default function JobsClient() {
   const searchParams = useSearchParams()
   const router = useRouter()
+  const qc = useQueryClient()
 
   // Read filter values from URL
   const page = Number(searchParams.get('page') ?? '1')
@@ -100,6 +104,10 @@ export default function JobsClient() {
   }
 
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  const [bulkStage, setBulkStage] = useState('')
+  const [bulkPending, setBulkPending] = useState(false)
+  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({})
 
   const { data, isLoading } = useJobs({
     page,
@@ -110,8 +118,99 @@ export default function JobsClient() {
     is_remote: isRemote,
   })
   const deleteJob = useDeleteJob()
+  const patchJob = usePatchJob()
+
+  const selectedIds = Object.entries(rowSelection)
+    .filter(([, v]) => v)
+    .map(([id]) => Number(id))
+
+  async function handleBulkDelete() {
+    setBulkPending(true)
+    const results = await Promise.allSettled(selectedIds.map(id => deleteJob.mutateAsync(id)))
+    const failed = results.filter(r => r.status === 'rejected').length
+    const succeeded = results.length - failed
+    setBulkPending(false)
+    setBulkDeleteOpen(false)
+    if (succeeded > 0) {
+      // Remove only successfully deleted rows from selection
+      const succeededIds = new Set(
+        selectedIds.filter((_, i) => results[i].status === 'fulfilled').map(String)
+      )
+      setRowSelection(prev => {
+        const next = { ...prev }
+        for (const id of succeededIds) delete next[id]
+        return next
+      })
+      qc.invalidateQueries({ queryKey: ['jobs'] })
+    }
+    if (failed > 0) toast.error(`${failed} deletion${failed !== 1 ? 's' : ''} failed`)
+    else toast.success(`Deleted ${succeeded} job${succeeded !== 1 ? 's' : ''}`)
+  }
+
+  async function handleBulkStage() {
+    if (!bulkStage) return
+    setBulkPending(true)
+    const results = await Promise.allSettled(
+      selectedIds.map(id => patchJob.mutateAsync({ id, body: { interview_stage: bulkStage } }))
+    )
+    const failed = results.filter(r => r.status === 'rejected').length
+    const succeeded = results.length - failed
+    setBulkPending(false)
+    if (succeeded > 0) {
+      const succeededIds = new Set(
+        selectedIds.filter((_, i) => results[i].status === 'fulfilled').map(String)
+      )
+      setRowSelection(prev => {
+        const next = { ...prev }
+        for (const id of succeededIds) delete next[id]
+        return next
+      })
+      setBulkStage('')
+      qc.invalidateQueries({ queryKey: ['jobs'] })
+    }
+    if (failed > 0) toast.error(`${failed} update${failed !== 1 ? 's' : ''} failed`)
+    else toast.success(`Updated ${succeeded} job${succeeded !== 1 ? 's' : ''}`)
+  }
+
+  const allRows = data?.jobs ?? []
+  const allRowIds = allRows.map(j => String(j.id))
+  const allSelected = allRowIds.length > 0 && allRowIds.every(id => rowSelection[id])
+  const someSelected = allRowIds.some(id => rowSelection[id])
+
+  function toggleAll(checked: boolean) {
+    const next: Record<string, boolean> = { ...rowSelection }
+    for (const id of allRowIds) {
+      if (checked) next[id] = true
+      else delete next[id]
+    }
+    setRowSelection(next)
+  }
 
   const columns = [
+    col.display({
+      id: 'select',
+      header: () => (
+        <Checkbox
+          checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+          onCheckedChange={(v) => toggleAll(!!v)}
+          aria-label="Select all"
+        />
+      ),
+      cell: (info) => (
+        <Checkbox
+          checked={!!rowSelection[String(info.row.original.id)]}
+          onCheckedChange={(v) => {
+            setRowSelection(prev => {
+              const next = { ...prev }
+              if (v) next[String(info.row.original.id)] = true
+              else delete next[String(info.row.original.id)]
+              return next
+            })
+          }}
+          aria-label="Select row"
+        />
+      ),
+    }),
     col.accessor('companyName', {
       header: 'Company',
       cell: (info) => <span className="font-medium">{info.getValue() ?? '—'}</span>,
@@ -174,7 +273,7 @@ export default function JobsClient() {
   ]
 
   const table = useReactTable({
-    data: data?.jobs ?? [],
+    data: allRows,
     columns,
     getCoreRowModel: getCoreRowModel(),
     manualPagination: true,
@@ -258,6 +357,56 @@ export default function JobsClient() {
         )}
       </div>
 
+      {/* Bulk action toolbar */}
+      {someSelected && (
+        <div className="flex items-center gap-3 mb-3 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm">
+          <span className="font-medium">{selectedIds.length} selected</span>
+          <span className="text-slate-400">·</span>
+          <select
+            value={bulkStage}
+            onChange={(e) => setBulkStage(e.target.value)}
+            className="h-7 rounded border border-slate-600 bg-slate-800 px-2 text-xs text-white"
+            disabled={bulkPending}
+          >
+            <option value="">Change stage…</option>
+            {STAGES.filter(Boolean).map((s) => (
+              <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
+            ))}
+          </select>
+          {bulkStage && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-3 text-xs bg-slate-700 border-slate-600 text-white hover:bg-slate-600"
+              disabled={bulkPending}
+              onClick={handleBulkStage}
+            >
+              {bulkPending ? 'Applying…' : 'Apply'}
+            </Button>
+          )}
+          <span className="text-slate-400">·</span>
+          <Button
+            size="sm"
+            variant="destructive"
+            className="h-7 px-3 text-xs"
+            disabled={bulkPending}
+            onClick={() => setBulkDeleteOpen(true)}
+          >
+            {bulkPending ? 'Deleting…' : 'Delete'}
+          </Button>
+          <span className="text-slate-400">·</span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-3 text-xs text-slate-300 hover:text-white hover:bg-slate-700"
+            disabled={bulkPending}
+            onClick={() => setRowSelection({})}
+          >
+            Clear
+          </Button>
+        </div>
+      )}
+
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-slate-900">
@@ -292,7 +441,10 @@ export default function JobsClient() {
                     </tr>
                   )
                 : table.getRowModel().rows.map((row) => (
-                    <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                    <tr
+                      key={row.id}
+                      className={`hover:bg-slate-50 transition-colors ${rowSelection[String(row.original.id)] ? 'bg-blue-50' : ''}`}
+                    >
                       {row.getVisibleCells().map((cell) => (
                         <td key={cell.id} className="px-4 py-3">
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -328,6 +480,8 @@ export default function JobsClient() {
           </div>
         </div>
       </Card>
+
+      {/* Single-row delete dialog */}
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -348,6 +502,28 @@ export default function JobsClient() {
               }}
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk delete dialog */}
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedIds.length} job{selectedIds.length !== 1 ? 's' : ''}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedIds.length} listing{selectedIds.length !== 1 ? 's' : ''} will be soft-deleted and hidden from the default view.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={bulkPending}
+              onClick={handleBulkDelete}
+            >
+              {bulkPending ? 'Deleting…' : `Delete ${selectedIds.length}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
