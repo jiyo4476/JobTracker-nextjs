@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { userSkills } from '@/db/schema'
+import { logger } from '@/lib/logger'
 import { eq } from 'drizzle-orm'
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -18,5 +19,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   if (deleted.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  logger.info('user skill removed', { skillId })
   return NextResponse.json({ success: true })
 }
