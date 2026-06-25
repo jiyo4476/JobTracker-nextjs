@@ -483,7 +483,7 @@ export default function EditJobPage({ params }: { params: Promise<{ id: string }
               keywords ({job.keywords.map(k => k.name).join(', ') || 'none'}),
               certifications ({job.certifications.map(c => c.name).join(', ') || 'none'}).
             </p>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-600 mt-1">
               {/* TODO: Tag editing requires separate junction-table mutations — planned for a future ticket */}
               Tag editing is not available in this form yet. Tags can be managed via the scraper webhook.
             </p>

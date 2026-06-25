@@ -91,7 +91,7 @@ export function SkillGapSettings() {
           </div>
 
           {loading ? (
-            <p className="text-sm text-slate-400">Loading skills...</p>
+            <p className="text-sm text-slate-600">Loading skills...</p>
           ) : error ? (
             <p className="text-sm text-red-500">Failed to load skill data.</p>
           ) : sortedUserSkills.length === 0 ? (
@@ -119,7 +119,7 @@ export function SkillGapSettings() {
         <div className="space-y-4">
           <h3 className="text-sm font-medium">Skill Gaps</h3>
           {loading ? (
-            <p className="text-sm text-slate-400">Loading gaps...</p>
+            <p className="text-sm text-slate-600">Loading gaps...</p>
           ) : error ? (
             <p className="text-sm text-red-500">Failed to load skill gaps.</p>
           ) : skillGaps.length === 0 ? (
@@ -129,11 +129,11 @@ export function SkillGapSettings() {
               {skillGaps.slice(0, 20).map(skill => (
                 <div key={skill.id} className="flex items-center justify-between rounded border px-3 py-2 text-sm">
                   <span>{skill.name}</span>
-                  <span className="text-xs text-slate-400">{skill.jobCount ?? 0} jobs</span>
+                  <span className="text-xs text-slate-600">{skill.jobCount ?? 0} jobs</span>
                 </div>
               ))}
               {skillGaps.length > 20 && (
-                <p className="text-xs text-slate-400 text-center pt-1">
+                <p className="text-xs text-slate-600 text-center pt-1">
                   +{skillGaps.length - 20} more skills not shown
                 </p>
               )}
