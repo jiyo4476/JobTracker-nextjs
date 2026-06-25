@@ -182,11 +182,11 @@ export default function DashboardPage() {
                       <span className="text-slate-500"> at <span className="font-medium">{item.companyName}</span></span>
                     )}
                     <span className="text-slate-500"> moved from </span>
-                    {item.fromStage ? <StageBadge stage={item.fromStage} /> : <span className="text-slate-400 text-xs">—</span>}
+                    {item.fromStage ? <StageBadge stage={item.fromStage} /> : <span className="text-slate-600 text-xs">—</span>}
                     <span className="text-slate-500 mx-1">→</span>
                     <StageBadge stage={item.toStage} />
                   </div>
-                  <span className="text-xs text-slate-400 whitespace-nowrap flex-shrink-0">
+                  <span className="text-xs text-slate-600 whitespace-nowrap flex-shrink-0">
                     {relativeTime(item.changedAt)}
                   </span>
                 </li>

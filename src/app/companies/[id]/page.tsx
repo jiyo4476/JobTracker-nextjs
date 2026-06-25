@@ -158,7 +158,7 @@ export default function CompanyDetailPage() {
                       <span className="text-sm text-slate-500 w-28 text-right">
                         {formatSalary(job.salaryMin, job.salaryMax)}
                       </span>
-                      <span className="text-xs text-slate-400 w-24 text-right">
+                      <span className="text-xs text-slate-600 w-24 text-right">
                         {new Date(job.dateFound).toLocaleDateString()}
                       </span>
                     </div>

@@ -152,7 +152,7 @@ export function ResumeVersionsSettings() {
         )}
 
         {isLoading ? (
-          <p className="text-sm text-slate-400">Loading resume versions...</p>
+          <p className="text-sm text-slate-600">Loading resume versions...</p>
         ) : isError ? (
           <p className="text-sm text-red-500">Failed to load resume versions.</p>
         ) : versions.length === 0 ? (
@@ -199,7 +199,7 @@ export function ResumeVersionsSettings() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1">
                       <p className="font-medium">{version.label}</p>
-                      <p className="text-xs text-slate-400">{formatDate(version.date)}</p>
+                      <p className="text-xs text-slate-600">{formatDate(version.date)}</p>
                       {version.notes && <p className="text-slate-500 whitespace-pre-wrap">{version.notes}</p>}
                     </div>
                     <div className="flex gap-2">

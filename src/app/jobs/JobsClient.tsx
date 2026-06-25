@@ -134,7 +134,7 @@ export default function JobsClient() {
         <span>
           {info.getValue() ?? '—'}
           {info.row.original.isRemote && (
-            <span className="ml-1 text-xs text-slate-400">(remote)</span>
+            <span className="ml-1 text-xs text-slate-600">(remote)</span>
           )}
         </span>
       ),
@@ -153,7 +153,7 @@ export default function JobsClient() {
         const p = info.getValue()
         return p
           ? <span className="text-amber-500">{'★'.repeat(p)}</span>
-          : <span className="text-slate-300">—</span>
+          : <span className="text-slate-600">—</span>
       },
     }),
     col.display({
@@ -260,9 +260,9 @@ export default function JobsClient() {
 
       <Card>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm text-slate-900">
             <thead>
-              <tr className="border-b text-left text-slate-500 text-xs uppercase tracking-wide">
+              <tr className="border-b text-left text-slate-600 text-xs uppercase tracking-wide">
                 {table.getHeaderGroups().map((hg) =>
                   hg.headers.map((header) => (
                     <th key={header.id} className="px-4 py-3 font-medium whitespace-nowrap">
@@ -286,7 +286,7 @@ export default function JobsClient() {
                 : table.getRowModel().rows.length === 0
                 ? (
                     <tr>
-                      <td colSpan={columns.length} className="px-4 py-12 text-center text-slate-400">
+                      <td colSpan={columns.length} className="px-4 py-12 text-center text-slate-600">
                         No jobs found
                       </td>
                     </tr>
@@ -304,7 +304,7 @@ export default function JobsClient() {
           </table>
         </div>
 
-        <div className="px-4 py-3 border-t flex items-center justify-between text-xs text-slate-500">
+        <div className="px-4 py-3 border-t flex items-center justify-between text-xs text-slate-600">
           <span>
             {total} job{total !== 1 ? 's' : ''} · page {page} of {totalPages}
           </span>

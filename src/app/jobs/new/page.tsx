@@ -197,7 +197,7 @@ export default function NewJobPage() {
                   <button
                     type="button"
                     onClick={() => setPriority('')}
-                    className="text-xs text-slate-400 hover:text-slate-600"
+                    className="text-xs text-slate-600 hover:text-slate-800"
                   >
                     clear
                   </button>
