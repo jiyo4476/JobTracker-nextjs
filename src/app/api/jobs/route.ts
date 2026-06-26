@@ -33,6 +33,9 @@ export async function GET(req: NextRequest) {
   const expLevelParsed = experienceLevelEnum.safeParse(expLevel)
   if (expLevel && expLevelParsed.success) filters.push(eq(jobs.experienceLevel, expLevelParsed.data))
 
+  const clearance = searchParams.get('security_clearance')
+  if (clearance !== null) filters.push(eq(jobs.securityClearanceReq, clearance === 'true'))
+
   const isRemote = searchParams.get('is_remote')
   if (isRemote !== null) filters.push(eq(jobs.isRemote, isRemote === 'true'))
 
@@ -84,7 +87,7 @@ export async function GET(req: NextRequest) {
   const where = filters.length > 0 ? and(...filters) : undefined
 
   logger.debug('GET /api/jobs', {
-    page, limit, stage, platform, jobType, expLevel, isRemote,
+    page, limit, stage, platform, jobType, expLevel, clearance, isRemote,
     hasQuery: q != null && q.length > 0,
     queryLength: q != null ? q.length : undefined,
   })
@@ -117,6 +120,7 @@ export async function GET(req: NextRequest) {
       dateFound: jobs.dateFound,
       isActive: jobs.isActive,
       priority: jobs.priority,
+      securityClearanceReq: jobs.securityClearanceReq,
       companyId: jobs.companyId,
       companyName: companies.name,
       createdAt: jobs.createdAt,

@@ -122,6 +122,7 @@ export interface JobListItem {
   dateFound: string
   isActive: boolean
   priority: number | null
+  securityClearanceReq: boolean | null
   companyId: number | null
   companyName: string | null
   createdAt: string
@@ -141,6 +142,7 @@ export interface JobsParams {
   platform?: string
   job_type?: string
   experience_level?: string
+  security_clearance?: string
   is_remote?: string
   is_active?: string
   skill_ids?: string

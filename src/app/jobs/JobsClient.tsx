@@ -43,6 +43,7 @@ function formatDate(d: string | null): string {
 const STAGES = ['', 'not_applied', 'applied', 'phone_screen', 'technical_screen', 'onsite', 'offer_received', 'rejected', 'withdrawn']
 const PLATFORMS = ['', 'linkedin', 'indeed', 'glassdoor', 'dice', 'lever', 'greenhouse', 'workday', 'angellist', 'direct', 'other']
 const JOB_TYPES = ['', 'full_time', 'part_time', 'contract', 'internship', 'temp', 'freelance']
+const EXPERIENCE_LEVELS = ['', 'entry', 'mid', 'senior', 'lead', 'executive']
 const EXTRA_FILTER_PARAMS = ['salary_min', 'salary_max', 'priority_min', 'skill_ids'] as const
 
 export default function JobsClient() {
@@ -55,6 +56,8 @@ export default function JobsClient() {
   const stage = searchParams.get('stage') ?? ''
   const platform = searchParams.get('platform') ?? ''
   const jobType = searchParams.get('job_type') ?? ''
+  const experienceLevel = searchParams.get('experience_level') ?? ''
+  const securityClearance = searchParams.get('security_clearance') ?? ''
   const isRemote = searchParams.get('is_remote') ?? ''
   const urlQ = searchParams.get('q') ?? ''
 
@@ -115,6 +118,8 @@ export default function JobsClient() {
     stage,
     platform,
     job_type: jobType,
+    experience_level: experienceLevel,
+    security_clearance: securityClearance,
     is_remote: isRemote,
   })
   const deleteJob = useDeleteJob()
@@ -255,6 +260,12 @@ export default function JobsClient() {
           : <span className="text-slate-600">—</span>
       },
     }),
+    col.accessor('securityClearanceReq', {
+      header: 'Clearance',
+      cell: (info) => info.getValue()
+        ? <span className="inline-block rounded px-1.5 py-0.5 text-xs font-medium bg-orange-100 text-orange-700">Required</span>
+        : <span className="text-slate-400 text-xs">—</span>,
+    }),
     col.display({
       id: 'actions',
       header: '',
@@ -288,6 +299,8 @@ export default function JobsClient() {
     stage ||
     platform ||
     jobType ||
+    experienceLevel ||
+    securityClearance ||
     isRemote ||
     EXTRA_FILTER_PARAMS.some(param => searchParams.has(param))
   )
@@ -340,6 +353,24 @@ export default function JobsClient() {
           {JOB_TYPES.map((t) => (
             <option key={t} value={t}>{t ? t.replace(/_/g, ' ') : 'All types'}</option>
           ))}
+        </select>
+        <select
+          value={experienceLevel}
+          onChange={(e) => updateParams({ experience_level: e.target.value })}
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+        >
+          {EXPERIENCE_LEVELS.map((l) => (
+            <option key={l} value={l}>{l ? l.charAt(0).toUpperCase() + l.slice(1) : 'All levels'}</option>
+          ))}
+        </select>
+        <select
+          value={securityClearance}
+          onChange={(e) => updateParams({ security_clearance: e.target.value })}
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+        >
+          <option value="">All clearance</option>
+          <option value="true">Clearance required</option>
+          <option value="false">No clearance</option>
         </select>
         <select
           value={isRemote}
