@@ -156,6 +156,46 @@ describe('PATCH /api/jobs/[id]', () => {
   })
 })
 
+describe('PATCH /api/jobs/[id] — salary recomputation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(requireApiKey).mockReturnValue(true)
+  })
+
+  it('reads salary_type from DB and computes annualEquivalentMin when only hourly_rate_min is patched', async () => {
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    // DB returns existing salary_type = 'hourly'; no stage change so only one select
+    mockDb.select.mockReturnValue(makeChain([{ salaryType: 'hourly' }]))
+    const updateChain = makeChain(undefined)
+    mockDb.update.mockReturnValue(updateChain)
+
+    const { PATCH } = await import('@/app/api/jobs/[id]/route')
+    const res = await PATCH(makeReq('1', { hourly_rate_min: 50 }), makeParams('1'))
+    expect(res.status).toBe(200)
+
+    const setSpy = updateChain.set as ReturnType<typeof vi.fn>
+    expect(setSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ annualEquivalentMin: Math.round(50 * 2080 * 100) }),
+    )
+  })
+
+  it('does not set annualEquivalentMin when salary_type from DB is annual and only job_title is patched', async () => {
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    mockDb.select.mockReturnValue(makeChain([{ interviewStage: 'applied' }]))
+    const updateChain = makeChain(undefined)
+    mockDb.update.mockReturnValue(updateChain)
+
+    const { PATCH } = await import('@/app/api/jobs/[id]/route')
+    const res = await PATCH(makeReq('1', { job_title: 'Senior Engineer' }), makeParams('1'))
+    expect(res.status).toBe(200)
+
+    const setSpy = updateChain.set as ReturnType<typeof vi.fn>
+    const callArgs = setSpy.mock.calls[0][0] as Record<string, unknown>
+    expect(callArgs).not.toHaveProperty('annualEquivalentMin')
+    expect(callArgs).not.toHaveProperty('annualEquivalentMax')
+  })
+})
+
 describe('DELETE /api/jobs/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -197,6 +237,17 @@ describe('DELETE /api/jobs/[id]', () => {
     })
     const res = await DELETE(req, makeParams('999'))
     expect(res.status).toBe(404)
+  })
+
+  it('returns 400 for non-numeric id', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    const { DELETE } = await import('@/app/api/jobs/[id]/route')
+    const req = new NextRequest('http://localhost/api/jobs/abc', {
+      method: 'DELETE',
+      headers: { authorization: 'Bearer test-key' },
+    })
+    const res = await DELETE(req, makeParams('abc'))
+    expect(res.status).toBe(400)
   })
 
   it('calls db.update (soft delete, not hard delete)', async () => {

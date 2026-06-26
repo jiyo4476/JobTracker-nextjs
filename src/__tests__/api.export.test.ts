@@ -90,4 +90,20 @@ describe('GET /api/export', () => {
     const res = await GET(req)
     expect(res.headers.get('Content-Disposition')).toContain('attachment')
   })
+
+  it('JSON response includes X-Export-Limit header set to 10000', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    const { GET } = await import('@/app/api/export/route')
+    const req = new NextRequest('http://localhost/api/export')
+    const res = await GET(req)
+    expect(res.headers.get('X-Export-Limit')).toBe('10000')
+  })
+
+  it('CSV response includes X-Export-Limit header set to 10000', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    const { GET } = await import('@/app/api/export/route')
+    const req = new NextRequest('http://localhost/api/export?format=csv')
+    const res = await GET(req)
+    expect(res.headers.get('X-Export-Limit')).toBe('10000')
+  })
 })

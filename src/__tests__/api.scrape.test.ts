@@ -274,6 +274,28 @@ describe('POST /api/scrape', () => {
     expect(vi.mocked(extractTags)).not.toHaveBeenCalled()
   })
 
+  it('returns 400 when posting_md_path uses uppercase characters', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    const { POST } = await import('@/app/api/scrape/route')
+    const res = await POST(makeRequest({ ...validBody, posting_md_path: 'LinkedIn/Job123.MD' }))
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 400 when posting_md_path uses mixed-case extension', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    const { POST } = await import('@/app/api/scrape/route')
+    const res = await POST(makeRequest({ ...validBody, posting_md_path: 'linkedin/Job123.Md' }))
+    expect(res.status).toBe(400)
+  })
+
+  it('accepts a valid lowercase posting_md_path', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    setupDbMocks('created')
+    const { POST } = await import('@/app/api/scrape/route')
+    const res = await POST(makeRequest({ ...validBody, posting_md_path: 'linkedin/job-123.md' }))
+    expect(res.status).toBe(201)
+  })
+
   it('does not call extractTags when description is absent and tag arrays are empty', async () => {
     vi.mocked(requireApiKey).mockReturnValue(true)
     setupDbMocks('created')
