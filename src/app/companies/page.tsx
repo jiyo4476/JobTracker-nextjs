@@ -52,7 +52,7 @@ export default function CompaniesPage() {
                       <td className="px-4 py-3 text-slate-600">{formatSalary(row.avgSalaryMax)}</td>
                       <td className="px-4 py-3">
                         {row.website
-                          ? <a href={row.website} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-blue-600">
+                          ? <a href={row.website} target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-blue-600">
                               <ExternalLink className="h-4 w-4" />
                             </a>
                           : '—'}

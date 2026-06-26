@@ -3,6 +3,7 @@ import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { scrapePayloadSchema } from '@/lib/schemas'
 import { extractTags } from '@/lib/nlp-extract'
+import { logger, serializeError } from '@/lib/logger'
 import {
   companies, jobs, skills, software as softwareTable, keywords, certifications,
   jobSkills, jobSoftware, jobKeywords, jobCertifications,
@@ -36,6 +37,15 @@ export async function POST(req: NextRequest) {
   const extracted = allTagsEmpty && parsed.data.job_description
     ? extractTags(parsed.data.job_description)
     : null
+
+  if (extracted) {
+    logger.debug('NLP tag extraction used', {
+      platform: parsed.data.source_platform,
+      skills: extracted.skills.length,
+      software: extracted.software.length,
+      keywords: extracted.keywords.length,
+    })
+  }
 
   const data = {
     ...parsed.data,
@@ -81,6 +91,7 @@ export async function POST(req: NextRequest) {
         .update(jobs)
         .set({ lastScrapedAt: new Date(), isActive: true, updatedAt: new Date() })
         .where(eq(jobs.id, exactMatch[0].id))
+      logger.info('scrape: job updated', { jobId: exactMatch[0].id, platform: data.source_platform })
       return NextResponse.json({ action: 'updated', job_id: exactMatch[0].id })
     }
 
@@ -103,6 +114,7 @@ export async function POST(req: NextRequest) {
       .limit(1)
 
     if (fuzzyMatch.length > 0) {
+      logger.info('scrape: duplicate skipped', { existingJobId: fuzzyMatch[0].id, platform: data.source_platform })
       return NextResponse.json({ action: 'duplicate_skipped', job_id: fuzzyMatch[0].id })
     }
 
@@ -166,9 +178,10 @@ export async function POST(req: NextRequest) {
       certRows.length > 0 && db.insert(jobCertifications).values(certRows.map(r => ({ jobId, certificationId: r.id }))).onConflictDoNothing(),
     ])
 
+    logger.info('scrape: job created', { jobId, platform: data.source_platform, company: data.company_name })
     return NextResponse.json({ action: 'created', job_id: jobId }, { status: 201 })
   } catch (err) {
-    console.error('[POST /api/scrape]', err)
+    logger.error('scrape webhook failed', serializeError(err))
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

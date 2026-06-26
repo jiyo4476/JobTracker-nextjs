@@ -323,7 +323,7 @@ export default function JobDetailPage() {
               {job.jobDescription ? (
                 <p className="text-sm whitespace-pre-wrap leading-relaxed">{job.jobDescription}</p>
               ) : (
-                <p className="text-sm text-slate-400 italic">No description available.</p>
+                <p className="text-sm text-slate-600 italic">No description available.</p>
               )}
             </CardContent>
           </Card>
@@ -513,7 +513,7 @@ export default function JobDetailPage() {
               )}
 
               {job.contacts.length === 0 ? (
-                <p className="text-sm text-slate-400 py-2">No contacts yet.</p>
+                <p className="text-sm text-slate-600 py-2">No contacts yet.</p>
               ) : (
                 job.contacts.map(c => (
                   <div key={c.id} className="text-sm border rounded p-3 space-y-2">

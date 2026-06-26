@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { companyPatchSchema } from '@/lib/schemas'
+import { logger, serializeError } from '@/lib/logger'
 import { companies, jobs } from '@/db/schema'
 import { and, desc, eq } from 'drizzle-orm'
 
@@ -44,15 +45,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
   const d = parsed.data
-  await db.update(companies).set({
-    ...(d.name !== undefined && { name: d.name }),
-    ...(d.website !== undefined && { website: d.website }),
-    ...(d.industry !== undefined && { industry: d.industry }),
-    ...(d.hq_location !== undefined && { hqLocation: d.hq_location }),
-    ...(d.glassdoor_url !== undefined && { glassdoorUrl: d.glassdoor_url }),
-    ...(d.linkedin_url !== undefined && { linkedinUrl: d.linkedin_url }),
-    ...(d.notes !== undefined && { notes: d.notes }),
-  }).where(eq(companies.id, companyId))
+  try {
+    await db.update(companies).set({
+      ...(d.name !== undefined && { name: d.name }),
+      ...(d.website !== undefined && { website: d.website }),
+      ...(d.industry !== undefined && { industry: d.industry }),
+      ...(d.hq_location !== undefined && { hqLocation: d.hq_location }),
+      ...(d.glassdoor_url !== undefined && { glassdoorUrl: d.glassdoor_url }),
+      ...(d.linkedin_url !== undefined && { linkedinUrl: d.linkedin_url }),
+      ...(d.notes !== undefined && { notes: d.notes }),
+    }).where(eq(companies.id, companyId))
+  } catch (err) {
+    logger.error('PATCH /api/companies/[id] failed', { companyId, ...serializeError(err) })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 
+  logger.info('company updated', { companyId })
   return NextResponse.json({ success: true })
 }
