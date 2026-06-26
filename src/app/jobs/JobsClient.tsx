@@ -119,7 +119,7 @@ export default function JobsClient() {
     platform,
     job_type: jobType,
     experience_level: experienceLevel,
-    security_clearance: securityClearance,
+    security_clearance: (securityClearance || undefined) as 'true' | 'false' | undefined,
     is_remote: isRemote,
   })
   const deleteJob = useDeleteJob()

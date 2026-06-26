@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
   if (expLevel && expLevelParsed.success) filters.push(eq(jobs.experienceLevel, expLevelParsed.data))
 
   const clearance = searchParams.get('security_clearance')
-  if (clearance !== null) filters.push(eq(jobs.securityClearanceReq, clearance === 'true'))
+  if (clearance === 'true' || clearance === 'false') filters.push(eq(jobs.securityClearanceReq, clearance === 'true'))
 
   const isRemote = searchParams.get('is_remote')
   if (isRemote !== null) filters.push(eq(jobs.isRemote, isRemote === 'true'))

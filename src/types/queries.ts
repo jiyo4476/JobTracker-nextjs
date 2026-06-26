@@ -142,7 +142,7 @@ export interface JobsParams {
   platform?: string
   job_type?: string
   experience_level?: string
-  security_clearance?: string
+  security_clearance?: 'true' | 'false'
   is_remote?: string
   is_active?: string
   skill_ids?: string
