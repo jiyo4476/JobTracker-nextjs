@@ -48,5 +48,5 @@ WHERE "name" IN (
   'Cross-Functional Collaboration','Stakeholder Communication',
   'Problem Solving','Debugging'
 )
-AND id NOT IN (SELECT skill_id FROM job_skills)
-AND id NOT IN (SELECT skill_id FROM user_skills);
+AND NOT EXISTS (SELECT 1 FROM job_skills  js WHERE js.skill_id = skills.id)
+AND NOT EXISTS (SELECT 1 FROM user_skills us WHERE us.skill_id = skills.id);
