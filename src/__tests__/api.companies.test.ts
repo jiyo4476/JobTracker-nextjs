@@ -99,6 +99,24 @@ describe('GET /api/companies/[id]', () => {
     expect(json).toHaveProperty('jobs')
     expect(Array.isArray(json.jobs)).toBe(true)
   })
+
+  it('applies a limit of 50 to the linked jobs query', async () => {
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    let callCount = 0
+    const jobsChain = makeChain([])
+    mockDb.select.mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return makeChain([mockCompany])
+      return jobsChain
+    })
+
+    const { GET } = await import('@/app/api/companies/[id]/route')
+    const req = new NextRequest('http://localhost/api/companies/1')
+    await GET(req, { params: Promise.resolve({ id: '1' }) })
+
+    const limitSpy = jobsChain.limit as ReturnType<typeof vi.fn>
+    expect(limitSpy).toHaveBeenCalledWith(50)
+  })
 })
 
 describe('PATCH /api/companies/[id]', () => {

@@ -32,4 +32,20 @@ describe('requireApiKey', () => {
     })
     expect(requireApiKey(req)).toBe(false)
   })
+
+  it('returns false when API_KEY env var is not set', () => {
+    delete process.env.API_KEY
+    const req = new NextRequest('http://localhost/api/test', {
+      headers: { authorization: 'Bearer test-key' },
+    })
+    expect(requireApiKey(req)).toBe(false)
+  })
+
+  it('returns false for "Bearer undefined" when API_KEY is not set', () => {
+    delete process.env.API_KEY
+    const req = new NextRequest('http://localhost/api/test', {
+      headers: { authorization: 'Bearer undefined' },
+    })
+    expect(requireApiKey(req)).toBe(false)
+  })
 })

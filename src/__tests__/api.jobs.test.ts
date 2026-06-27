@@ -163,6 +163,30 @@ describe('GET /api/jobs', () => {
     const json = await res.json()
     expect(json.page).toBe(1)
   })
+
+  it('filters by security_clearance=true param', async () => {
+    const { GET } = await import('@/app/api/jobs/route')
+    const res = await GET(new NextRequest('http://localhost/api/jobs?security_clearance=true'))
+    expect(res.status).toBe(200)
+  })
+
+  it('filters by security_clearance=false param', async () => {
+    const { GET } = await import('@/app/api/jobs/route')
+    const res = await GET(new NextRequest('http://localhost/api/jobs?security_clearance=false'))
+    expect(res.status).toBe(200)
+  })
+
+  it('filters by experience_level param', async () => {
+    const { GET } = await import('@/app/api/jobs/route')
+    const res = await GET(new NextRequest('http://localhost/api/jobs?experience_level=senior'))
+    expect(res.status).toBe(200)
+  })
+
+  it('ignores unknown experience_level param', async () => {
+    const { GET } = await import('@/app/api/jobs/route')
+    const res = await GET(new NextRequest('http://localhost/api/jobs?experience_level=not_a_level'))
+    expect(res.status).toBe(200)
+  })
 })
 
 describe('POST /api/jobs', () => {

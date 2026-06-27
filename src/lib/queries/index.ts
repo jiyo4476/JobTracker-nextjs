@@ -135,6 +135,8 @@ export function useJobs(params: JobsParams = {}) {
   if (params.stage) qs.set('stage', params.stage)
   if (params.platform) qs.set('platform', params.platform)
   if (params.job_type) qs.set('job_type', params.job_type)
+  if (params.experience_level) qs.set('experience_level', params.experience_level)
+  if (params.security_clearance) qs.set('security_clearance', params.security_clearance)
   if (params.is_remote) qs.set('is_remote', params.is_remote)
 
   return useQuery<JobsResponse>({
