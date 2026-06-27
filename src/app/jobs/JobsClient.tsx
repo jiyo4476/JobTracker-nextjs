@@ -125,21 +125,26 @@ export default function JobsClient() {
   const deleteJob = useDeleteJob()
   const patchJob = usePatchJob()
 
-  const selectedIds = Object.entries(rowSelection)
-    .filter(([, v]) => v)
-    .map(([id]) => Number(id))
+  const allRows = data?.jobs ?? []
+  const allRowIds = allRows.map(j => String(j.id))
+  const allSelected = allRowIds.length > 0 && allRowIds.every(id => rowSelection[id])
+  const someSelected = allRowIds.some(id => rowSelection[id])
+  // Read numeric IDs directly from allRows to avoid a string→number roundtrip.
+  const selectedIds = allRows.filter(j => rowSelection[String(j.id)]).map(j => j.id)
 
   async function handleBulkDelete() {
+    // Snapshot at call time so the set of IDs is unambiguously tied to the
+    // rows visible when the user confirmed, not a stale closure value.
+    const ids = allRows.filter(j => rowSelection[String(j.id)]).map(j => j.id)
     setBulkPending(true)
-    const results = await Promise.allSettled(selectedIds.map(id => deleteJob.mutateAsync(id)))
+    const results = await Promise.allSettled(ids.map(id => deleteJob.mutateAsync(id)))
     const failed = results.filter(r => r.status === 'rejected').length
     const succeeded = results.length - failed
     setBulkPending(false)
     setBulkDeleteOpen(false)
     if (succeeded > 0) {
-      // Remove only successfully deleted rows from selection
       const succeededIds = new Set(
-        selectedIds.filter((_, i) => results[i].status === 'fulfilled').map(String)
+        ids.filter((_, i) => results[i].status === 'fulfilled').map(String)
       )
       setRowSelection(prev => {
         const next = { ...prev }
@@ -154,16 +159,17 @@ export default function JobsClient() {
 
   async function handleBulkStage() {
     if (!bulkStage) return
+    const ids = allRows.filter(j => rowSelection[String(j.id)]).map(j => j.id)
     setBulkPending(true)
     const results = await Promise.allSettled(
-      selectedIds.map(id => patchJob.mutateAsync({ id, body: { interview_stage: bulkStage } }))
+      ids.map(id => patchJob.mutateAsync({ id, body: { interview_stage: bulkStage } }))
     )
     const failed = results.filter(r => r.status === 'rejected').length
     const succeeded = results.length - failed
     setBulkPending(false)
     if (succeeded > 0) {
       const succeededIds = new Set(
-        selectedIds.filter((_, i) => results[i].status === 'fulfilled').map(String)
+        ids.filter((_, i) => results[i].status === 'fulfilled').map(String)
       )
       setRowSelection(prev => {
         const next = { ...prev }
@@ -176,11 +182,6 @@ export default function JobsClient() {
     if (failed > 0) toast.error(`${failed} update${failed !== 1 ? 's' : ''} failed`)
     else toast.success(`Updated ${succeeded} job${succeeded !== 1 ? 's' : ''}`)
   }
-
-  const allRows = data?.jobs ?? []
-  const allRowIds = allRows.map(j => String(j.id))
-  const allSelected = allRowIds.length > 0 && allRowIds.every(id => rowSelection[id])
-  const someSelected = allRowIds.some(id => rowSelection[id])
 
   function toggleAll(checked: boolean) {
     const next: Record<string, boolean> = { ...rowSelection }

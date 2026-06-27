@@ -252,4 +252,4 @@ INSERT INTO "skills" ("name") VALUES
 ('Problem Solving'),
 ('Debugging')
 
-ON CONFLICT ("name") DO NOTHING;
+ON CONFLICT ON CONSTRAINT skills_name_unique DO NOTHING;
