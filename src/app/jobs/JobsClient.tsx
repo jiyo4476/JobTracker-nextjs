@@ -125,10 +125,6 @@ export default function JobsClient() {
   const deleteJob = useDeleteJob()
   const patchJob = usePatchJob()
 
-  const selectedIds = Object.entries(rowSelection)
-    .filter(([, v]) => v)
-    .map(([id]) => Number(id))
-
   async function handleBulkDelete() {
     setBulkPending(true)
     const results = await Promise.allSettled(selectedIds.map(id => deleteJob.mutateAsync(id)))
@@ -181,6 +177,9 @@ export default function JobsClient() {
   const allRowIds = allRows.map(j => String(j.id))
   const allSelected = allRowIds.length > 0 && allRowIds.every(id => rowSelection[id])
   const someSelected = allRowIds.some(id => rowSelection[id])
+  const selectedIds = allRowIds
+    .filter(id => rowSelection[id])
+    .map(id => Number(id))
 
   function toggleAll(checked: boolean) {
     const next: Record<string, boolean> = { ...rowSelection }
