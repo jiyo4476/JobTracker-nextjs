@@ -179,9 +179,9 @@ describe('PATCH /api/jobs/[id] — salary recomputation', () => {
     )
   })
 
-  it('does not set annualEquivalentMin when salary_type from DB is annual and only job_title is patched', async () => {
+  it('does not set annualEquivalentMin or annualEquivalentMax when no salary fields are in the patch', async () => {
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
-    mockDb.select.mockReturnValue(makeChain([{ interviewStage: 'applied' }]))
+    // No salary fields → salaryFieldsChanged is false → no salary DB read, no annual equivalent update
     const updateChain = makeChain(undefined)
     mockDb.update.mockReturnValue(updateChain)
 
@@ -193,6 +193,23 @@ describe('PATCH /api/jobs/[id] — salary recomputation', () => {
     const callArgs = setSpy.mock.calls[0][0] as Record<string, unknown>
     expect(callArgs).not.toHaveProperty('annualEquivalentMin')
     expect(callArgs).not.toHaveProperty('annualEquivalentMax')
+  })
+
+  it('computes annualEquivalentMin from salary_min when salary_type from DB is annual', async () => {
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    // Patching salary_min only — salary_type must be read from DB
+    mockDb.select.mockReturnValue(makeChain([{ salaryType: 'annual' }]))
+    const updateChain = makeChain(undefined)
+    mockDb.update.mockReturnValue(updateChain)
+
+    const { PATCH } = await import('@/app/api/jobs/[id]/route')
+    const res = await PATCH(makeReq('1', { salary_min: 9000000 }), makeParams('1'))
+    expect(res.status).toBe(200)
+
+    const setSpy = updateChain.set as ReturnType<typeof vi.fn>
+    expect(setSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ annualEquivalentMin: 9000000 }),
+    )
   })
 })
 
