@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   logger.info('backfill-skills: candidates found', { count: candidates.length, limit })
 
   let processed = 0
-  let skillsAdded = 0
+  let skillsLinked = 0 // upper bound — counts IDs resolved, not net-new junction rows
 
   for (const job of candidates) {
     if (!job.jobDescription) continue
@@ -73,12 +73,12 @@ export async function POST(req: NextRequest) {
         .insert(jobSkills)
         .values(skillRows.map(s => ({ jobId: job.id, skillId: s.id, isRequired: true })))
         .onConflictDoNothing()
-      skillsAdded += skillRows.length
+      skillsLinked += skillRows.length
     }
 
     processed++
   }
 
-  logger.info('backfill-skills: done', { processed, skillsAdded })
-  return NextResponse.json({ processed, skillsAdded, candidates: candidates.length })
+  logger.info('backfill-skills: done', { processed, skillsLinked })
+  return NextResponse.json({ processed, skillsLinked, candidates: candidates.length })
 }

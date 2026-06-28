@@ -15,6 +15,8 @@ export function requireApiKey(req: NextRequest): boolean {
   // (e.g. "https://localhost.evil.com" containing "localhost").
   if (!auth) {
     const host = req.headers.get("host") ?? ""; // "hostname:port" or "hostname"
+    // Referer includes the full path (e.g. "https://localhost:3000/jobs/42");
+    // new URL().host extracts just "localhost:3000" for comparison.
     const rawOrigin = req.headers.get("origin") ?? req.headers.get("referer") ?? "";
     if (rawOrigin === "") return true; // no origin → same-server request (e.g. RSC fetch)
     try {

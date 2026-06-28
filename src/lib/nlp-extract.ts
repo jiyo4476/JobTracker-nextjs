@@ -6,13 +6,14 @@ export interface ExtractedTags {
 }
 
 // Full SWE skill list — mirrors the DB seed in 0001_seed_swe_skills.sql.
-// Ordered longest-first within each category so multi-word terms match before
-// their substrings (e.g. "Next.js" before "Node.js", "CI/CD" before "CD").
+// Aliases (e.g. 'Bash', 'k8s') are included so they can be detected and then
+// collapsed to their canonical form by deduplicateSkills().
 const SKILLS = [
   // Programming Languages
   'TypeScript', 'JavaScript', 'Python', 'Kotlin', 'Swift', 'Scala', 'Haskell',
   'Clojure', 'Elixir', 'Erlang', 'PowerShell', 'Ruby', 'Rust', 'Java', 'Go',
-  'PHP', 'Lua', 'C#', 'C++', 'C', 'R',
+  'PHP', 'Lua', 'C#', 'C++',
+  // 'C' and 'R' omitted — single-letter patterns produce too many false positives
   'Bash / Shell Scripting', 'Bash', 'Shell Scripting',
 
   // Web — Frontend
@@ -23,8 +24,9 @@ const SKILLS = [
   'Framer Motion',
   'Tailwind CSS', 'Tailwind',
   'Sass / SCSS', 'SCSS', 'Sass',
-  'CSS Modules', 'CSS3', 'CSS',
-  'HTML5', 'HTML',
+  'CSS Modules', 'CSS3',
+  // 'CSS' and 'HTML' omitted — too generic; CSS3/HTML5 are the canonical forms
+  'HTML5',
   'SvelteKit', 'Svelte',
   'Next.js', 'Nuxt.js', 'Remix',
   'Angular', 'Vue.js', 'Vue',
@@ -129,7 +131,8 @@ const SKILLS = [
 
   // Systems & Networking
   'Concurrency & Parallelism', 'Concurrency',
-  'Networking (TCP/IP)', 'TCP/IP', 'Networking',
+  'Networking (TCP/IP)', 'TCP/IP',
+  // 'Networking' omitted — matches too broadly (e.g. "networking events")
   'Operating Systems',
   'Memory Management',
   'Embedded Systems',
@@ -157,7 +160,8 @@ const SKILLS = [
   'Semantic Versioning', 'SemVer',
   'Code Review',
   'Monorepo',
-  'GitHub', 'GitLab', 'Git',
+  // GitHub and GitLab live in SOFTWARE; no need to duplicate them here
+  'Git',
 
   // Process & Soft Skills
   'Cross-Functional Collaboration',
@@ -170,6 +174,8 @@ const SKILLS = [
   'Debugging',
 ]
 
+// GitHub and GitLab are tools (appear in SOFTWARE) — not listed in SKILLS to
+// avoid producing duplicate junction-table rows on the same job.
 const SOFTWARE = [
   'Jira', 'Confluence', 'Slack', 'Bitbucket', 'VS Code', 'IntelliJ',
   'Figma', 'Notion', 'Datadog', 'Splunk', 'Tableau',
@@ -216,8 +222,9 @@ function matchTerms(description: string, terms: ReturnType<typeof compileTerms>)
     .map(({ term }) => term)
 }
 
-// Deduplicate: when both an alias and its canonical form match (e.g. "Bash" and
-// "Bash / Shell Scripting"), keep only the canonical (longer) form.
+// Alias → canonical name map. When both an alias and its canonical form are
+// detected (e.g. "k8s" and "Kubernetes" both appear), deduplicateSkills()
+// collapses them to the canonical form via a Set so only one entry survives.
 const CANONICAL: Record<string, string> = {
   'Bash': 'Bash / Shell Scripting',
   'Shell Scripting': 'Bash / Shell Scripting',
@@ -234,8 +241,8 @@ const CANONICAL: Record<string, string> = {
   'OAuth': 'OAuth 2.0 / OpenID Connect',
   'SCSS': 'Sass / SCSS',
   'Sass': 'Sass / SCSS',
-  'CSS': 'CSS3',
-  'HTML': 'HTML5',
+  // CSS and HTML removed from CANONICAL — these aliases were dropped from SKILLS
+  // because they match too broadly; CSS3 and HTML5 are matched directly instead.
   'IaC': 'Infrastructure as Code',
   'SRE': 'Site Reliability Engineering',
   'Tailwind': 'Tailwind CSS',
@@ -256,7 +263,7 @@ const CANONICAL: Record<string, string> = {
   'OWASP': 'OWASP Top 10',
   'TS/SCI': 'Security Clearance — TS/SCI',
   'TCP/IP': 'Networking (TCP/IP)',
-  'Networking': 'Networking (TCP/IP)',
+  // 'Networking' removed — too broad, dropped from SKILLS
   'Protobuf': 'Protocol Buffers',
   'Concurrency': 'Concurrency & Parallelism',
   'DDD': 'Domain-Driven Design',
