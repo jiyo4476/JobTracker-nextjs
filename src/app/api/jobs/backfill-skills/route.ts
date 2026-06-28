@@ -4,17 +4,24 @@ import { requireApiKey } from '@/lib/auth'
 import { extractTags } from '@/lib/nlp-extract'
 import { logger } from '@/lib/logger'
 import { jobs, skills, jobSkills } from '@/db/schema'
-import { eq, sql } from 'drizzle-orm'
+import { inArray, sql } from 'drizzle-orm'
 
 // POST /api/jobs/backfill-skills
 // Re-runs NLP skill extraction on every job that has a description but no linked skills.
 // Safe to call multiple times — uses INSERT ... ON CONFLICT DO NOTHING.
+// Accepts ?limit=N (default 100, max 500) to keep each call bounded.
 export async function POST(req: NextRequest) {
   if (!requireApiKey(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Find all jobs that have a description but zero linked skills
+  const requestedLimit = Number(req.nextUrl.searchParams.get('limit') ?? '100')
+  const limit =
+    Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 500)
+      : 100
+
+  // Find jobs that have a description but zero linked skills
   const candidates = await db
     .select({ id: jobs.id, jobDescription: jobs.jobDescription })
     .from(jobs)
@@ -25,8 +32,9 @@ export async function POST(req: NextRequest) {
           select 1 from job_skills where job_skills.job_id = ${jobs.id}
         )`
     )
+    .limit(limit)
 
-  logger.info('backfill-skills: candidates found', { count: candidates.length })
+  logger.info('backfill-skills: candidates found', { count: candidates.length, limit })
 
   let processed = 0
   let skillsAdded = 0
@@ -37,34 +45,35 @@ export async function POST(req: NextRequest) {
     const { skills: extracted } = extractTags(job.jobDescription)
     if (extracted.length === 0) continue
 
-    // Upsert each skill name → get id
-    const skillRows = await Promise.all(
-      extracted.map(name =>
-        db
-          .insert(skills)
-          .values({ name })
-          .onConflictDoNothing()
-          .returning({ id: skills.id })
-          .then(async rows => {
-            if (rows[0]) return rows[0]
-            const [existing] = await db
-              .select({ id: skills.id })
-              .from(skills)
-              .where(eq(skills.name, name))
-            return existing ?? null
-          })
-      )
-    )
+    const uniqueSkillNames = [...new Set(extracted)]
 
-    const validSkillIds = skillRows.filter(Boolean) as { id: number }[]
+    // Batch insert all skill names at once; get IDs for newly inserted rows
+    const insertedSkills = await db
+      .insert(skills)
+      .values(uniqueSkillNames.map(name => ({ name })))
+      .onConflictDoNothing()
+      .returning({ id: skills.id, name: skills.name })
 
-    // Insert into job_skills (ON CONFLICT DO NOTHING — idempotent)
-    if (validSkillIds.length > 0) {
+    // For names that conflicted (already existed), fetch their IDs in one query
+    const insertedNames = new Set(insertedSkills.map(r => r.name))
+    const missingNames = uniqueSkillNames.filter(name => !insertedNames.has(name))
+
+    let existingSkills: { id: number; name: string }[] = []
+    if (missingNames.length > 0) {
+      existingSkills = await db
+        .select({ id: skills.id, name: skills.name })
+        .from(skills)
+        .where(inArray(skills.name, missingNames))
+    }
+
+    const skillRows = [...insertedSkills, ...existingSkills]
+
+    if (skillRows.length > 0) {
       await db
         .insert(jobSkills)
-        .values(validSkillIds.map(s => ({ jobId: job.id, skillId: s.id, isRequired: true })))
+        .values(skillRows.map(s => ({ jobId: job.id, skillId: s.id, isRequired: true })))
         .onConflictDoNothing()
-      skillsAdded += validSkillIds.length
+      skillsAdded += skillRows.length
     }
 
     processed++

@@ -50,6 +50,12 @@ describe('requireApiKey', () => {
     expect(requireApiKey(req)).toBe(true)
   })
 
+  it('returns true when API_KEY is unset and no auth header is provided (fully unauthenticated open access)', () => {
+    delete process.env.API_KEY
+    const req = new NextRequest('http://localhost/api/test')
+    expect(requireApiKey(req)).toBe(true)
+  })
+
   it('returns false for "Bearer undefined" when API_KEY is set', () => {
     // API_KEY is 'test-key' (set in beforeEach); 'Bearer undefined' is not a valid token
     const req = new NextRequest('http://localhost/api/test', {

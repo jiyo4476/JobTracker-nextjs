@@ -10,11 +10,19 @@ export function requireApiKey(req: NextRequest): boolean {
   const auth = req.headers.get("authorization");
   if (auth === `Bearer ${key}`) return true;
 
-  // Allow same-origin browser requests that carry no auth header
+  // Allow same-origin browser requests that carry no auth header.
+  // Parse origin URL and compare hostname+port explicitly to avoid substring spoofing
+  // (e.g. "https://localhost.evil.com" containing "localhost").
   if (!auth) {
-    const host = req.headers.get("host") ?? "";
-    const origin = req.headers.get("origin") ?? req.headers.get("referer") ?? "";
-    if (origin === "" || (host !== "" && origin.includes(host))) return true;
+    const host = req.headers.get("host") ?? ""; // "hostname:port" or "hostname"
+    const rawOrigin = req.headers.get("origin") ?? req.headers.get("referer") ?? "";
+    if (rawOrigin === "") return true; // no origin → same-server request (e.g. RSC fetch)
+    try {
+      const { host: parsedHost } = new URL(rawOrigin);
+      if (host !== "" && parsedHost === host) return true;
+    } catch {
+      // malformed origin — fall through to reject
+    }
   }
 
   return false;
