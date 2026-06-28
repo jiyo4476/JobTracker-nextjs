@@ -247,7 +247,7 @@ describe('POST /api/scrape', () => {
     expect(json.action).toBe('duplicate_skipped')
   })
 
-  it('calls extractTags and uses extracted tags when all tag arrays are empty but job_description is present', async () => {
+  it('calls extractTags when skills are empty and job_description is present', async () => {
     vi.mocked(requireApiKey).mockReturnValue(true)
     setupDbMocks('created')
     const { POST } = await import('@/app/api/scrape/route')
@@ -260,16 +260,30 @@ describe('POST /api/scrape', () => {
     expect(vi.mocked(extractTags)).toHaveBeenCalledWith(bodyWithDescription.job_description)
   })
 
-  it('does not call extractTags when tag arrays are already populated', async () => {
+  it('calls extractTags even when keywords are present but skills are empty', async () => {
     vi.mocked(requireApiKey).mockReturnValue(true)
     setupDbMocks('created')
     const { POST } = await import('@/app/api/scrape/route')
-    const bodyWithTags = {
+    const bodyWithKeywordsOnly = {
+      ...validBody,
+      job_description: 'Senior backend Python role, remote friendly.',
+      keywords: ['remote', 'backend'],
+    }
+    const res = await POST(makeRequest(bodyWithKeywordsOnly))
+    expect(res.status).toBe(201)
+    expect(vi.mocked(extractTags)).toHaveBeenCalledWith(bodyWithKeywordsOnly.job_description)
+  })
+
+  it('does not call extractTags when skills are already provided', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    setupDbMocks('created')
+    const { POST } = await import('@/app/api/scrape/route')
+    const bodyWithSkills = {
       ...validBody,
       job_description: 'We need Python experience.',
       skills: ['TypeScript'],
     }
-    const res = await POST(makeRequest(bodyWithTags))
+    const res = await POST(makeRequest(bodyWithSkills))
     expect(res.status).toBe(201)
     expect(vi.mocked(extractTags)).not.toHaveBeenCalled()
   })

@@ -5,29 +5,193 @@ export interface ExtractedTags {
   certifications: string[]
 }
 
+// Full SWE skill list — mirrors the DB seed in 0001_seed_swe_skills.sql.
+// Ordered longest-first within each category so multi-word terms match before
+// their substrings (e.g. "Next.js" before "Node.js", "CI/CD" before "CD").
 const SKILLS = [
-  'Python', 'TypeScript', 'JavaScript', 'Java', 'Go', 'Rust', 'C++', 'SQL',
-  'GraphQL', 'REST', 'AWS', 'Azure', 'GCP', 'Docker', 'Kubernetes', 'Terraform',
-  'React', 'Next.js', 'Node.js', 'FastAPI', 'Django', 'PostgreSQL', 'MySQL',
-  'MongoDB', 'Redis', 'Git', 'CI/CD', 'Agile', 'Scrum', 'Linux',
+  // Programming Languages
+  'TypeScript', 'JavaScript', 'Python', 'Kotlin', 'Swift', 'Scala', 'Haskell',
+  'Clojure', 'Elixir', 'Erlang', 'PowerShell', 'Ruby', 'Rust', 'Java', 'Go',
+  'PHP', 'Lua', 'C#', 'C++', 'C', 'R',
+  'Bash / Shell Scripting', 'Bash', 'Shell Scripting',
+
+  // Web — Frontend
+  'Accessibility (WCAG)', 'WCAG',
+  'Progressive Web Apps', 'PWA',
+  'Service Workers',
+  'TanStack Query', 'TanStack Table',
+  'Framer Motion',
+  'Tailwind CSS', 'Tailwind',
+  'Sass / SCSS', 'SCSS', 'Sass',
+  'CSS Modules', 'CSS3', 'CSS',
+  'HTML5', 'HTML',
+  'SvelteKit', 'Svelte',
+  'Next.js', 'Nuxt.js', 'Remix',
+  'Angular', 'Vue.js', 'Vue',
+  'React Native', 'React',
+  'Redux', 'Zustand', 'Recoil', 'MobX',
+  'Webpack', 'Rollup', 'Vite', 'esbuild',
+  'Three.js', 'D3.js', 'D3',
+  'Recharts', 'Chart.js',
+  'WebSockets', 'WebRTC',
+
+  // Web — Backend
+  'OAuth 2.0 / OpenID Connect', 'OAuth 2.0', 'OpenID Connect', 'OAuth',
+  'REST API Design', 'REST API',
+  'WebSocket Server',
+  'ASP.NET Core', 'ASP.NET',
+  'Spring Boot', 'Spring',
+  'Ruby on Rails', 'Rails',
+  'Express.js', 'Express',
+  'Fastify', 'NestJS',
+  'Django', 'Flask', 'FastAPI',
+  'Laravel',
+  'Node.js',
+  'GraphQL', 'gRPC', 'tRPC', 'JWT',
+
+  // Databases
+  'Database Design', 'Data Modeling', 'Query Optimization',
+  'Drizzle ORM', 'SQLAlchemy', 'Hibernate', 'Prisma',
+  'CockroachDB', 'PlanetScale', 'Supabase',
+  'Elasticsearch',
+  'PostgreSQL', 'Postgres',
+  'MySQL', 'SQLite',
+  'DynamoDB', 'Cassandra', 'Neo4j',
+  'MongoDB', 'Redis',
+  'SQL',
+
+  // Cloud & DevOps
+  'Infrastructure as Code', 'IaC',
+  'Site Reliability Engineering', 'SRE',
+  'Serverless / Lambda', 'Serverless', 'Lambda',
+  'GitHub Actions', 'GitLab CI/CD', 'GitLab CI',
+  'Load Balancing',
+  'OpenTelemetry', 'Observability',
+  'Kubernetes', 'k8s',
+  'Terraform', 'Ansible', 'Pulumi',
+  'CircleCI', 'Jenkins',
+  'Prometheus', 'Grafana', 'Datadog',
+  'Docker', 'Helm',
+  'Cloudflare', 'Vercel', 'Netlify', 'Heroku', 'Railway',
+  'Nginx', 'Apache',
+  'Linux', 'CDN',
+  'AWS', 'GCP', 'Azure',
+  'CI/CD',
+
+  // Data & ML
+  'Natural Language Processing', 'NLP',
+  'Machine Learning', 'ML',
+  'Deep Learning',
+  'Computer Vision',
+  'Hugging Face Transformers', 'Hugging Face',
+  'Feature Engineering', 'Model Evaluation',
+  'Data Warehousing', 'ETL Pipelines', 'ETL',
+  'Vector Databases',
+  'Jupyter Notebooks', 'Jupyter',
+  'LangChain', 'OpenAI API', 'OpenAI',
+  'scikit-learn', 'sklearn',
+  'PyTorch', 'TensorFlow', 'Keras',
+  'Pandas', 'NumPy', 'Matplotlib',
+  'MLflow',
+  'BigQuery', 'Snowflake',
+  'Airflow', 'Spark', 'Kafka',
+  'dbt',
+
+  // Mobile
+  'iOS Development', 'iOS',
+  'Android Development', 'Android',
+  'App Store Deployment',
+  'Jetpack Compose',
+  'SwiftUI', 'Flutter', 'Expo',
+
+  // Testing
+  'Test-Driven Development', 'TDD',
+  'End-to-End Testing', 'E2E Testing',
+  'Integration Testing',
+  'Unit Testing',
+  'Load Testing', 'Performance Testing',
+  'Mock / Stub / Spy',
+  'Playwright', 'Cypress', 'Selenium',
+  'Vitest', 'Jest', 'PyTest', 'JUnit',
+
+  // Security
+  'Zero Trust Architecture', 'Zero Trust',
+  'Static Analysis (SAST)', 'SAST',
+  'Application Security', 'AppSec',
+  'Dependency Scanning',
+  'Secret Management',
+  'Penetration Testing', 'Pen Testing',
+  'SOC 2 Compliance', 'SOC 2',
+  'OWASP Top 10', 'OWASP',
+  'Encryption',
+  'Security Clearance — TS/SCI', 'TS/SCI',
+  'Security Clearance — Secret',
+
+  // Systems & Networking
+  'Concurrency & Parallelism', 'Concurrency',
+  'Networking (TCP/IP)', 'TCP/IP', 'Networking',
+  'Operating Systems',
+  'Memory Management',
+  'Embedded Systems',
+  'Protocol Buffers', 'Protobuf',
+  'Message Queues',
+  'Compiler Design',
+  'Assembly',
+  'FPGA',
+
+  // Architecture & Design
+  'Event-Driven Architecture', 'Event-Driven',
+  'Domain-Driven Design', 'DDD',
+  'CQRS / Event Sourcing', 'CQRS',
+  'High Availability Design', 'High Availability',
+  'Performance Optimization',
+  'Distributed Systems',
+  'Clean Architecture',
+  'Design Patterns',
+  'Caching Strategies', 'Caching',
+  'Microservices',
+  'System Design',
+  'API Gateway',
+
+  // Version Control & Collaboration
+  'Semantic Versioning', 'SemVer',
+  'Code Review',
+  'Monorepo',
+  'GitHub', 'GitLab', 'Git',
+
+  // Process & Soft Skills
+  'Cross-Functional Collaboration',
+  'Stakeholder Communication',
+  'Agile / Scrum', 'Scrum', 'Agile',
+  'Technical Writing',
+  'Problem Solving',
+  'Kanban',
+  'Mentoring',
+  'Debugging',
 ]
 
 const SOFTWARE = [
-  'Jira', 'Confluence', 'Slack', 'GitHub', 'GitLab', 'Bitbucket', 'VS Code',
-  'IntelliJ', 'Figma', 'Notion', 'Datadog', 'Splunk', 'Tableau', 'Snowflake',
-  'dbt', 'Airflow', 'Spark',
+  'Jira', 'Confluence', 'Slack', 'Bitbucket', 'VS Code', 'IntelliJ',
+  'Figma', 'Notion', 'Datadog', 'Splunk', 'Tableau',
+  'GitHub', 'GitLab',
 ]
 
 const CERTIFICATIONS = [
-  'AWS Certified', 'Azure Certified', 'GCP Certified', 'CPA', 'PMP', 'CISSP',
-  'CompTIA', 'Kubernetes Administrator', 'Terraform Associate',
+  'AWS Certified', 'Azure Certified', 'GCP Certified',
+  'CPA', 'PMP', 'CISSP', 'CompTIA',
+  'Kubernetes Administrator', 'CKA',
+  'Terraform Associate',
 ]
 
 const KEYWORDS = [
-  'remote', 'hybrid', 'on-site', 'full-stack', 'backend', 'frontend',
-  'machine learning', 'data engineering', 'DevOps', 'platform engineering',
-  'distributed systems', 'microservices', 'startup', 'series A', 'series B',
-  'series C',
+  'remote', 'hybrid', 'on-site', 'full-stack', 'full stack',
+  'backend', 'front-end', 'frontend',
+  'machine learning', 'data engineering',
+  'DevOps', 'platform engineering',
+  'distributed systems', 'microservices',
+  'startup', 'series A', 'series B', 'series C',
+  'executive', 'senior', 'lead', 'staff', 'principal',
+  'entry level', 'junior', 'mid-level',
 ]
 
 function escapeRegExp(term: string): string {
@@ -52,9 +216,74 @@ function matchTerms(description: string, terms: ReturnType<typeof compileTerms>)
     .map(({ term }) => term)
 }
 
+// Deduplicate: when both an alias and its canonical form match (e.g. "Bash" and
+// "Bash / Shell Scripting"), keep only the canonical (longer) form.
+const CANONICAL: Record<string, string> = {
+  'Bash': 'Bash / Shell Scripting',
+  'Shell Scripting': 'Bash / Shell Scripting',
+  'Postgres': 'PostgreSQL',
+  'Vue': 'Vue.js',
+  'Rails': 'Ruby on Rails',
+  'Express': 'Express.js',
+  'k8s': 'Kubernetes',
+  'Serverless': 'Serverless / Lambda',
+  'Lambda': 'Serverless / Lambda',
+  'REST API': 'REST API Design',
+  'OAuth 2.0': 'OAuth 2.0 / OpenID Connect',
+  'OpenID Connect': 'OAuth 2.0 / OpenID Connect',
+  'OAuth': 'OAuth 2.0 / OpenID Connect',
+  'SCSS': 'Sass / SCSS',
+  'Sass': 'Sass / SCSS',
+  'CSS': 'CSS3',
+  'HTML': 'HTML5',
+  'IaC': 'Infrastructure as Code',
+  'SRE': 'Site Reliability Engineering',
+  'Tailwind': 'Tailwind CSS',
+  'NLP': 'Natural Language Processing',
+  'ML': 'Machine Learning',
+  'ETL': 'ETL Pipelines',
+  'Jupyter': 'Jupyter Notebooks',
+  'sklearn': 'scikit-learn',
+  'iOS': 'iOS Development',
+  'Android': 'Android Development',
+  'TDD': 'Test-Driven Development',
+  'E2E Testing': 'End-to-End Testing',
+  'AppSec': 'Application Security',
+  'SAST': 'Static Analysis (SAST)',
+  'Zero Trust': 'Zero Trust Architecture',
+  'Pen Testing': 'Penetration Testing',
+  'SOC 2': 'SOC 2 Compliance',
+  'OWASP': 'OWASP Top 10',
+  'TS/SCI': 'Security Clearance — TS/SCI',
+  'TCP/IP': 'Networking (TCP/IP)',
+  'Networking': 'Networking (TCP/IP)',
+  'Protobuf': 'Protocol Buffers',
+  'Concurrency': 'Concurrency & Parallelism',
+  'DDD': 'Domain-Driven Design',
+  'CQRS': 'CQRS / Event Sourcing',
+  'High Availability': 'High Availability Design',
+  'Event-Driven': 'Event-Driven Architecture',
+  'Caching': 'Caching Strategies',
+  'SemVer': 'Semantic Versioning',
+  'Scrum': 'Agile / Scrum',
+  'Agile': 'Agile / Scrum',
+  'PWA': 'Progressive Web Apps',
+  'WCAG': 'Accessibility (WCAG)',
+  'Hugging Face': 'Hugging Face Transformers',
+  'OpenAI': 'OpenAI API',
+  'GitLab CI': 'GitLab CI/CD',
+  'Spring': 'Spring Boot',
+  'ASP.NET': 'ASP.NET Core',
+}
+
+function deduplicateSkills(matched: string[]): string[] {
+  const result = new Set(matched.map(s => CANONICAL[s] ?? s))
+  return Array.from(result)
+}
+
 export function extractTags(description: string): ExtractedTags {
   return {
-    skills: matchTerms(description, SKILL_PATTERNS),
+    skills: deduplicateSkills(matchTerms(description, SKILL_PATTERNS)),
     software: matchTerms(description, SOFTWARE_PATTERNS),
     keywords: matchTerms(description, KEYWORD_PATTERNS),
     certifications: matchTerms(description, CERTIFICATION_PATTERNS),
