@@ -65,4 +65,38 @@ describe('extractTags', () => {
     expect(result.skills).not.toContain('Go')
     expect(result.skills).toContain('MongoDB')
   })
+
+  it('detects expanded skill set — Rust, Playwright, Kubernetes, Terraform', () => {
+    const desc = 'We use Rust for systems work, Playwright for E2E testing, Kubernetes for orchestration, and Terraform for IaC.'
+    const result = extractTags(desc)
+    expect(result.skills).toContain('Rust')
+    expect(result.skills).toContain('Playwright')
+    expect(result.skills).toContain('Kubernetes')
+    expect(result.skills).toContain('Terraform')
+    expect(result.skills).toContain('Infrastructure as Code')
+  })
+
+  it('canonicalizes aliases to canonical skill names', () => {
+    const desc = 'Experience with Postgres, Agile, Scrum, and k8s required.'
+    const result = extractTags(desc)
+    // Aliases should resolve to canonical names
+    expect(result.skills).toContain('PostgreSQL')
+    expect(result.skills).toContain('Agile / Scrum')
+    expect(result.skills).toContain('Kubernetes')
+    // Aliases themselves should not appear as separate entries
+    expect(result.skills).not.toContain('Postgres')
+    expect(result.skills).not.toContain('Agile')
+    expect(result.skills).not.toContain('Scrum')
+    expect(result.skills).not.toContain('k8s')
+  })
+
+  it('detects ML/data skills', () => {
+    const desc = 'Role requires PyTorch, scikit-learn, Pandas, and experience with ETL pipelines and Snowflake.'
+    const result = extractTags(desc)
+    expect(result.skills).toContain('PyTorch')
+    expect(result.skills).toContain('scikit-learn')
+    expect(result.skills).toContain('Pandas')
+    expect(result.skills).toContain('ETL Pipelines')
+    expect(result.skills).toContain('Snowflake')
+  })
 })

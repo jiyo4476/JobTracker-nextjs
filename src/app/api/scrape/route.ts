@@ -27,32 +27,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
-  // NLP fallback: if all tag arrays are empty but description is present, extract tags
-  const allTagsEmpty =
-    parsed.data.skills.length === 0 &&
-    parsed.data.software.length === 0 &&
-    parsed.data.keywords.length === 0 &&
-    parsed.data.certifications.length === 0
-
-  const extracted = allTagsEmpty && parsed.data.job_description
-    ? extractTags(parsed.data.job_description)
-    : null
+  // NLP fallback: extract skills from description whenever the scraper sends none.
+  // Keywords/software/certs from the scraper are preserved regardless — we only
+  // supplement missing skills, not override data the scraper already provided.
+  const extracted =
+    parsed.data.skills.length === 0 && parsed.data.job_description
+      ? extractTags(parsed.data.job_description)
+      : null
 
   if (extracted) {
-    logger.debug('NLP tag extraction used', {
+    logger.debug('NLP skill extraction used', {
       platform: parsed.data.source_platform,
       skills: extracted.skills.length,
-      software: extracted.software.length,
-      keywords: extracted.keywords.length,
     })
   }
 
   const data = {
     ...parsed.data,
     skills: extracted ? extracted.skills : parsed.data.skills,
-    software: extracted ? extracted.software : parsed.data.software,
-    keywords: extracted ? extracted.keywords : parsed.data.keywords,
-    certifications: extracted ? extracted.certifications : parsed.data.certifications,
   }
 
   try {
