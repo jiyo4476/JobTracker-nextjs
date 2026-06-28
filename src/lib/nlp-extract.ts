@@ -12,8 +12,10 @@ const SKILLS = [
   // Programming Languages
   'TypeScript', 'JavaScript', 'Python', 'Kotlin', 'Swift', 'Scala', 'Haskell',
   'Clojure', 'Elixir', 'Erlang', 'PowerShell', 'Ruby', 'Rust', 'Java', 'Go',
-  'PHP', 'Lua', 'C#', 'C++',
-  // 'C' and 'R' omitted — single-letter patterns produce too many false positives
+  'PHP', 'C#', 'C++',
+  // 'Lua' omitted — false-positives on "evaluate", "valuable", etc.
+  // 'C', 'R', 'Go' omitted — single-letter / verb patterns fire too broadly in prose
+  //   ("Go to our website", "evaluate candidates", "required at assembly")
   'Bash / Shell Scripting', 'Bash', 'Shell Scripting',
 
   // Web — Frontend
@@ -139,6 +141,8 @@ const SKILLS = [
   'Protocol Buffers', 'Protobuf',
   'Message Queues',
   'Compiler Design',
+  // 'Assembly' kept — in an engineering job description context this rarely false-positives;
+  // "assembly of components" is uncommon in SWE postings vs. "Assembly language"
   'Assembly',
   'FPGA',
 
@@ -229,6 +233,7 @@ const CANONICAL: Record<string, string> = {
   'Bash': 'Bash / Shell Scripting',
   'Shell Scripting': 'Bash / Shell Scripting',
   'Postgres': 'PostgreSQL',
+  'D3': 'D3.js',
   'Vue': 'Vue.js',
   'Rails': 'Ruby on Rails',
   'Express': 'Express.js',
