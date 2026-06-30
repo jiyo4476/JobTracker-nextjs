@@ -83,22 +83,51 @@ type DeleteJobVariables = string | number | {
   showErrorToast?: boolean
 }
 
-function getDeleteJobId(variables: DeleteJobVariables) {
+class DeleteJobValidationError extends Error {
+  constructor() {
+    super('Missing job id')
+    this.name = 'DeleteJobValidationError'
+  }
+}
+
+function isDeleteJobVariables(variables: unknown): variables is DeleteJobVariables {
+  if (typeof variables === 'string' || typeof variables === 'number') return true
+  return !!variables &&
+    typeof variables === 'object' &&
+    'id' in variables &&
+    (typeof variables.id === 'string' || typeof variables.id === 'number')
+}
+
+function getDeleteJobId(variables: unknown) {
+  if (!isDeleteJobVariables(variables)) throw new DeleteJobValidationError()
   return typeof variables === 'object' ? variables.id : variables
+}
+
+function shouldShowDeleteErrorToast(variables: unknown) {
+  return !(variables &&
+    typeof variables === 'object' &&
+    'showErrorToast' in variables &&
+    variables.showErrorToast === false)
 }
 
 export function useDeleteJob() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (variables: DeleteJobVariables) => api.delete(`/jobs/${getDeleteJobId(variables)}`),
+    mutationFn: (variables: DeleteJobVariables) => {
+      const id = getDeleteJobId(variables)
+      return api.delete(`/jobs/${id}`)
+    },
     onSuccess: (_data, variables) => {
       const id = getDeleteJobId(variables)
       qc.invalidateQueries({ queryKey: ['jobs'] })
       qc.invalidateQueries({ queryKey: ['job', String(id)] })
     },
     onError: (err, variables) => {
-      if (typeof variables === 'object' && variables.showErrorToast === false) return
-      toast.error(`Delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      if (!shouldShowDeleteErrorToast(variables)) return
+      console.error('Delete job failed', err)
+      toast.error(err instanceof DeleteJobValidationError
+        ? 'Delete failed because the job id was missing.'
+        : 'Delete failed. Please try again.')
     },
   })
 }
