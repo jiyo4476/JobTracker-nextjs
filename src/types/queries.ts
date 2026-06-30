@@ -167,7 +167,7 @@ export interface AnalyticsParams {
   from?: string
   to?: string
   platform?: string
-  security_clearance?: 'true' | 'false'
+  security_clearance?: boolean
 }
 
 export interface SkillDemandRow {

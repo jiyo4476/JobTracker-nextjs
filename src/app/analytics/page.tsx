@@ -23,9 +23,9 @@ const SKILL_COLORS = [
 
 const PLATFORMS = ['', 'linkedin', 'indeed', 'glassdoor', 'dice', 'lever', 'greenhouse', 'workday', 'angellist', 'direct', 'other']
 const CLEARANCE_MODES = [
-  { label: 'All', value: '' },
-  { label: 'Clearance', value: 'true' },
-  { label: 'No clearance', value: 'false' },
+  { label: 'All', value: null },
+  { label: 'Clearance', value: true },
+  { label: 'No clearance', value: false },
 ] as const
 
 function EmptyState() {
@@ -145,13 +145,13 @@ export default function AnalyticsPage() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [platform, setPlatform] = useState('')
-  const [skillClearance, setSkillClearance] = useState<'true' | 'false' | ''>('')
+  const [skillClearance, setSkillClearance] = useState<boolean | null>(null)
 
   const params = {
     from: from || undefined,
     to: to || undefined,
     platform: platform || undefined,
-    security_clearance: skillClearance || undefined,
+    security_clearance: skillClearance ?? undefined,
   }
 
   const { data, isLoading } = useAnalytics(params)
@@ -190,7 +190,7 @@ export default function AnalyticsPage() {
             <div className="inline-flex rounded-md border border-input bg-background p-1">
               {CLEARANCE_MODES.map((mode) => (
                 <button
-                  key={mode.value}
+                  key={mode.label}
                   type="button"
                   aria-pressed={skillClearance === mode.value}
                   onClick={() => setSkillClearance(mode.value)}
