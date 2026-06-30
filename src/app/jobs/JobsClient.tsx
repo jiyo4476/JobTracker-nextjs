@@ -137,7 +137,9 @@ export default function JobsClient() {
     // rows visible when the user confirmed, not a stale closure value.
     const ids = allRows.filter(j => rowSelection[String(j.id)]).map(j => j.id)
     setBulkPending(true)
-    const results = await Promise.allSettled(ids.map(id => deleteJob.mutateAsync(id)))
+    const results = await Promise.allSettled(
+      ids.map(id => deleteJob.mutateAsync({ id, showErrorToast: false }))
+    )
     const failed = results.filter(r => r.status === 'rejected').length
     const succeeded = results.length - failed
     setBulkPending(false)

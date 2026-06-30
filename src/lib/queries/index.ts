@@ -1,6 +1,7 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import type {
   ActivityItem,
@@ -77,13 +78,27 @@ export function usePatchJob() {
   })
 }
 
+type DeleteJobVariables = string | number | {
+  id: string | number
+  showErrorToast?: boolean
+}
+
+function getDeleteJobId(variables: DeleteJobVariables) {
+  return typeof variables === 'object' ? variables.id : variables
+}
+
 export function useDeleteJob() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string | number) => api.delete(`/jobs/${id}`),
-    onSuccess: (_data, id) => {
+    mutationFn: (variables: DeleteJobVariables) => api.delete(`/jobs/${getDeleteJobId(variables)}`),
+    onSuccess: (_data, variables) => {
+      const id = getDeleteJobId(variables)
       qc.invalidateQueries({ queryKey: ['jobs'] })
       qc.invalidateQueries({ queryKey: ['job', String(id)] })
+    },
+    onError: (err, variables) => {
+      if (typeof variables === 'object' && variables.showErrorToast === false) return
+      toast.error(`Delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
     },
   })
 }
