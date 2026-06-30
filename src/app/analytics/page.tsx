@@ -181,30 +181,31 @@ export default function AnalyticsPage() {
             ))}
           </select>
         </div>
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">Top skills clearance</span>
+          <div className="inline-flex rounded-md border border-input bg-background p-1">
+            {CLEARANCE_MODES.map((mode) => (
+              <button
+                key={mode.label}
+                type="button"
+                aria-pressed={skillClearance === mode.value}
+                onClick={() => setSkillClearance(mode.value)}
+                className={`h-7 rounded px-3 text-xs font-medium transition-colors ${
+                  skillClearance === mode.value
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                }`}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-6">
         <Card className="col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between gap-3">
-            <CardTitle className="text-sm">Top 15 Skill Demand Over Time</CardTitle>
-            <div className="inline-flex rounded-md border border-input bg-background p-1">
-              {CLEARANCE_MODES.map((mode) => (
-                <button
-                  key={mode.label}
-                  type="button"
-                  aria-pressed={skillClearance === mode.value}
-                  onClick={() => setSkillClearance(mode.value)}
-                  className={`h-7 rounded px-3 text-xs font-medium transition-colors ${
-                    skillClearance === mode.value
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                  }`}
-                >
-                  {mode.label}
-                </button>
-              ))}
-            </div>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-sm">Top 15 Skill Demand Over Time</CardTitle></CardHeader>
           <CardContent>
             {isLoading
               ? <Skeleton className="h-52 w-full" />
