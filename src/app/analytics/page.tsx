@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -27,6 +27,52 @@ const CLEARANCE_MODES = [
   { label: 'Clearance', value: true },
   { label: 'No clearance', value: false },
 ] as const
+
+type ClearanceMode = typeof CLEARANCE_MODES[number]['value']
+
+function ClearanceModeControl({
+  value,
+  onChange,
+}: {
+  value: ClearanceMode
+  onChange: (value: ClearanceMode) => void
+}) {
+  const labelId = useId()
+
+  return (
+    <div className="flex flex-col gap-1">
+      <span id={labelId} className="text-xs text-muted-foreground">
+        Top skills clearance
+      </span>
+      <div
+        role="radiogroup"
+        aria-labelledby={labelId}
+        aria-describedby={`${labelId}-description`}
+        className="inline-flex rounded-md border border-input bg-background p-1"
+      >
+        {CLEARANCE_MODES.map((mode) => (
+          <button
+            key={mode.label}
+            type="button"
+            role="radio"
+            aria-checked={value === mode.value}
+            onClick={() => onChange(mode.value)}
+            className={`h-7 rounded px-3 text-xs font-medium transition-colors ${
+              value === mode.value
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            }`}
+          >
+            {mode.label}
+          </button>
+        ))}
+      </div>
+      <span id={`${labelId}-description`} className="sr-only">
+        Filters only the Top 15 Skill Demand Over Time chart.
+      </span>
+    </div>
+  )
+}
 
 function EmptyState() {
   return (
@@ -145,7 +191,7 @@ export default function AnalyticsPage() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [platform, setPlatform] = useState('')
-  const [skillClearance, setSkillClearance] = useState<boolean | null>(null)
+  const [skillClearance, setSkillClearance] = useState<ClearanceMode>(null)
 
   const params = {
     from: from || undefined,
@@ -181,26 +227,7 @@ export default function AnalyticsPage() {
             ))}
           </select>
         </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">Top skills clearance</span>
-          <div className="inline-flex rounded-md border border-input bg-background p-1">
-            {CLEARANCE_MODES.map((mode) => (
-              <button
-                key={mode.label}
-                type="button"
-                aria-pressed={skillClearance === mode.value}
-                onClick={() => setSkillClearance(mode.value)}
-                className={`h-7 rounded px-3 text-xs font-medium transition-colors ${
-                  skillClearance === mode.value
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                }`}
-              >
-                {mode.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <ClearanceModeControl value={skillClearance} onChange={setSkillClearance} />
       </div>
 
       <div className="grid grid-cols-2 gap-6">
