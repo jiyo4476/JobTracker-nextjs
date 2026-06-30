@@ -81,24 +81,33 @@ export function usePatchJob() {
 type DeleteJobVariables = string | number | {
   id: string | number
   showErrorToast?: boolean
-}
+} | null | undefined
 
 function getDeleteJobId(variables: DeleteJobVariables) {
-  return typeof variables === 'object' ? variables.id : variables
+  return variables && typeof variables === 'object' ? variables.id : variables
+}
+
+function shouldShowDeleteErrorToast(variables: DeleteJobVariables) {
+  return !(variables && typeof variables === 'object' && variables.showErrorToast === false)
 }
 
 export function useDeleteJob() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (variables: DeleteJobVariables) => api.delete(`/jobs/${getDeleteJobId(variables)}`),
+    mutationFn: (variables: DeleteJobVariables) => {
+      const id = getDeleteJobId(variables)
+      if (id === null || id === undefined) throw new Error('Missing job id')
+      return api.delete(`/jobs/${id}`)
+    },
     onSuccess: (_data, variables) => {
       const id = getDeleteJobId(variables)
       qc.invalidateQueries({ queryKey: ['jobs'] })
       qc.invalidateQueries({ queryKey: ['job', String(id)] })
     },
     onError: (err, variables) => {
-      if (typeof variables === 'object' && variables.showErrorToast === false) return
-      toast.error(`Delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      if (!shouldShowDeleteErrorToast(variables)) return
+      console.error('Delete job failed', err)
+      toast.error('Delete failed. Please try again.')
     },
   })
 }
