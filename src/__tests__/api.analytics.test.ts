@@ -46,6 +46,12 @@ describe('GET /api/analytics', () => {
     expect(res.status).toBe(200)
   })
 
+  it('returns 200 with security clearance skill chart query params', async () => {
+    const { GET } = await import('@/app/api/analytics/route')
+    const res = await GET(makeRequest('?security_clearance=true'))
+    expect(res.status).toBe(200)
+  })
+
   it('ignores invalid platform param', async () => {
     const { GET } = await import('@/app/api/analytics/route')
     const res = await GET(makeRequest('?platform=notaplatform'))

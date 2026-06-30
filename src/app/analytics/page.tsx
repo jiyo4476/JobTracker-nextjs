@@ -22,6 +22,11 @@ const SKILL_COLORS = [
 ]
 
 const PLATFORMS = ['', 'linkedin', 'indeed', 'glassdoor', 'dice', 'lever', 'greenhouse', 'workday', 'angellist', 'direct', 'other']
+const CLEARANCE_MODES = [
+  { label: 'All', value: null },
+  { label: 'Clearance', value: true },
+  { label: 'No clearance', value: false },
+] as const
 
 function EmptyState() {
   return (
@@ -140,11 +145,13 @@ export default function AnalyticsPage() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [platform, setPlatform] = useState('')
+  const [skillClearance, setSkillClearance] = useState<boolean | null>(null)
 
   const params = {
     from: from || undefined,
     to: to || undefined,
     platform: platform || undefined,
+    security_clearance: skillClearance ?? undefined,
   }
 
   const { data, isLoading } = useAnalytics(params)
@@ -178,7 +185,26 @@ export default function AnalyticsPage() {
 
       <div className="grid grid-cols-2 gap-6">
         <Card className="col-span-2">
-          <CardHeader><CardTitle className="text-sm">Skill Demand Over Time</CardTitle></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-3">
+            <CardTitle className="text-sm">Top 15 Skill Demand Over Time</CardTitle>
+            <div className="inline-flex rounded-md border border-input bg-background p-1">
+              {CLEARANCE_MODES.map((mode) => (
+                <button
+                  key={mode.label}
+                  type="button"
+                  aria-pressed={skillClearance === mode.value}
+                  onClick={() => setSkillClearance(mode.value)}
+                  className={`h-7 rounded px-3 text-xs font-medium transition-colors ${
+                    skillClearance === mode.value
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  }`}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+          </CardHeader>
           <CardContent>
             {isLoading
               ? <Skeleton className="h-52 w-full" />
