@@ -8,6 +8,7 @@ export async function GET(req: NextRequest) {
   const fromRaw = searchParams.get('from')
   const toRaw = searchParams.get('to')
   const platformRaw = searchParams.get('platform')
+  const clearanceRaw = searchParams.get('security_clearance')
 
   const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
   const from = fromRaw && ISO_DATE.test(fromRaw) ? fromRaw : null
@@ -15,6 +16,7 @@ export async function GET(req: NextRequest) {
 
   const ALLOWED_PLATFORMS = new Set(['linkedin','indeed','glassdoor','dice','lever','greenhouse','workday','angellist','direct','other'])
   const platform = platformRaw && ALLOWED_PLATFORMS.has(platformRaw) ? platformRaw : null
+  const clearance = clearanceRaw === 'true' || clearanceRaw === 'false' ? clearanceRaw : null
 
   const dateFilters = []
   if (from) dateFilters.push(gte(jobs.dateFound, from))
@@ -24,7 +26,7 @@ export async function GET(req: NextRequest) {
   const where = dateFilters.length > 0 ? and(...dateFilters) : undefined
 
   const [skillDemandOverTime, salaryDistribution, platformBreakdown, remoteVsOnsiteByWeek] = await Promise.all([
-    // Top 10 skills by month over date_posted
+    // Top 15 skills by month over date_posted, optionally scoped by clearance.
     db.execute(sql`
       SELECT s.name AS skill,
              DATE_TRUNC('month', j.date_posted::timestamp) AS month,
@@ -34,10 +36,20 @@ export async function GET(req: NextRequest) {
       JOIN jobs j ON js.job_id = j.id
       WHERE s.id IN (
         SELECT skill_id FROM job_skills
-        GROUP BY skill_id ORDER BY COUNT(*) DESC LIMIT 10
+        JOIN jobs top_jobs ON job_skills.job_id = top_jobs.id
+        WHERE 1 = 1
+        ${from ? sql`AND top_jobs.date_found >= ${from}::date` : sql``}
+        ${to ? sql`AND top_jobs.date_found <= ${to}::date` : sql``}
+        ${platform ? sql`AND top_jobs.source_platform = ${platform}` : sql``}
+        ${clearance === 'true' ? sql`AND top_jobs.security_clearance_req = true` : sql``}
+        ${clearance === 'false' ? sql`AND top_jobs.security_clearance_req = false` : sql``}
+        GROUP BY skill_id ORDER BY COUNT(*) DESC LIMIT 15
       )
       ${from ? sql`AND j.date_found >= ${from}::date` : sql``}
       ${to ? sql`AND j.date_found <= ${to}::date` : sql``}
+      ${platform ? sql`AND j.source_platform = ${platform}` : sql``}
+      ${clearance === 'true' ? sql`AND j.security_clearance_req = true` : sql``}
+      ${clearance === 'false' ? sql`AND j.security_clearance_req = false` : sql``}
       GROUP BY s.name, DATE_TRUNC('month', j.date_posted::timestamp)
       ORDER BY month, count DESC
     `),

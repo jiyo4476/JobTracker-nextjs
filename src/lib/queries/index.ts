@@ -158,6 +158,7 @@ export function useAnalytics(params?: AnalyticsParams) {
   if (params?.from) qs.set('from', params.from)
   if (params?.to) qs.set('to', params.to)
   if (params?.platform) qs.set('platform', params.platform)
+  if (params?.security_clearance) qs.set('security_clearance', params.security_clearance)
   const query = qs.toString()
   return useQuery<AnalyticsResponse>({
     queryKey: ['analytics', params],
