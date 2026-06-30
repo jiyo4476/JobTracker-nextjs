@@ -81,14 +81,33 @@ export function usePatchJob() {
 type DeleteJobVariables = string | number | {
   id: string | number
   showErrorToast?: boolean
-} | null | undefined
-
-function getDeleteJobId(variables: DeleteJobVariables) {
-  return variables && typeof variables === 'object' ? variables.id : variables
 }
 
-function shouldShowDeleteErrorToast(variables: DeleteJobVariables) {
-  return !(variables && typeof variables === 'object' && variables.showErrorToast === false)
+class DeleteJobValidationError extends Error {
+  constructor() {
+    super('Missing job id')
+    this.name = 'DeleteJobValidationError'
+  }
+}
+
+function isDeleteJobVariables(variables: unknown): variables is DeleteJobVariables {
+  if (typeof variables === 'string' || typeof variables === 'number') return true
+  return !!variables &&
+    typeof variables === 'object' &&
+    'id' in variables &&
+    (typeof variables.id === 'string' || typeof variables.id === 'number')
+}
+
+function getDeleteJobId(variables: unknown) {
+  if (!isDeleteJobVariables(variables)) throw new DeleteJobValidationError()
+  return typeof variables === 'object' ? variables.id : variables
+}
+
+function shouldShowDeleteErrorToast(variables: unknown) {
+  return !(variables &&
+    typeof variables === 'object' &&
+    'showErrorToast' in variables &&
+    variables.showErrorToast === false)
 }
 
 export function useDeleteJob() {
@@ -96,7 +115,6 @@ export function useDeleteJob() {
   return useMutation({
     mutationFn: (variables: DeleteJobVariables) => {
       const id = getDeleteJobId(variables)
-      if (id === null || id === undefined) throw new Error('Missing job id')
       return api.delete(`/jobs/${id}`)
     },
     onSuccess: (_data, variables) => {
@@ -107,7 +125,9 @@ export function useDeleteJob() {
     onError: (err, variables) => {
       if (!shouldShowDeleteErrorToast(variables)) return
       console.error('Delete job failed', err)
-      toast.error('Delete failed. Please try again.')
+      toast.error(err instanceof DeleteJobValidationError
+        ? 'Delete failed because the job id was missing.'
+        : 'Delete failed. Please try again.')
     },
   })
 }
