@@ -190,11 +190,17 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const jobId = parseInt(id)
   if (isNaN(jobId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
 
-  const result = await db
-    .update(jobs)
-    .set({ isActive: false, deletedAt: new Date(), updatedAt: new Date() })
-    .where(eq(jobs.id, jobId))
-    .returning({ id: jobs.id })
+  let result: { id: number }[]
+  try {
+    result = await db
+      .update(jobs)
+      .set({ isActive: false, deletedAt: new Date(), updatedAt: new Date() })
+      .where(eq(jobs.id, jobId))
+      .returning({ id: jobs.id })
+  } catch (err) {
+    logger.error('DELETE /api/jobs/[id] failed', { jobId, ...serializeError(err) })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 
   if (result.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   logger.info('job soft-deleted', { jobId })
