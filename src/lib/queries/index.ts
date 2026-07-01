@@ -6,7 +6,7 @@ import { api } from '@/lib/api'
 import type {
   ActivityItem,
   CompanyRow, CompanyDetail,
-  JobDetail, JobListItem, JobsResponse, JobsParams,
+  JobDetail, JobsResponse, JobsParams,
   LookupItem, StatsResponse, ResumeVersion, UserSkill,
   AnalyticsParams, AnalyticsResponse,
 } from '@/types/queries'
@@ -182,6 +182,11 @@ export function useJobs(params: JobsParams = {}) {
   if (params.experience_level) qs.set('experience_level', params.experience_level)
   if (params.security_clearance) qs.set('security_clearance', params.security_clearance)
   if (params.is_remote) qs.set('is_remote', params.is_remote)
+  if (params.is_active) qs.set('is_active', params.is_active)
+  if (params.skill_ids) qs.set('skill_ids', params.skill_ids)
+  if (params.salary_min !== undefined) qs.set('salary_min', String(params.salary_min))
+  if (params.salary_max !== undefined) qs.set('salary_max', String(params.salary_max))
+  if (params.priority_min !== undefined) qs.set('priority_min', String(params.priority_min))
 
   return useQuery<JobsResponse>({
     queryKey: ['jobs', params],
