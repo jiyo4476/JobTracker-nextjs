@@ -19,7 +19,7 @@ export const scrapePayloadSchema = z.object({
   job_location: z.string().optional(),
   is_remote: z.boolean().default(false),
   job_description: z.string().optional(),
-  date_posted: z.string().optional(),
+  date_posted: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be ISO date (YYYY-MM-DD)').optional(),
   salary_text: z.string().optional(),
   salary_type: salaryTypeEnum.optional(),
   salary_min: z.number().int().optional(),
@@ -38,12 +38,16 @@ export const scrapePayloadSchema = z.object({
   certifications: z.array(z.string()).default([]),
 })
 
+// Patch date fields also accept '' — the edit form sends empty string to clear a date;
+// the route maps '' to NULL before the DB write.
+const patchDateString = z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/, 'Must be ISO date (YYYY-MM-DD)')
+
 export const jobPatchSchema = z.object({
   job_title: z.string().optional(),
   job_location: z.string().optional(),
   is_remote: z.boolean().optional(),
   job_description: z.string().optional(),
-  date_posted: z.string().optional(),
+  date_posted: patchDateString.optional(),
   salary_text: z.string().optional(),
   salary_type: salaryTypeEnum.optional(),
   salary_min: z.number().int().optional(),
@@ -54,7 +58,7 @@ export const jobPatchSchema = z.object({
   experience_level: experienceLevelEnum.optional(),
   security_clearance_req: z.boolean().optional(),
   has_applied: z.boolean().optional(),
-  date_applied: z.string().optional(),
+  date_applied: patchDateString.optional(),
   heard_back: z.boolean().optional(),
   interview_stage: interviewStageEnum.optional(),
   is_active: z.boolean().optional(),
@@ -64,7 +68,7 @@ export const jobPatchSchema = z.object({
   rejection_reason: z.string().optional(),
   referral: z.boolean().optional(),
   cover_letter_submitted: z.boolean().optional(),
-  application_deadline: z.string().optional(),
+  application_deadline: patchDateString.optional(),
 }).strict()
 
 export const manualJobSchema = z.object({

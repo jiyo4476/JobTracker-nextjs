@@ -85,6 +85,25 @@ describe('scrapePayloadSchema', () => {
     expect(scrapePayloadSchema.safeParse({ ...validPayload, posting_md_path: 'linkedin/../secret.md' }).success).toBe(false)
   })
 
+  it('accepts a valid ISO date_posted', () => {
+    const result = scrapePayloadSchema.safeParse({ ...validPayload, date_posted: '2026-07-08' })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.date_posted).toBe('2026-07-08')
+  })
+
+  it('rejects a malformed date_posted', () => {
+    expect(scrapePayloadSchema.safeParse({ ...validPayload, date_posted: '3 days ago' }).success).toBe(false)
+    expect(scrapePayloadSchema.safeParse({ ...validPayload, date_posted: '07/08/2026' }).success).toBe(false)
+    expect(scrapePayloadSchema.safeParse({ ...validPayload, date_posted: '2026-7-8' }).success).toBe(false)
+    expect(scrapePayloadSchema.safeParse({ ...validPayload, date_posted: '' }).success).toBe(false)
+  })
+
+  it('accepts date_posted being absent (optional)', () => {
+    const result = scrapePayloadSchema.safeParse(validPayload)
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.date_posted).toBeUndefined()
+  })
+
   it('rejects posting_md_path that does not match platform/job_id.md format', () => {
     expect(scrapePayloadSchema.safeParse({ ...validPayload, posting_md_path: 'no-slash.md' }).success).toBe(false)
     expect(scrapePayloadSchema.safeParse({ ...validPayload, posting_md_path: 'linkedin/123456.txt' }).success).toBe(false)
@@ -112,5 +131,31 @@ describe('jobPatchSchema', () => {
 
   it('fails with invalid interview_stage enum', () => {
     expect(jobPatchSchema.safeParse({ interview_stage: 'chatting' }).success).toBe(false)
+  })
+
+  it('accepts valid ISO dates for date fields', () => {
+    expect(jobPatchSchema.safeParse({
+      date_posted: '2026-07-01',
+      date_applied: '2026-07-05',
+      application_deadline: '2026-08-01',
+    }).success).toBe(true)
+  })
+
+  it('rejects malformed dates for date fields', () => {
+    expect(jobPatchSchema.safeParse({ date_posted: '3 days ago' }).success).toBe(false)
+    expect(jobPatchSchema.safeParse({ date_applied: 'yesterday' }).success).toBe(false)
+    expect(jobPatchSchema.safeParse({ application_deadline: '08-01-2026' }).success).toBe(false)
+  })
+
+  it('accepts empty string for date fields (edit form sends "" to clear)', () => {
+    expect(jobPatchSchema.safeParse({
+      date_posted: '',
+      date_applied: '',
+      application_deadline: '',
+    }).success).toBe(true)
+  })
+
+  it('accepts date fields being absent (optional)', () => {
+    expect(jobPatchSchema.safeParse({ notes: 'no dates here' }).success).toBe(true)
   })
 })
