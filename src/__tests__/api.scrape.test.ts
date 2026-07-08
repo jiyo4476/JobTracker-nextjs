@@ -25,23 +25,14 @@ vi.mock('@/db', () => ({
   },
 }))
 
-// Mock schema module (tables)
-vi.mock('@/db/schema', () => ({
-  companies: {},
-  jobs: {},
-  skills: {},
-  software: {},
-  keywords: {},
-  certifications: {},
-  jobSkills: {},
-  jobSoftware: {},
-  jobKeywords: {},
-  jobCertifications: {},
-}))
+// Schema is NOT mocked: the fuzzy-dedup tests render the real Drizzle columns
+// to SQL to verify the COALESCE(date_posted, date_found) window.
 
 import { requireApiKey } from '@/lib/auth'
 import { db } from '@/db'
 import { extractTags } from '@/lib/nlp-extract'
+import { PgDialect } from 'drizzle-orm/pg-core'
+import type { SQL } from 'drizzle-orm'
 
 const validBody = {
   source_platform: 'linkedin',
@@ -184,6 +175,49 @@ function setupDbMocks(scenario: 'created' | 'updated' | 'duplicate') {
   }
 }
 
+const PRIMARY_INSERT_ID = 1
+const FUZZY_INSERT_ID = 42
+
+// Like setupDbMocks, but captures the fuzzy-dedup WHERE condition so tests can
+// assert on the SQL it generates, and lets the caller control the fuzzy result.
+//
+// Expected call sequence:
+// 1. First INSERT creates or updates the primary lead and returns PRIMARY_INSERT_ID.
+// 2. First SELECT checks for an exact URL match and returns no rows.
+// 3. Second SELECT checks fuzzy duplicates and returns the caller-provided result.
+// 4. Second INSERT creates the new fuzzy-matched lead and returns FUZZY_INSERT_ID.
+// 5. Any additional INSERTs return an empty result set.
+function setupFuzzyCapture(fuzzyResult: unknown[]) {
+  const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+  const captured: { fuzzyWhere?: SQL } = {}
+
+  let insertCallCount = 0
+  mockDb.insert.mockImplementation(() => {
+    insertCallCount++
+    if (insertCallCount === 1) {
+      return makeInsertMock({ returning: [{ id: PRIMARY_INSERT_ID }], withConflictUpdate: true })
+    }
+    if (insertCallCount === 2) {
+      return makeInsertMock({ returning: [{ id: FUZZY_INSERT_ID }] })
+    }
+    return makeInsertMock({ returning: [] })
+  })
+
+  let selectCallCount = 0
+  mockDb.select.mockImplementation(() => ({
+    from: vi.fn().mockReturnValue({
+      where: vi.fn().mockImplementation((condition: SQL) => {
+        selectCallCount++
+        if (selectCallCount === 1) return { limit: vi.fn().mockResolvedValue([]) } // exact match: none
+        captured.fuzzyWhere = condition
+        return { limit: vi.fn().mockResolvedValue(fuzzyResult) }
+      }),
+    }),
+  }))
+
+  return captured
+}
+
 describe('POST /api/scrape', () => {
   beforeEach(() => {
     process.env.API_KEY = 'test-key'
@@ -317,6 +351,42 @@ describe('POST /api/scrape', () => {
     const res = await POST(makeRequest(validBody))
     expect(res.status).toBe(201)
     expect(vi.mocked(extractTags)).not.toHaveBeenCalled()
+  })
+
+  it('skips as duplicate when a NULL date_posted row has a recent date_found', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    // The DB matches an undated row whose date_found is inside the 7-day window
+    const captured = setupFuzzyCapture([{ id: 88 }])
+    const { POST } = await import('@/app/api/scrape/route')
+    const res = await POST(makeRequest(validBody))
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.action).toBe('duplicate_skipped')
+    expect(json.job_id).toBe(88)
+
+    // The window must be COALESCE(date_posted, date_found) >= <7 days ago>, so a
+    // NULL date_posted row only matches while its date_found is recent.
+    const { sql: rendered, params } = new PgDialect().sqlToQuery(captured.fuzzyWhere!)
+    expect(rendered).toMatch(/coalesce\("jobs"\."date_posted",\s*"jobs"\."date_found"\)\s*>=\s*\$\d+/i)
+    expect(params.some(p => typeof p === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p))).toBe(true)
+  })
+
+  it('creates the job when a NULL date_posted row has an old date_found', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    // An undated row whose date_found fell out of the 7-day window no longer matches
+    const captured = setupFuzzyCapture([])
+    const { POST } = await import('@/app/api/scrape/route')
+    const res = await POST(makeRequest(validBody))
+    expect(res.status).toBe(201)
+    const json = await res.json()
+    expect(json.action).toBe('created')
+    expect(json.job_id).toBe(42)
+
+    // Regression guard: no unconditional "date_posted IS NULL" branch, which used
+    // to let stale undated rows block new jobs forever.
+    const { sql: rendered } = new PgDialect().sqlToQuery(captured.fuzzyWhere!)
+    expect(rendered).toMatch(/coalesce/i)
+    expect(rendered).not.toMatch(/"date_posted"\s+is\s+null/i)
   })
 
   it('does not call extractTags when job_description is empty string and skills are empty', async () => {
