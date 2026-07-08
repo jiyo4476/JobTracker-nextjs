@@ -8,7 +8,7 @@ import {
   companies, jobs, skills, software as softwareTable, keywords, certifications,
   jobSkills, jobSoftware, jobKeywords, jobCertifications,
 } from '@/db/schema'
-import { eq, and, ilike, gte, or, isNull } from 'drizzle-orm'
+import { eq, and, ilike, sql } from 'drizzle-orm'
 
 export async function POST(req: NextRequest) {
   if (!requireApiKey(req)) {
@@ -87,8 +87,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ action: 'updated', job_id: exactMatch[0].id })
     }
 
-    // 4. Fuzzy cross-platform dedup: same company + same title, posted within 7 days OR no date.
-    // Use date_found (always set) as the fallback window when date_posted is NULL.
+    // 4. Fuzzy cross-platform dedup: same company + same title within the last 7 days.
+    // Jobs with NULL date_posted fall back to date_found (set on every insert), so an
+    // old undated posting ages out of the window instead of blocking new jobs forever.
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
     const fuzzyMatch = await db
       .select({ id: jobs.id })
@@ -97,10 +98,7 @@ export async function POST(req: NextRequest) {
         and(
           eq(jobs.companyId, companyId),
           ilike(jobs.jobTitle, data.job_title),
-          or(
-            isNull(jobs.datePosted),
-            gte(jobs.datePosted, sevenDaysAgo)
-          )
+          sql`COALESCE(${jobs.datePosted}, ${jobs.dateFound}) >= ${sevenDaysAgo}`
         )
       )
       .limit(1)
