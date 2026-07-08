@@ -175,8 +175,18 @@ function setupDbMocks(scenario: 'created' | 'updated' | 'duplicate') {
   }
 }
 
+const PRIMARY_INSERT_ID = 1
+const FUZZY_INSERT_ID = 42
+
 // Like setupDbMocks, but captures the fuzzy-dedup WHERE condition so tests can
 // assert on the SQL it generates, and lets the caller control the fuzzy result.
+//
+// Expected call sequence:
+// 1. First INSERT creates or updates the primary lead and returns PRIMARY_INSERT_ID.
+// 2. First SELECT checks for an exact URL match and returns no rows.
+// 3. Second SELECT checks fuzzy duplicates and returns the caller-provided result.
+// 4. Second INSERT creates the new fuzzy-matched lead and returns FUZZY_INSERT_ID.
+// 5. Any additional INSERTs return an empty result set.
 function setupFuzzyCapture(fuzzyResult: unknown[]) {
   const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
   const captured: { fuzzyWhere?: SQL } = {}
@@ -184,8 +194,12 @@ function setupFuzzyCapture(fuzzyResult: unknown[]) {
   let insertCallCount = 0
   mockDb.insert.mockImplementation(() => {
     insertCallCount++
-    if (insertCallCount === 1) return makeInsertMock({ returning: [{ id: 1 }], withConflictUpdate: true })
-    if (insertCallCount === 2) return makeInsertMock({ returning: [{ id: 42 }] })
+    if (insertCallCount === 1) {
+      return makeInsertMock({ returning: [{ id: PRIMARY_INSERT_ID }], withConflictUpdate: true })
+    }
+    if (insertCallCount === 2) {
+      return makeInsertMock({ returning: [{ id: FUZZY_INSERT_ID }] })
+    }
     return makeInsertMock({ returning: [] })
   })
 
