@@ -53,12 +53,13 @@ async function verifyOAuthToken(token: string): Promise<boolean> {
     const scopes =
       typeof scopeClaim === "string" ? scopeClaim.split(/\s+/).filter(Boolean) : [];
     return config.requiredScopes.every((scope) => scopes.includes(scope));
-  } catch {
+  } catch (err) {
+    console.warn("OAuth2 bearer token verification failed:", err);
     return false;
   }
 }
 
-function getOAuthConfig() {
+export function getOAuthConfig() {
   const baseUrl = (
     process.env.AUTHENTIK_BASE_URL ?? DEFAULT_AUTHENTIK_BASE_URL
   ).replace(/\/+$/, "");

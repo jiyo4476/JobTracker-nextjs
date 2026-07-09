@@ -13,7 +13,7 @@ describe('GET /api/health/auth', () => {
   })
 
   it('returns ok when the API key is valid', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const { GET } = await import('@/app/api/health/auth/route')
     const req = new NextRequest('http://localhost/api/health/auth', {
       headers: { authorization: 'Bearer test-key' },
@@ -27,7 +27,7 @@ describe('GET /api/health/auth', () => {
   })
 
   it('returns 401 when the API key is invalid', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(false)
+    vi.mocked(requireApiKey).mockResolvedValue(false)
     const { GET } = await import('@/app/api/health/auth/route')
     const req = new NextRequest('http://localhost/api/health/auth', {
       headers: { authorization: 'Bearer wrong-key' },
@@ -40,7 +40,7 @@ describe('GET /api/health/auth', () => {
   })
 
   it('returns 401 when auth is missing and requireApiKey rejects it', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(false)
+    vi.mocked(requireApiKey).mockResolvedValue(false)
     const { GET } = await import('@/app/api/health/auth/route')
     const req = new NextRequest('http://localhost/api/health/auth')
 
