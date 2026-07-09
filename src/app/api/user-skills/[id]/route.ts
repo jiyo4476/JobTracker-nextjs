@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger'
 import { eq } from 'drizzle-orm'
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!requireApiKey(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await requireApiKey(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
   const skillId = parseInt(id)

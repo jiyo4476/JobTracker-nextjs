@@ -11,7 +11,7 @@ import {
 import { eq, and, ilike, sql } from 'drizzle-orm'
 
 export async function POST(req: NextRequest) {
-  if (!requireApiKey(req)) {
+  if (!(await requireApiKey(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

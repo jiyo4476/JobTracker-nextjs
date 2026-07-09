@@ -7,7 +7,7 @@ import { contacts } from '@/db/schema'
 import { and, eq } from 'drizzle-orm'
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string; contactId: string }> }) {
-  if (!requireApiKey(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await requireApiKey(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id, contactId } = await params
   const jobId = parseInt(id)
@@ -45,7 +45,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string; contactId: string }> }) {
-  if (!requireApiKey(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await requireApiKey(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id, contactId } = await params
   const jobId = parseInt(id)

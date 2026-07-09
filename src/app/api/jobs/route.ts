@@ -141,7 +141,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!requireApiKey(req)) {
+  if (!(await requireApiKey(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
