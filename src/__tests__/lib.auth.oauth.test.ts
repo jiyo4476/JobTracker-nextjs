@@ -25,6 +25,8 @@ describe('requireApiKey OAuth2/JWT verification', () => {
     vi.clearAllMocks()
     delete process.env.API_KEY // force the OAuth2 path
     delete process.env.AUTHENTIK_REQUIRED_SCOPES
+    delete process.env.AUTHENTIK_TRUSTED_ISSUERS
+    delete process.env.AUTHENTIK_AUDIENCES
     for (const [k, v] of Object.entries(OAUTH_ENV)) process.env[k] = v
   })
 
@@ -78,10 +80,59 @@ describe('requireApiKey OAuth2/JWT verification', () => {
     await expect(requireApiKey(req)).resolves.toBe(false)
   })
 
+  it('tries each trusted issuer until one verifies the bearer token', async () => {
+    delete process.env.AUTHENTIK_ISSUER
+    delete process.env.AUTHENTIK_JWKS_URI
+    process.env.AUTHENTIK_TRUSTED_ISSUERS = [
+      'https://auth.yjimmy.dev/application/o/job-tracker-scraper/',
+      'https://auth.yjimmy.dev/application/o/job-tracker-extension/',
+    ].join(' ')
+    vi.mocked(jwtVerify)
+      .mockRejectedValueOnce(new Error('wrong issuer'))
+      .mockResolvedValueOnce({
+        payload: { scope: 'openid profile email' },
+        protectedHeader: { alg: 'RS256' },
+        key: undefined,
+      } as never)
+
+    const req = new NextRequest('http://localhost/api/test', {
+      headers: { authorization: 'Bearer extension-token' },
+    })
+
+    await expect(requireApiKey(req)).resolves.toBe(true)
+    expect(jwtVerify).toHaveBeenCalledTimes(2)
+  })
+
   it('getOAuthConfig derives issuer/audience/jwksUri from AUTHENTIK_* env vars', () => {
     const config = getOAuthConfig()
     expect(config.issuer).toBe(OAUTH_ENV.AUTHENTIK_ISSUER)
     expect(config.audience).toBe(OAUTH_ENV.AUTHENTIK_AUDIENCE)
     expect(config.jwksUri).toBe(OAUTH_ENV.AUTHENTIK_JWKS_URI)
+  })
+
+  it('getOAuthConfig accepts and de-duplicates multiple trusted Authentik issuers', () => {
+    delete process.env.AUTHENTIK_ISSUER
+    delete process.env.AUTHENTIK_JWKS_URI
+    process.env.AUTHENTIK_TRUSTED_ISSUERS = [
+      'https://auth.yjimmy.dev/application/o/job-tracker-scraper/',
+      'https://auth.yjimmy.dev/application/o/job-tracker-extension/',
+      'https://auth.yjimmy.dev/application/o/job-tracker-scraper/',
+    ].join(' ')
+    process.env.AUTHENTIK_AUDIENCES = 'job-tracker-scraper,job-tracker-extension'
+
+    const config = getOAuthConfig()
+
+    expect(config.providers).toEqual([
+      {
+        issuer: 'https://auth.yjimmy.dev/application/o/job-tracker-scraper/',
+        jwksUri: 'https://auth.yjimmy.dev/application/o/job-tracker-scraper/jwks/',
+      },
+      {
+        issuer: 'https://auth.yjimmy.dev/application/o/job-tracker-extension/',
+        jwksUri: 'https://auth.yjimmy.dev/application/o/job-tracker-extension/jwks/',
+      },
+    ])
+    expect(config.audiences).toContain('job-tracker-scraper')
+    expect(config.audiences).toContain('job-tracker-extension')
   })
 })

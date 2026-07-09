@@ -3,9 +3,13 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 
 const DEFAULT_AUTHENTIK_BASE_URL = "https://auth.yjimmy.dev";
 const DEFAULT_AUTHENTIK_APP_SLUG = "job-tracker";
+const DEFAULT_AUTHENTIK_TRUSTED_ISSUERS = [
+  "https://auth.yjimmy.dev/application/o/job-tracker-scraper/",
+  "https://auth.yjimmy.dev/application/o/job-tracker-extension/",
+  "https://auth.yjimmy.dev/application/o/job-tracker-scraper/",
+];
 
-let jwks: ReturnType<typeof createRemoteJWKSet> | undefined;
-let jwksUri: string | undefined;
+const jwksByUri = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
 // Validates OAuth2 Bearer tokens issued by Authentik for external callers.
 // Same-origin browser requests (no Authorization header + Origin/Referer matches host)
@@ -42,21 +46,24 @@ export async function requireApiKey(req: NextRequest): Promise<boolean> {
 
 async function verifyOAuthToken(token: string): Promise<boolean> {
   const config = getOAuthConfig();
-  try {
-    const result = await jwtVerify(token, getJwks(config.jwksUri), {
-      issuer: config.issuer,
-      audience: config.audience,
-    });
-    if (config.requiredScopes.length === 0) return true;
+  for (const provider of config.providers) {
+    try {
+      const result = await jwtVerify(token, getJwks(provider.jwksUri), {
+        issuer: provider.issuer,
+        audience: config.audiences,
+      });
+      if (config.requiredScopes.length === 0) return true;
 
-    const scopeClaim = result.payload.scope;
-    const scopes =
-      typeof scopeClaim === "string" ? scopeClaim.split(/\s+/).filter(Boolean) : [];
-    return config.requiredScopes.every((scope) => scopes.includes(scope));
-  } catch (err) {
-    console.warn("OAuth2 bearer token verification failed:", err);
-    return false;
+      const scopeClaim = result.payload.scope;
+      const scopes =
+        typeof scopeClaim === "string" ? scopeClaim.split(/\s+/).filter(Boolean) : [];
+      return config.requiredScopes.every((scope) => scopes.includes(scope));
+    } catch {
+      // Try the next trusted issuer/JWKS pair.
+    }
   }
+
+  return false;
 }
 
 export function getOAuthConfig() {
@@ -65,29 +72,87 @@ export function getOAuthConfig() {
   ).replace(/\/+$/, "");
   const appSlug = process.env.AUTHENTIK_APP_SLUG ?? DEFAULT_AUTHENTIK_APP_SLUG;
   const issuer =
-    process.env.AUTHENTIK_ISSUER ?? `${baseUrl}/application/o/${appSlug}/`;
-  const audience =
-    process.env.AUTHENTIK_AUDIENCE ??
-    process.env.OAUTH_CLIENT_ID ??
-    DEFAULT_AUTHENTIK_APP_SLUG;
+    normalizeIssuer(process.env.AUTHENTIK_ISSUER ?? `${baseUrl}/application/o/${appSlug}/`);
+  const audiences = unique([
+    ...splitEnvList(process.env.AUTHENTIK_AUDIENCES),
+    process.env.AUTHENTIK_AUDIENCE,
+    process.env.OAUTH_CLIENT_ID,
+    DEFAULT_AUTHENTIK_APP_SLUG,
+    ...getTrustedIssuers(baseUrl).map((trustedIssuer) =>
+      issuerToAppSlug(trustedIssuer),
+    ),
+  ]);
   const requiredScopes = (process.env.AUTHENTIK_REQUIRED_SCOPES ?? "")
     .split(/\s+/)
     .filter(Boolean);
+  const providers = getTrustedIssuers(baseUrl).map((trustedIssuer) => ({
+    issuer: trustedIssuer,
+    jwksUri: `${trustedIssuer}jwks/`,
+  }));
+  if (process.env.AUTHENTIK_ISSUER || process.env.AUTHENTIK_JWKS_URI) {
+    providers.unshift({
+      issuer,
+      jwksUri:
+        process.env.AUTHENTIK_JWKS_URI ??
+        `${issuer}jwks/`,
+    });
+  }
+  const uniqueProviders = uniqueBy(providers, (provider) => provider.issuer);
 
   return {
-    issuer,
-    audience,
+    issuer: uniqueProviders[0]?.issuer ?? issuer,
+    audience: audiences[0] ?? DEFAULT_AUTHENTIK_APP_SLUG,
+    audiences,
+    providers: uniqueProviders,
     requiredScopes,
-    jwksUri:
-      process.env.AUTHENTIK_JWKS_URI ??
-      `${baseUrl}/application/o/${appSlug}/jwks/`,
+    jwksUri: uniqueProviders[0]?.jwksUri ?? `${issuer}jwks/`,
   };
 }
 
 function getJwks(uri: string) {
-  if (!jwks || jwksUri !== uri) {
-    jwksUri = uri;
+  let jwks = jwksByUri.get(uri);
+  if (!jwks) {
     jwks = createRemoteJWKSet(new URL(uri));
+    jwksByUri.set(uri, jwks);
   }
   return jwks;
+}
+
+function getTrustedIssuers(baseUrl: string): string[] {
+  const configured = splitEnvList(process.env.AUTHENTIK_TRUSTED_ISSUERS);
+  return unique(
+    (configured.length > 0 ? configured : DEFAULT_AUTHENTIK_TRUSTED_ISSUERS).map(
+      (issuer) => normalizeIssuer(issuer.replace("${AUTHENTIK_BASE_URL}", baseUrl)),
+    ),
+  );
+}
+
+function splitEnvList(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(/[\s,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function normalizeIssuer(value: string): string {
+  return value.replace(/\/+$/, "") + "/";
+}
+
+function issuerToAppSlug(issuer: string): string {
+  const parts = normalizeIssuer(issuer).split("/").filter(Boolean);
+  return parts.at(-1) ?? DEFAULT_AUTHENTIK_APP_SLUG;
+}
+
+function unique(values: Array<string | undefined>): string[] {
+  return Array.from(new Set(values.filter((value): value is string => Boolean(value))));
+}
+
+function uniqueBy<T>(values: T[], getKey: (value: T) => string): T[] {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const key = getKey(value);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }

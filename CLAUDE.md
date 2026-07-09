@@ -168,6 +168,8 @@ AUTHENTIK_APP_SLUG=job-tracker
 AUTHENTIK_ISSUER=https://auth.yjimmy.dev/application/o/job-tracker/
 AUTHENTIK_JWKS_URI=https://auth.yjimmy.dev/application/o/job-tracker/jwks/
 AUTHENTIK_AUDIENCE=job-tracker
+AUTHENTIK_TRUSTED_ISSUERS="https://auth.yjimmy.dev/application/o/job-tracker-scraper/ https://auth.yjimmy.dev/application/o/job-tracker-extension/ https://auth.yjimmy.dev/application/o/job-tracker-scraper/"
+AUTHENTIK_AUDIENCES="job-tracker-scraper job-tracker-extension"
 ```
 
 ---
