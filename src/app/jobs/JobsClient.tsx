@@ -47,6 +47,8 @@ const EXPERIENCE_LEVELS = ['', 'entry', 'mid', 'senior', 'lead', 'executive']
 const EXTRA_FILTER_PARAMS = ['salary_min', 'salary_max', 'priority_min', 'skill_ids'] as const
 
 export default function JobsClient() {
+  "use no memo"
+
   const searchParams = useSearchParams()
   const router = useRouter()
   const qc = useQueryClient()
@@ -286,6 +288,7 @@ export default function JobsClient() {
     }),
   ]
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table intentionally returns non-memoizable helpers.
   const table = useReactTable({
     data: allRows,
     columns,

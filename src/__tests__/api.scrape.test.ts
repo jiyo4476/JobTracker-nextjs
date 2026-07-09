@@ -67,29 +67,6 @@ function makeInsertMock(opts: { returning?: unknown[]; withConflictUpdate?: bool
   }
 }
 
-function makeSelectChain(limitResults: unknown[][]) {
-  let callCount = 0
-  return () => ({
-    from: vi.fn().mockReturnValue({
-      where: vi.fn().mockReturnValue({
-        limit: vi.fn().mockImplementation(() => {
-          const result = limitResults[callCount] ?? []
-          callCount++
-          return Promise.resolve(result)
-        }),
-        // fuzzy query uses .where().where().limit() — allow extra where
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockImplementation(() => {
-            const result = limitResults[callCount] ?? []
-            callCount++
-            return Promise.resolve(result)
-          }),
-        }),
-      }),
-    }),
-  })
-}
-
 function setupDbMocks(scenario: 'created' | 'updated' | 'duplicate') {
   const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
 
