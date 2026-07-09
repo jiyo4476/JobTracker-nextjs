@@ -43,7 +43,6 @@ describe('GET /api/user-skills', () => {
     mockDb.select.mockReturnValue(makeChain(mockRows))
 
     const { GET } = await import('@/app/api/user-skills/route')
-    const req = new NextRequest('http://localhost/api/user-skills')
     const res = await GET()
     expect(res.status).toBe(200)
     const json = await res.json()

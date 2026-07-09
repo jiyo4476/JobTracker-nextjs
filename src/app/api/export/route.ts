@@ -8,7 +8,7 @@ import { desc, eq } from 'drizzle-orm'
 const EXPORT_LIMIT = 10_000
 
 export async function GET(req: NextRequest) {
-  if (!requireApiKey(req)) {
+  if (!(await requireApiKey(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const { searchParams } = new URL(req.url)

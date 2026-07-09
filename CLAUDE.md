@@ -73,7 +73,7 @@ src/
 
 ## API Routes (`src/app/api/`)
 
-`POST`, `PATCH`, and `DELETE` routes require `Authorization: Bearer <API_KEY>`.
+External `POST`, `PATCH`, and `DELETE` callers require `Authorization: Bearer <OAuth2 access token>` issued by Authentik at `https://auth.yjimmy.dev`. Same-origin browser calls are allowed without an Authorization header because Authentik protects the web app in front of Next.js. `API_KEY` is only a deprecated local fallback while migrating old callers.
 
 | Method | Route | Description |
 |--------|-------|-------------|
@@ -162,7 +162,14 @@ Python scraper → POST /api/scrape
 
 ```
 DATABASE_URL=postgresql://...
-API_KEY=...        # Bearer token for scraper webhook and protected routes
+API_KEY=...        # Deprecated local bearer-token fallback only
+AUTHENTIK_BASE_URL=https://auth.yjimmy.dev
+AUTHENTIK_APP_SLUG=job-tracker
+AUTHENTIK_ISSUER=https://auth.yjimmy.dev/application/o/job-tracker/
+AUTHENTIK_JWKS_URI=https://auth.yjimmy.dev/application/o/job-tracker/jwks/
+AUTHENTIK_AUDIENCE=job-tracker
+AUTHENTIK_TRUSTED_ISSUERS="https://auth.yjimmy.dev/application/o/job-tracker-scraper/ https://auth.yjimmy.dev/application/o/job-tracker-extension/ https://auth.yjimmy.dev/application/o/job-tracker-scraper/"
+AUTHENTIK_AUDIENCES="job-tracker-scraper job-tracker-extension"
 ```
 
 ---
