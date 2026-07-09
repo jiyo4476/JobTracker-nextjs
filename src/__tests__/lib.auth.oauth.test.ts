@@ -27,6 +27,12 @@ describe('requireApiKey OAuth2/JWT verification', () => {
     delete process.env.AUTHENTIK_REQUIRED_SCOPES
     delete process.env.AUTHENTIK_TRUSTED_ISSUERS
     delete process.env.AUTHENTIK_AUDIENCES
+    delete process.env.AUTHENTIK_INTROSPECTION_URI
+    delete process.env.AUTHENTIK_INTROSPECTION_CLIENT_ID
+    delete process.env.AUTHENTIK_INTROSPECTION_CLIENT_SECRET
+    delete process.env.OAUTH_CLIENT_ID
+    delete process.env.OAUTH_CLIENT_SECRET
+    vi.unstubAllGlobals()
     for (const [k, v] of Object.entries(OAUTH_ENV)) process.env[k] = v
   })
 
@@ -77,6 +83,50 @@ describe('requireApiKey OAuth2/JWT verification', () => {
     const req = new NextRequest('http://localhost/api/test', {
       headers: { authorization: 'Bearer invalid-token' },
     })
+    await expect(requireApiKey(req)).resolves.toBe(false)
+  })
+
+  it('accepts an active introspected token when JWKS verification is unavailable', async () => {
+    process.env.OAUTH_CLIENT_ID = 'client-id'
+    process.env.OAUTH_CLIENT_SECRET = 'client-secret'
+    vi.mocked(jwtVerify).mockRejectedValue(new Error('jwks unavailable'))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        active: true,
+        iss: OAUTH_ENV.AUTHENTIK_ISSUER,
+        aud: 'client-id',
+        client_id: 'client-id',
+        scope: 'openid profile email',
+      }),
+    }))
+
+    const req = new NextRequest('http://localhost/api/test', {
+      headers: { authorization: 'Bearer introspected-token' },
+    })
+
+    await expect(requireApiKey(req)).resolves.toBe(true)
+  })
+
+  it('rejects an active introspected token with the wrong audience', async () => {
+    process.env.OAUTH_CLIENT_ID = 'client-id'
+    process.env.OAUTH_CLIENT_SECRET = 'client-secret'
+    vi.mocked(jwtVerify).mockRejectedValue(new Error('jwks unavailable'))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        active: true,
+        iss: OAUTH_ENV.AUTHENTIK_ISSUER,
+        aud: 'wrong-audience',
+        client_id: 'client-id',
+        scope: 'openid profile email',
+      }),
+    }))
+
+    const req = new NextRequest('http://localhost/api/test', {
+      headers: { authorization: 'Bearer wrong-audience-token' },
+    })
+
     await expect(requireApiKey(req)).resolves.toBe(false)
   })
 

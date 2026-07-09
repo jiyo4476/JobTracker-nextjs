@@ -23,7 +23,7 @@ describe('GET /api/health/auth', () => {
 
     expect(res.status).toBe(200)
     await expect(res.json()).resolves.toEqual({ ok: true })
-    expect(requireApiKey).toHaveBeenCalledWith(req)
+    expect(requireApiKey).toHaveBeenCalledWith(req, { allowSameOrigin: false })
   })
 
   it('returns 401 when the API key is invalid', async () => {

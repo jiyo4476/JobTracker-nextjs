@@ -11,10 +11,26 @@ const DEFAULT_AUTHENTIK_TRUSTED_ISSUERS = [
 
 const jwksByUri = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
+type RequireApiKeyOptions = {
+  allowSameOrigin?: boolean;
+};
+
+type IntrospectionResponse = {
+  active?: boolean;
+  iss?: string;
+  aud?: string | string[];
+  client_id?: string;
+  scope?: string;
+};
+
 // Validates OAuth2 Bearer tokens issued by Authentik for external callers.
 // Same-origin browser requests (no Authorization header + Origin/Referer matches host)
 // are allowed so the web UI can call its own API after Authentik protects the app.
-export async function requireApiKey(req: NextRequest): Promise<boolean> {
+export async function requireApiKey(
+  req: NextRequest,
+  options: RequireApiKeyOptions = {},
+): Promise<boolean> {
+  const allowSameOrigin = options.allowSameOrigin ?? true;
   const key = process.env.API_KEY;
   const auth = req.headers.get("authorization");
 
@@ -25,7 +41,7 @@ export async function requireApiKey(req: NextRequest): Promise<boolean> {
   // Allow same-origin browser requests that carry no auth header.
   // Parse origin URL and compare hostname+port explicitly to avoid substring spoofing
   // (e.g. "https://localhost.evil.com" containing "localhost").
-  if (!auth) {
+  if (allowSameOrigin && !auth) {
     const host = req.headers.get("host") ?? ""; // "hostname:port" or "hostname"
     // Referer includes the full path (e.g. "https://localhost:3000/jobs/42");
     // new URL().host extracts just "localhost:3000" for comparison.
@@ -63,7 +79,7 @@ async function verifyOAuthToken(token: string): Promise<boolean> {
     }
   }
 
-  return false;
+  return verifyTokenByIntrospection(token, config);
 }
 
 export function getOAuthConfig() {
@@ -106,7 +122,70 @@ export function getOAuthConfig() {
     providers: uniqueProviders,
     requiredScopes,
     jwksUri: uniqueProviders[0]?.jwksUri ?? `${issuer}jwks/`,
+    introspectionUri:
+      process.env.AUTHENTIK_INTROSPECTION_URI ??
+      `${baseUrl}/application/o/introspect/`,
+    introspectionClientId:
+      process.env.AUTHENTIK_INTROSPECTION_CLIENT_ID ??
+      process.env.OAUTH_CLIENT_ID ??
+      "",
+    introspectionClientSecret:
+      process.env.AUTHENTIK_INTROSPECTION_CLIENT_SECRET ??
+      process.env.OAUTH_CLIENT_SECRET ??
+      "",
   };
+}
+
+async function verifyTokenByIntrospection(
+  token: string,
+  config: ReturnType<typeof getOAuthConfig>,
+): Promise<boolean> {
+  if (!config.introspectionClientId || !config.introspectionClientSecret) {
+    return false;
+  }
+
+  try {
+    const credentials = Buffer.from(
+      `${config.introspectionClientId}:${config.introspectionClientSecret}`,
+    ).toString("base64");
+    const body = new URLSearchParams({ token });
+    const response = await fetch(config.introspectionUri, {
+      method: "POST",
+      headers: {
+        authorization: `Basic ${credentials}`,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body,
+    });
+    if (!response.ok) return false;
+
+    const data = (await response.json()) as IntrospectionResponse;
+    if (!data.active) return false;
+
+    const trustedIssuers = new Set(
+      config.providers.map((provider) => provider.issuer),
+    );
+    if (!data.iss || !trustedIssuers.has(normalizeIssuer(data.iss))) {
+      return false;
+    }
+
+    const tokenAudiences = Array.isArray(data.aud) ? data.aud : [data.aud];
+    if (
+      !tokenAudiences.some(
+        (audience) => audience && config.audiences.includes(audience),
+      )
+    ) {
+      return false;
+    }
+
+    if (config.requiredScopes.length === 0) return true;
+
+    const scopes =
+      typeof data.scope === "string" ? data.scope.split(/\s+/).filter(Boolean) : [];
+    return config.requiredScopes.every((scope) => scopes.includes(scope));
+  } catch {
+    return false;
+  }
 }
 
 function getJwks(uri: string) {
