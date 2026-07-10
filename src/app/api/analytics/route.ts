@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const from = fromRaw && ISO_DATE.test(fromRaw) ? fromRaw : null
   const to = toRaw && ISO_DATE.test(toRaw) ? toRaw : null
 
-  const ALLOWED_PLATFORMS = new Set(['linkedin','indeed','glassdoor','dice','lever','greenhouse','workday','angellist','direct','other'])
+  const ALLOWED_PLATFORMS = new Set(['linkedin','indeed','glassdoor','dice','lever','greenhouse','workday','angellist','direct','other','google'])
   const platform = platformRaw && ALLOWED_PLATFORMS.has(platformRaw) ? platformRaw : null
   const clearance =
     clearanceRaw === 'true' ? true :

@@ -21,7 +21,7 @@ const SKILL_COLORS = [
   '#8b5cf6', '#f97316', '#14b8a6', '#ec4899', '#84cc16',
 ]
 
-const PLATFORMS = ['', 'linkedin', 'indeed', 'glassdoor', 'dice', 'lever', 'greenhouse', 'workday', 'angellist', 'direct', 'other']
+const PLATFORMS = ['', 'linkedin', 'indeed', 'glassdoor', 'dice', 'lever', 'greenhouse', 'workday', 'angellist', 'direct', 'other', 'google']
 const CLEARANCE_MODES = [
   { label: 'All', value: null },
   { label: 'Clearance', value: true },

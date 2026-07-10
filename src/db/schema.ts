@@ -39,6 +39,7 @@ export const sourcePlatformEnum = pgEnum("source_platform_enum", [
   "angellist",
   "direct",
   "other",
+  "google",
 ]);
 
 export const jobTypeEnum = pgEnum("job_type_enum", [

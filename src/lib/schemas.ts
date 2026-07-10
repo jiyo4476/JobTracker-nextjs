@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const sourcePlatformEnum = z.enum([
-  'linkedin','indeed','glassdoor','dice','lever','greenhouse','workday','angellist','direct','other'
+  'linkedin','indeed','glassdoor','dice','lever','greenhouse','workday','angellist','direct','other','google'
 ])
 export const jobTypeEnum = z.enum(['full_time','part_time','contract','internship','temp','freelance'])
 export const experienceLevelEnum = z.enum(['entry','mid','senior','lead','executive'])

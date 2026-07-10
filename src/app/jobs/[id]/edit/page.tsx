@@ -59,6 +59,7 @@ const SOURCE_PLATFORMS = [
   { value: 'angellist', label: 'AngelList' },
   { value: 'direct', label: 'Direct' },
   { value: 'other', label: 'Other' },
+  { value: 'google', label: 'Google' },
 ]
 
 const SALARY_TYPES = [
