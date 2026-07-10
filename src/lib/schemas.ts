@@ -1,8 +1,7 @@
 import { z } from 'zod'
+import { sourcePlatformValues } from '@/lib/source-platforms'
 
-export const sourcePlatformEnum = z.enum([
-  'linkedin','indeed','glassdoor','dice','lever','greenhouse','workday','angellist','direct','other'
-])
+export const sourcePlatformEnum = z.enum(sourcePlatformValues)
 export const jobTypeEnum = z.enum(['full_time','part_time','contract','internship','temp','freelance'])
 export const experienceLevelEnum = z.enum(['entry','mid','senior','lead','executive'])
 export const salaryTypeEnum = z.enum(['annual','hourly'])

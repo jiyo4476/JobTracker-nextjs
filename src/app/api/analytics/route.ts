@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { jobs } from '@/db/schema'
+import { sourcePlatformEnum } from '@/lib/schemas'
 import { eq, sql, and, gte, lte } from 'drizzle-orm'
 
 export async function GET(req: NextRequest) {
@@ -14,8 +15,8 @@ export async function GET(req: NextRequest) {
   const from = fromRaw && ISO_DATE.test(fromRaw) ? fromRaw : null
   const to = toRaw && ISO_DATE.test(toRaw) ? toRaw : null
 
-  const ALLOWED_PLATFORMS = new Set(['linkedin','indeed','glassdoor','dice','lever','greenhouse','workday','angellist','direct','other'])
-  const platform = platformRaw && ALLOWED_PLATFORMS.has(platformRaw) ? platformRaw : null
+  const platformParsed = sourcePlatformEnum.safeParse(platformRaw)
+  const platform = platformParsed.success ? platformParsed.data : null
   const clearance =
     clearanceRaw === 'true' ? true :
     clearanceRaw === 'false' ? false :
@@ -24,8 +25,7 @@ export async function GET(req: NextRequest) {
   const dateFilters = []
   if (from) dateFilters.push(gte(jobs.dateFound, from))
   if (to) dateFilters.push(lte(jobs.dateFound, to))
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (platform) dateFilters.push(eq(jobs.sourcePlatform, platform as any))
+  if (platform) dateFilters.push(eq(jobs.sourcePlatform, platform))
   const where = dateFilters.length > 0 ? and(...dateFilters) : undefined
 
   const [skillDemandOverTime, salaryDistribution, platformBreakdown, remoteVsOnsiteByWeek] = await Promise.all([

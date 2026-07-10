@@ -238,6 +238,16 @@ describe('POST /api/scrape', () => {
     expect(json.job_id).toBe(42)
   })
 
+  it('accepts google as a source_platform on new job insert', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    setupDbMocks('created')
+    const { POST } = await import('@/app/api/scrape/route')
+    const res = await POST(makeRequest({ ...validBody, source_platform: 'google' }))
+    expect(res.status).toBe(201)
+    const json = await res.json()
+    expect(json.action).toBe('created')
+  })
+
   it('returns 200 with action=updated when exact match exists', async () => {
     vi.mocked(requireApiKey).mockReturnValue(true)
     setupDbMocks('updated')

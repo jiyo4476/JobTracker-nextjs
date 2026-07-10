@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useJob, usePatchJob } from '@/lib/queries'
 import { jobPatchSchema } from '@/lib/schemas'
+import { getSourcePlatformLabel } from '@/lib/source-platforms'
 
 type JobPatchFormValues = z.infer<typeof jobPatchSchema>
 
@@ -46,19 +47,6 @@ const EXPERIENCE_LEVELS = [
   { value: 'senior', label: 'Senior' },
   { value: 'lead', label: 'Lead' },
   { value: 'executive', label: 'Executive' },
-]
-
-const SOURCE_PLATFORMS = [
-  { value: 'linkedin', label: 'LinkedIn' },
-  { value: 'indeed', label: 'Indeed' },
-  { value: 'glassdoor', label: 'Glassdoor' },
-  { value: 'dice', label: 'Dice' },
-  { value: 'lever', label: 'Lever' },
-  { value: 'greenhouse', label: 'Greenhouse' },
-  { value: 'workday', label: 'Workday' },
-  { value: 'angellist', label: 'AngelList' },
-  { value: 'direct', label: 'Direct' },
-  { value: 'other', label: 'Other' },
 ]
 
 const SALARY_TYPES = [
@@ -232,7 +220,7 @@ export default function EditJobPage({ params }: { params: Promise<{ id: string }
                   title="Platform cannot be changed after creation"
                 >
                   <option value={job.sourcePlatform ?? ''}>
-                    {SOURCE_PLATFORMS.find(p => p.value === job.sourcePlatform)?.label ?? job.sourcePlatform ?? '—'}
+                    {getSourcePlatformLabel(job.sourcePlatform)}
                   </option>
                 </select>
               </div>

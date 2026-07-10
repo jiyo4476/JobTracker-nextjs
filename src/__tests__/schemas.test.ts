@@ -66,6 +66,10 @@ describe('scrapePayloadSchema', () => {
     expect(scrapePayloadSchema.safeParse({ ...validPayload, source_platform: 'twitter' }).success).toBe(false)
   })
 
+  it('accepts google as a valid source_platform', () => {
+    expect(scrapePayloadSchema.safeParse({ ...validPayload, source_platform: 'google' }).success).toBe(true)
+  })
+
   it('fails with an invalid job_type enum value', () => {
     expect(scrapePayloadSchema.safeParse({ ...validPayload, job_type: 'gig' }).success).toBe(false)
   })

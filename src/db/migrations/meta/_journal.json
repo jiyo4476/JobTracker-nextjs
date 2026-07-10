@@ -15,6 +15,13 @@
       "when": 1782604800000,
       "tag": "0001_seed_swe_skills",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783645402873,
+      "tag": "0002_adorable_nocturne",
+      "breakpoints": true
     }
   ]
 }

@@ -14,6 +14,7 @@ import {
   index,
   primaryKey,
 } from "drizzle-orm/pg-core";
+import { sourcePlatformValues } from "@/lib/source-platforms";
 
 // ── ENUMs ────────────────────────────────────────────────────────────────────
 
@@ -28,18 +29,7 @@ export const interviewStageEnum = pgEnum("interview_stage_enum", [
   "withdrawn",
 ]);
 
-export const sourcePlatformEnum = pgEnum("source_platform_enum", [
-  "linkedin",
-  "indeed",
-  "glassdoor",
-  "dice",
-  "lever",
-  "greenhouse",
-  "workday",
-  "angellist",
-  "direct",
-  "other",
-]);
+export const sourcePlatformEnum = pgEnum("source_platform_enum", sourcePlatformValues);
 
 export const jobTypeEnum = pgEnum("job_type_enum", [
   "full_time",
