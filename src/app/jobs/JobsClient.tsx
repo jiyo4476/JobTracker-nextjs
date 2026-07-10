@@ -21,6 +21,7 @@ import {
 import { PageHeader } from '@/components/layout/PageHeader'
 import { StageBadge } from '@/components/jobs/StageBadge'
 import { useJobs, useDeleteJob, usePatchJob, type JobListItem } from '@/lib/queries'
+import { sourcePlatformOptions } from '@/lib/source-platforms'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -41,7 +42,6 @@ function formatDate(d: string | null): string {
 }
 
 const STAGES = ['', 'not_applied', 'applied', 'phone_screen', 'technical_screen', 'onsite', 'offer_received', 'rejected', 'withdrawn']
-const PLATFORMS = ['', 'linkedin', 'indeed', 'glassdoor', 'dice', 'lever', 'greenhouse', 'workday', 'angellist', 'direct', 'other', 'google']
 const JOB_TYPES = ['', 'full_time', 'part_time', 'contract', 'internship', 'temp', 'freelance']
 const EXPERIENCE_LEVELS = ['', 'entry', 'mid', 'senior', 'lead', 'executive']
 const EXTRA_FILTER_PARAMS = ['salary_min', 'salary_max', 'priority_min', 'skill_ids'] as const
@@ -347,8 +347,9 @@ export default function JobsClient() {
           onChange={(e) => updateParams({ platform: e.target.value })}
           className="h-9 rounded-md border border-input bg-background px-3 text-sm"
         >
-          {PLATFORMS.map((p) => (
-            <option key={p} value={p}>{p || 'All platforms'}</option>
+          <option value="">All platforms</option>
+          {sourcePlatformOptions.map((p) => (
+            <option key={p.value} value={p.value}>{p.label}</option>
           ))}
         </select>
         <select

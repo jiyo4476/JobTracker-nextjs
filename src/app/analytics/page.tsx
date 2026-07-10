@@ -15,13 +15,13 @@ import {
   type SkillDemandRow,
   type SalaryDistributionRow,
 } from '@/lib/queries'
+import { sourcePlatformOptions } from '@/lib/source-platforms'
 
 const SKILL_COLORS = [
   '#6366f1', '#f59e0b', '#22c55e', '#ef4444', '#06b6d4',
   '#8b5cf6', '#f97316', '#14b8a6', '#ec4899', '#84cc16',
 ]
 
-const PLATFORMS = ['', 'linkedin', 'indeed', 'glassdoor', 'dice', 'lever', 'greenhouse', 'workday', 'angellist', 'direct', 'other', 'google']
 const CLEARANCE_MODES = [
   { label: 'All', value: null },
   { label: 'Clearance', value: true },
@@ -222,8 +222,9 @@ export default function AnalyticsPage() {
             onChange={(e) => setPlatform(e.target.value)}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm w-40"
           >
-            {PLATFORMS.map((p) => (
-              <option key={p} value={p}>{p || 'All platforms'}</option>
+            <option value="">All platforms</option>
+            {sourcePlatformOptions.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
             ))}
           </select>
         </div>
