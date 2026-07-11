@@ -86,11 +86,20 @@ export async function requireApiKey(
 // `X-authentik-meta-jwks` header the outpost also sends — trusting a header-supplied
 // JWKS URL would let a client that bypasses the outpost point verification at a
 // JWKS of its own choosing, defeating the whole check.
+//
+// The outpost issues this JWT per-proxy-provider via a standard OAuth2 flow (Authentik
+// docs: "the token must be a JWT token issued for the proxy provider"), so it carries an
+// `aud` claim scoped to job-tracker's own provider — same as any other Authentik-issued
+// token for this app. We check it against config.audiences for the same reason
+// verifyOAuthToken does: without it, a JWT minted for a *different* application behind
+// the same Authentik instance/JWKS would also verify here if this backend were ever
+// reachable by a path that skips the Traefik ForwardAuth hop.
 async function verifyForwardAuthJwt(token: string): Promise<boolean> {
   const config = getOAuthConfig();
   try {
     await jwtVerify(token, getJwks(config.jwksUri), {
       issuer: config.issuer,
+      audience: config.audiences,
       algorithms: JWT_ALGORITHMS,
     });
     return true;
