@@ -138,7 +138,11 @@ export default function NewJobPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label htmlFor="job_type" className={labelClass}>Job Type</label>
-                <select id="job_type" {...register('job_type')} className={SELECT_CLASS}>
+                <select
+                  id="job_type"
+                  {...register('job_type', { setValueAs: (v) => (v === '' ? undefined : v) })}
+                  className={SELECT_CLASS}
+                >
                   <option value="">— Select —</option>
                   {JOB_TYPES.map((t) => (
                     <option key={t.value} value={t.value}>{t.label}</option>
@@ -148,7 +152,11 @@ export default function NewJobPage() {
               </div>
               <div>
                 <label htmlFor="experience_level" className={labelClass}>Experience Level</label>
-                <select id="experience_level" {...register('experience_level')} className={SELECT_CLASS}>
+                <select
+                  id="experience_level"
+                  {...register('experience_level', { setValueAs: (v) => (v === '' ? undefined : v) })}
+                  className={SELECT_CLASS}
+                >
                   <option value="">— Select —</option>
                   {EXPERIENCE_LEVELS.map((l) => (
                     <option key={l.value} value={l.value}>{l.label}</option>
@@ -161,17 +169,25 @@ export default function NewJobPage() {
             <div>
               <label className={labelClass}>Priority</label>
               <div className="flex gap-3 items-center h-9">
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <label key={n} className="flex items-center gap-1.5 text-sm text-slate-700 cursor-pointer">
-                    <input
-                      type="radio"
-                      value={n}
-                      {...register('priority', { valueAsNumber: true })}
-                      className="h-4 w-4"
-                    />
-                    {n}
-                  </label>
-                ))}
+                <Controller
+                  name="priority"
+                  control={control}
+                  render={({ field }) => (
+                    <>
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <label key={n} className="flex items-center gap-1.5 text-sm text-slate-700 cursor-pointer">
+                          <input
+                            type="radio"
+                            checked={field.value === n}
+                            onChange={() => field.onChange(n)}
+                            className="h-4 w-4"
+                          />
+                          {n}
+                        </label>
+                      ))}
+                    </>
+                  )}
+                />
                 {priority != null && (
                   <button
                     type="button"
