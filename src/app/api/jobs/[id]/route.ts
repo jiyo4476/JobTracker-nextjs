@@ -34,6 +34,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       annualEquivalentMin: jobs.annualEquivalentMin,
       annualEquivalentMax: jobs.annualEquivalentMax,
       salaryText: jobs.salaryText,
+      salaryCurrency: jobs.salaryCurrency,
       hasApplied: jobs.hasApplied,
       dateApplied: jobs.dateApplied,
       heardBack: jobs.heardBack,

@@ -74,6 +74,7 @@ export type JobDetail = {
   annualEquivalentMin: number | null
   annualEquivalentMax: number | null
   salaryText: string | null
+  salaryCurrency: string | null
   hasApplied: boolean | null
   dateApplied: string | null
   heardBack: boolean | null
@@ -126,6 +127,24 @@ export interface JobListItem {
   companyId: number | null
   companyName: string | null
   createdAt: string
+}
+
+export type SalaryPatchResponse = Pick<
+  JobDetail,
+  | 'id'
+  | 'salaryType'
+  | 'salaryMin'
+  | 'salaryMax'
+  | 'hourlyRateMin'
+  | 'hourlyRateMax'
+  | 'annualEquivalentMin'
+  | 'annualEquivalentMax'
+  | 'salaryCurrency'
+  | 'salaryText'
+>
+
+export type TagsPatchResponse = Pick<JobDetail, 'skills' | 'software' | 'keywords' | 'certifications'> & {
+  counts: Record<'skills' | 'software' | 'keywords' | 'certifications', number>
 }
 
 export interface JobsResponse {
