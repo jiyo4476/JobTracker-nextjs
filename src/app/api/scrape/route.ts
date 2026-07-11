@@ -15,7 +15,9 @@ import { eq, and, ilike, sql } from 'drizzle-orm'
 const PG_UNIQUE_VIOLATION = '23505'
 
 export async function POST(req: NextRequest) {
-  if (!(await requireApiKey(req))) {
+  // External-only endpoint (Python scraper via OAuth2 bearer token) — the browser
+  // UI never calls this directly, so the same-origin bypass must not apply here.
+  if (!(await requireApiKey(req, { allowSameOrigin: false }))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

@@ -208,6 +208,14 @@ describe('POST /api/scrape', () => {
     expect(res.status).toBe(401)
   })
 
+  it('calls requireApiKey with allowSameOrigin: false (external-only endpoint)', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    const { POST } = await import('@/app/api/scrape/route')
+    const req = makeRequest(validBody, false)
+    await POST(req)
+    expect(requireApiKey).toHaveBeenCalledWith(req, { allowSameOrigin: false })
+  })
+
   it('returns 400 when body is invalid JSON', async () => {
     vi.mocked(requireApiKey).mockReturnValue(true)
     const { POST } = await import('@/app/api/scrape/route')

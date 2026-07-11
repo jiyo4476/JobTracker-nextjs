@@ -67,6 +67,8 @@ export const salaryTypeEnum = pgEnum("salary_type_enum", ["annual", "hourly"]);
 
 export const companies = pgTable("companies", {
   id: serial("id").primaryKey(),
+  // Also has a pg_trgm GIN index (companies_name_trgm_idx, see
+  // migrations/0004_add_search_trgm_indexes.sql) backing the /api/jobs `q` search.
   name: text("name").unique().notNull(),
   website: text("website"),
   industry: text("industry"),
@@ -150,6 +152,10 @@ export const jobs = pgTable(
     // generated migration file:
     //   CREATE INDEX jobs_description_fts_idx ON jobs
     //   USING GIN (to_tsvector('english', coalesce(job_description, '')));
+    //
+    // jobs.job_title also has a pg_trgm GIN index (jobs_job_title_trgm_idx, see
+    // migrations/0004_add_search_trgm_indexes.sql) so the ilike() branch in the
+    // /api/jobs `q` search is index-backed alongside the description tsvector match.
   ]
 );
 

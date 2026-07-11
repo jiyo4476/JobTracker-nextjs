@@ -22,7 +22,7 @@ export const scrapePayloadSchema = z.object({
   source_platform: sourcePlatformEnum,
   external_job_id: z.string().min(1).max(500),
   company_name: z.string().min(1).max(500),
-  job_title: z.string().min(1).max(500),
+  job_title: z.string().trim().min(1).max(500),
   job_link: httpUrlSchema,
   job_location: z.string().max(300).optional(),
   is_remote: z.boolean().default(false),
@@ -52,7 +52,7 @@ export const scrapePayloadSchema = z.object({
 const patchDateString = z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/, 'Must be ISO date (YYYY-MM-DD)')
 
 export const jobPatchSchema = z.object({
-  job_title: z.string().max(500).optional(),
+  job_title: z.string().trim().min(1).max(500).optional(),
   job_location: z.string().max(300).optional(),
   is_remote: z.boolean().optional(),
   job_description: z.string().max(50_000).optional(),
@@ -81,7 +81,7 @@ export const jobPatchSchema = z.object({
 }).strict()
 
 export const manualJobSchema = z.object({
-  job_title: z.string().min(1).max(500),
+  job_title: z.string().trim().min(1).max(500),
   job_link: httpUrlSchema.optional(),
   job_location: z.string().max(300).optional(),
   is_remote: z.boolean().optional(),

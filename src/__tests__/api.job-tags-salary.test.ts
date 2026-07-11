@@ -408,4 +408,17 @@ describe('GET /api/tags', () => {
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual([])
   })
+
+  it('returns 500 instead of throwing when the DB query fails', async () => {
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    mockDb.select.mockImplementation(() => {
+      throw new Error('connection lost')
+    })
+
+    const { GET } = await import('@/app/api/tags/route')
+    const res = await GET(new NextRequest('http://localhost/api/tags?type=skills&q=script'))
+
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: 'Internal server error' })
+  })
 })
