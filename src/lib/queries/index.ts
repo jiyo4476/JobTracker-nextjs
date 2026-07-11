@@ -78,6 +78,49 @@ export function usePatchJob() {
   })
 }
 
+export type TagLookupType = 'skills' | 'software' | 'keywords' | 'certifications'
+
+export function useTagLookup(type: TagLookupType, q: string) {
+  const qs = new URLSearchParams({ type })
+  if (q.trim()) qs.set('q', q.trim())
+  return useQuery<LookupItem[]>({
+    queryKey: ['tags', type, q.trim()],
+    queryFn: () => api.get<LookupItem[]>(`/tags?${qs.toString()}`),
+  })
+}
+
+export function usePatchJobTags() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string | number; body: Record<string, string[]> }) =>
+      api.patch(`/jobs/${id}/tags`, body),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: ['job', String(id)] })
+      qc.invalidateQueries({ queryKey: ['jobs'] })
+      toast.success('Tags updated')
+    },
+    onError: () => {
+      toast.error('Tag update failed')
+    },
+  })
+}
+
+export function usePatchJobSalary() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string | number; body: Record<string, unknown> }) =>
+      api.patch(`/jobs/${id}/salary`, body),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: ['job', String(id)] })
+      qc.invalidateQueries({ queryKey: ['jobs'] })
+      toast.success('Salary updated')
+    },
+    onError: () => {
+      toast.error('Salary update failed')
+    },
+  })
+}
+
 type DeleteJobVariables = string | number | {
   id: string | number
   showErrorToast?: boolean

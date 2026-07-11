@@ -74,6 +74,7 @@ export type JobDetail = {
   annualEquivalentMin: number | null
   annualEquivalentMax: number | null
   salaryText: string | null
+  salaryCurrency: string | null
   hasApplied: boolean | null
   dateApplied: string | null
   heardBack: boolean | null
