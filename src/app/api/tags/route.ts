@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { certifications, keywords, skills, software } from '@/db/schema'
+import { escapeLikePattern } from '@/lib/db-utils'
 import { asc, ilike } from 'drizzle-orm'
 
 const tagTables = {
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
   const rows = await db
     .select({ id: table.id, name: table.name })
     .from(table)
-    .where(q ? ilike(table.name, `%${q.replace(/[%_\\]/g, '\\$&')}%`) : undefined)
+    .where(q ? ilike(table.name, `%${escapeLikePattern(q)}%`) : undefined)
     .orderBy(asc(table.name))
     .limit(20)
 

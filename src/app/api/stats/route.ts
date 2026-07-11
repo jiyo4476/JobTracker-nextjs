@@ -1,9 +1,19 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/db'
 import { jobs, skills, jobSkills } from '@/db/schema'
+import { logger, serializeError } from '@/lib/logger'
 import { eq, and, inArray, count, sql } from 'drizzle-orm'
 
 export async function GET() {
+  try {
+    return await getStats()
+  } catch (err) {
+    logger.error('GET /api/stats failed', serializeError(err))
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+async function getStats() {
   const [
     [{ totalJobs }],
     [{ applied }],

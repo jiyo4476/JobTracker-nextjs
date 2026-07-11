@@ -1,9 +1,19 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/db'
 import { companies, jobs } from '@/db/schema'
+import { logger, serializeError } from '@/lib/logger'
 import { eq, sql } from 'drizzle-orm'
 
 export async function GET() {
+  try {
+    return await listCompanies()
+  } catch (err) {
+    logger.error('GET /api/companies failed', serializeError(err))
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+async function listCompanies() {
   const rows = await db
     .select({
       id: companies.id,

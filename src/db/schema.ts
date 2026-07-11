@@ -10,10 +10,11 @@ import {
   char,
   date,
   timestamp,
-  unique,
+  uniqueIndex,
   index,
   primaryKey,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { sourcePlatformValues } from "@/lib/source-platforms";
 
 // ── ENUMs ────────────────────────────────────────────────────────────────────
@@ -83,7 +84,7 @@ export const jobs = pgTable(
   "jobs",
   {
     id: serial("id").primaryKey(),
-    companyId: integer("company_id").references(() => companies.id),
+    companyId: integer("company_id").references(() => companies.id, { onDelete: "set null" }),
     jobTitle: text("job_title").notNull(),
     jobLink: text("job_link"),
     jobLocation: text("job_location"),
@@ -130,7 +131,13 @@ export const jobs = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
   (t) => [
-    unique("jobs_external_dedup").on(t.externalJobId, t.sourcePlatform).nullsNotDistinct(),
+    // Partial unique index: only scraped jobs (external_job_id set) participate in
+    // dedup. Manually-created jobs always have external_job_id NULL and must not
+    // collide with each other — a plain UNIQUE NULLS NOT DISTINCT constraint would
+    // treat every (NULL, NULL) row as a duplicate of the first.
+    uniqueIndex("jobs_external_dedup")
+      .on(t.externalJobId, t.sourcePlatform)
+      .where(sql`${t.externalJobId} IS NOT NULL`),
     index("jobs_company_id_idx").on(t.companyId),
     index("jobs_interview_stage_idx").on(t.interviewStage),
     index("jobs_date_found_idx").on(t.dateFound),

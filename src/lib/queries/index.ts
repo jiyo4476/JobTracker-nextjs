@@ -45,6 +45,9 @@ export function useCreateJob() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['jobs'] })
     },
+    onError: () => {
+      toast.error('Failed to create job')
+    },
   })
 }
 
@@ -56,6 +59,9 @@ export function usePatchCompany() {
     onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: ['companies'] })
       qc.invalidateQueries({ queryKey: ['companies', id] })
+    },
+    onError: () => {
+      toast.error('Failed to update company')
     },
   })
 }
@@ -76,6 +82,9 @@ export function usePatchJob() {
     onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: ['job', String(id)] })
       qc.invalidateQueries({ queryKey: ['jobs'] })
+    },
+    onError: () => {
+      toast.error('Failed to save job changes')
     },
   })
 }
@@ -185,6 +194,9 @@ export function useCreateContact() {
     onSuccess: (_data, { jobId }) => {
       qc.invalidateQueries({ queryKey: ['job', String(jobId)] })
     },
+    onError: () => {
+      toast.error('Failed to add contact')
+    },
   })
 }
 
@@ -203,6 +215,9 @@ export function usePatchContact() {
     onSuccess: (_data, { jobId }) => {
       qc.invalidateQueries({ queryKey: ['job', String(jobId)] })
     },
+    onError: () => {
+      toast.error('Failed to update contact')
+    },
   })
 }
 
@@ -213,6 +228,9 @@ export function useDeleteContact() {
       api.delete(`/jobs/${jobId}/contacts/${contactId}`),
     onSuccess: (_data, { jobId }) => {
       qc.invalidateQueries({ queryKey: ['job', String(jobId)] })
+    },
+    onError: () => {
+      toast.error('Failed to delete contact')
     },
   })
 }
@@ -282,6 +300,9 @@ export function useCreateResumeVersion() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['resume-versions'] })
     },
+    onError: () => {
+      toast.error('Failed to create resume version')
+    },
   })
 }
 
@@ -293,6 +314,9 @@ export function usePatchResumeVersion() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['resume-versions'] })
     },
+    onError: () => {
+      toast.error('Failed to update resume version')
+    },
   })
 }
 
@@ -302,6 +326,9 @@ export function useDeleteResumeVersion() {
     mutationFn: (id: number) => api.delete(`/resume-versions/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['resume-versions'] })
+    },
+    onError: () => {
+      toast.error('Failed to delete resume version')
     },
   })
 }
@@ -329,6 +356,9 @@ export function useCreateUserSkill() {
       qc.invalidateQueries({ queryKey: ['user-skills'] })
       qc.invalidateQueries({ queryKey: ['skills'] })
     },
+    onError: () => {
+      toast.error('Failed to add skill')
+    },
   })
 }
 
@@ -339,6 +369,9 @@ export function useDeleteUserSkill() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['user-skills'] })
       qc.invalidateQueries({ queryKey: ['skills'] })
+    },
+    onError: () => {
+      toast.error('Failed to remove skill')
     },
   })
 }

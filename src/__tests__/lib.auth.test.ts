@@ -28,9 +28,18 @@ describe('requireApiKey', () => {
     await expect(requireApiKey(req)).resolves.toBe(false)
   })
 
-  // Same-origin browser requests (no auth header, no external origin) are allowed
-  it('returns true for same-origin request with no auth header and no origin', async () => {
+  // A request with no auth header AND no Origin/Referer is never trusted — that's
+  // trivial for a non-browser client (curl, a script) to produce, so treating it as
+  // same-origin would bypass auth entirely.
+  it('returns false for a request with no auth header and no origin/referer', async () => {
     const req = new NextRequest('http://localhost/api/test')
+    await expect(requireApiKey(req)).resolves.toBe(false)
+  })
+
+  it('returns true for same-origin request with no auth header and a matching origin', async () => {
+    const req = new NextRequest('http://localhost/api/test', {
+      headers: { origin: 'http://localhost', host: 'localhost' },
+    })
     await expect(requireApiKey(req)).resolves.toBe(true)
   })
 
@@ -49,10 +58,10 @@ describe('requireApiKey', () => {
     await expect(requireApiKey(req)).resolves.toBe(false)
   })
 
-  it('returns true when API_KEY is unset and no auth header is provided by same-origin server code', async () => {
+  it('returns false when API_KEY is unset and no auth header or origin is provided', async () => {
     delete process.env.API_KEY
     const req = new NextRequest('http://localhost/api/test')
-    await expect(requireApiKey(req)).resolves.toBe(true)
+    await expect(requireApiKey(req)).resolves.toBe(false)
   })
 
   it('returns false for "Bearer undefined" when API_KEY is set', async () => {

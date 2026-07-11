@@ -3,6 +3,7 @@ import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { manualJobSchema } from '@/lib/schemas'
 import { logger, serializeError } from '@/lib/logger'
+import { escapeLikePattern } from '@/lib/db-utils'
 import { jobs, companies, jobSkills } from '@/db/schema'
 import { eq, and, ilike, or, gte, lte, count, desc, sql } from 'drizzle-orm'
 import {
@@ -10,6 +11,15 @@ import {
 } from '@/lib/schemas'
 
 export async function GET(req: NextRequest) {
+  try {
+    return await listJobs(req)
+  } catch (err) {
+    logger.error('GET /api/jobs failed', serializeError(err))
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+async function listJobs(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1'))
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '25')))
@@ -75,11 +85,15 @@ export async function GET(req: NextRequest) {
   const q = searchParams.get('q')?.slice(0, 200)
   if (q) {
     // Escape LIKE special chars so user input doesn't accidentally match everything
-    const escaped = q.replace(/[%_\\]/g, (c) => `\\${c}`)
+    const escaped = escapeLikePattern(q)
     filters.push(
       or(
         ilike(jobs.jobTitle, `%${escaped}%`),
-        ilike(companies.name, `%${escaped}%`)
+        ilike(companies.name, `%${escaped}%`),
+        // Full-text match against job_description, backed by the jobs_description_fts_idx
+        // GIN index. plainto_tsquery handles arbitrary user text safely — no LIKE-style
+        // escaping needed.
+        sql`to_tsvector('english', coalesce(${jobs.jobDescription}, '')) @@ plainto_tsquery('english', ${q})`
       )
     )
   }

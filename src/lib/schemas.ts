@@ -9,17 +9,26 @@ export const interviewStageEnum = z.enum([
   'not_applied','applied','phone_screen','technical_screen','onsite','offer_received','rejected','withdrawn'
 ])
 
+// Zod's .url() doesn't restrict scheme (it accepts javascript:/data: URIs), and these
+// values get rendered as clickable links in the UI — restrict to http(s) only.
+const httpUrlSchema = z.string().url().refine(
+  (v) => /^https?:\/\//i.test(v),
+  'Must be an http(s) URL'
+)
+
+const tagArraySchema = z.array(z.string().trim().min(1).max(100)).max(100)
+
 export const scrapePayloadSchema = z.object({
   source_platform: sourcePlatformEnum,
-  external_job_id: z.string().min(1),
-  company_name: z.string().min(1),
-  job_title: z.string().min(1),
-  job_link: z.string().url(),
-  job_location: z.string().optional(),
+  external_job_id: z.string().min(1).max(500),
+  company_name: z.string().min(1).max(500),
+  job_title: z.string().min(1).max(500),
+  job_link: httpUrlSchema,
+  job_location: z.string().max(300).optional(),
   is_remote: z.boolean().default(false),
-  job_description: z.string().optional(),
+  job_description: z.string().max(50_000).optional(),
   date_posted: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be ISO date (YYYY-MM-DD)').optional(),
-  salary_text: z.string().optional(),
+  salary_text: z.string().max(200).optional(),
   salary_type: salaryTypeEnum.optional(),
   salary_min: z.number().int().optional(),
   salary_max: z.number().int().optional(),
@@ -28,13 +37,14 @@ export const scrapePayloadSchema = z.object({
   job_type: jobTypeEnum.optional(),
   experience_level: experienceLevelEnum.optional(),
   posting_md_path: z.string()
+    .max(300)
     .regex(/^[a-z0-9_-]+\/[a-z0-9_.-]+\.md$/, 'Must be in the form platform/job_id.md (lowercase only)')
     .optional(),
   security_clearance_req: z.boolean().default(false),
-  skills: z.array(z.string()).default([]),
-  software: z.array(z.string()).default([]),
-  keywords: z.array(z.string()).default([]),
-  certifications: z.array(z.string()).default([]),
+  skills: tagArraySchema.default([]),
+  software: tagArraySchema.default([]),
+  keywords: tagArraySchema.default([]),
+  certifications: tagArraySchema.default([]),
 })
 
 // Patch date fields also accept '' — the edit form sends empty string to clear a date;
@@ -42,12 +52,12 @@ export const scrapePayloadSchema = z.object({
 const patchDateString = z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/, 'Must be ISO date (YYYY-MM-DD)')
 
 export const jobPatchSchema = z.object({
-  job_title: z.string().optional(),
-  job_location: z.string().optional(),
+  job_title: z.string().max(500).optional(),
+  job_location: z.string().max(300).optional(),
   is_remote: z.boolean().optional(),
-  job_description: z.string().optional(),
+  job_description: z.string().max(50_000).optional(),
   date_posted: patchDateString.optional(),
-  salary_text: z.string().optional(),
+  salary_text: z.string().max(200).optional(),
   salary_type: salaryTypeEnum.optional(),
   salary_min: z.number().int().optional(),
   salary_max: z.number().int().optional(),
@@ -62,36 +72,36 @@ export const jobPatchSchema = z.object({
   interview_stage: interviewStageEnum.optional(),
   is_active: z.boolean().optional(),
   priority: z.number().int().min(1).max(5).optional(),
-  notes: z.string().optional(),
-  resume_version: z.string().optional(),
-  rejection_reason: z.string().optional(),
+  notes: z.string().max(20_000).optional(),
+  resume_version: z.string().max(200).optional(),
+  rejection_reason: z.string().max(2_000).optional(),
   referral: z.boolean().optional(),
   cover_letter_submitted: z.boolean().optional(),
   application_deadline: patchDateString.optional(),
 }).strict()
 
 export const manualJobSchema = z.object({
-  job_title: z.string().min(1),
-  job_link: z.string().url().optional(),
-  job_location: z.string().optional(),
+  job_title: z.string().min(1).max(500),
+  job_link: httpUrlSchema.optional(),
+  job_location: z.string().max(300).optional(),
   is_remote: z.boolean().optional(),
   company_id: z.number().int().positive().optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(20_000).optional(),
   job_type: jobTypeEnum.optional(),
   experience_level: experienceLevelEnum.optional(),
   priority: z.number().int().min(1).max(5).optional(),
-  salary_text: z.string().optional(),
+  salary_text: z.string().max(200).optional(),
 }).strict()
 
 export const contactCreateSchema = z.object({
-  name: z.string().min(1),
-  title: z.string().optional(),
-  email: z.string().email().optional(),
-  phone: z.string().optional(),
-  linkedin_url: z.string().url().optional(),
-  role: z.string().optional(),
+  name: z.string().min(1).max(300),
+  title: z.string().max(300).optional(),
+  email: z.string().email().max(320).optional(),
+  phone: z.string().max(50).optional(),
+  linkedin_url: httpUrlSchema.optional(),
+  role: z.string().max(300).optional(),
   contacted_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(20_000).optional(),
 }).strict()
 
 export const contactPatchSchema = contactCreateSchema.partial().refine(
@@ -109,32 +119,32 @@ export const userSkillCreateSchema = z
   })
 
 export const companyPatchSchema = z.object({
-  name: z.string().optional(),
-  website: z.string().url().optional(),
-  industry: z.string().optional(),
-  hq_location: z.string().optional(),
-  glassdoor_url: z.string().url().optional(),
-  linkedin_url: z.string().url().optional(),
-  notes: z.string().optional(),
+  name: z.string().max(500).optional(),
+  website: httpUrlSchema.optional(),
+  industry: z.string().max(300).optional(),
+  hq_location: z.string().max(300).optional(),
+  glassdoor_url: httpUrlSchema.optional(),
+  linkedin_url: httpUrlSchema.optional(),
+  notes: z.string().max(20_000).optional(),
 })
 
 export const resumeVersionCreateSchema = z.object({
-  label: z.string().min(1),
+  label: z.string().min(1).max(200),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be ISO date (YYYY-MM-DD)').optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(20_000).optional(),
 }).strict()
 
 export const resumeVersionPatchSchema = z.object({
-  label: z.string().min(1).optional(),
+  label: z.string().min(1).max(200).optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be ISO date (YYYY-MM-DD)').optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(20_000).optional(),
 }).strict()
 
 export const jobTagsPatchSchema = z.object({
-  skills: z.array(z.string().trim().min(1)).optional(),
-  software: z.array(z.string().trim().min(1)).optional(),
-  keywords: z.array(z.string().trim().min(1)).optional(),
-  certifications: z.array(z.string().trim().min(1)).optional(),
+  skills: tagArraySchema.optional(),
+  software: tagArraySchema.optional(),
+  keywords: tagArraySchema.optional(),
+  certifications: tagArraySchema.optional(),
 }).strict().refine(
   value => Object.keys(value).length > 0,
   { message: 'At least one tag array is required' }

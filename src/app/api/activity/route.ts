@@ -1,9 +1,19 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/db'
 import { jobStatusHistory, jobs, companies } from '@/db/schema'
+import { logger, serializeError } from '@/lib/logger'
 import { eq, desc } from 'drizzle-orm'
 
 export async function GET() {
+  try {
+    return await getActivity()
+  } catch (err) {
+    logger.error('GET /api/activity failed', serializeError(err))
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+async function getActivity() {
   const rows = await db
     .select({
       id: jobStatusHistory.id,
