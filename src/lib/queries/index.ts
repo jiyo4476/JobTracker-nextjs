@@ -9,6 +9,7 @@ import type {
   JobDetail, JobsResponse, JobsParams,
   LookupItem, StatsResponse, ResumeVersion, UserSkill,
   AnalyticsParams, AnalyticsResponse,
+  SalaryPatchResponse, TagsPatchResponse,
 } from '@/types/queries'
 
 // Re-export all types so consumers can import from '@/lib/queries' unchanged
@@ -20,6 +21,7 @@ export type {
   LookupItem, StatsResponse, ResumeVersion, UserSkill,
   AnalyticsParams, AnalyticsResponse,
   SkillDemandRow, SalaryDistributionRow, PlatformBreakdownRow, RemoteVsOnsiteRow,
+  SalaryPatchResponse, TagsPatchResponse,
 } from '@/types/queries'
 
 export function useCompanies() {
@@ -93,7 +95,7 @@ export function usePatchJobTags() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, body }: { id: string | number; body: Record<string, string[]> }) =>
-      api.patch(`/jobs/${id}/tags`, body),
+      api.patch<TagsPatchResponse>(`/jobs/${id}/tags`, body),
     onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: ['job', String(id)] })
       qc.invalidateQueries({ queryKey: ['jobs'] })
@@ -109,7 +111,7 @@ export function usePatchJobSalary() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, body }: { id: string | number; body: Record<string, unknown> }) =>
-      api.patch(`/jobs/${id}/salary`, body),
+      api.patch<SalaryPatchResponse>(`/jobs/${id}/salary`, body),
     onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: ['job', String(id)] })
       qc.invalidateQueries({ queryKey: ['jobs'] })

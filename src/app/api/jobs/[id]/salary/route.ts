@@ -6,12 +6,6 @@ import { jobSalaryPatchSchema } from '@/lib/schemas'
 import { logger, serializeError } from '@/lib/logger'
 import { eq } from 'drizzle-orm'
 
-function dollarsToCents(value: number | null | undefined) {
-  if (value === undefined) return undefined
-  if (value === null) return null
-  return Math.round(value * 100)
-}
-
 function annualEquivalentFromHourly(value: number | null | undefined) {
   if (value === undefined) return undefined
   if (value === null) return null
@@ -32,8 +26,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
   const d = parsed.data
-  const salaryMinCents = dollarsToCents(d.salary_min)
-  const salaryMaxCents = dollarsToCents(d.salary_max)
+  // salary_min/salary_max arrive as annual-equivalent cents, matching jobPatchSchema's contract.
+  const salaryMinCents = d.salary_min
+  const salaryMaxCents = d.salary_max
   const hourlyRateMin = d.hourly_rate_min
   const hourlyRateMax = d.hourly_rate_max
   const annualRangeProvided = salaryMinCents !== undefined || salaryMaxCents !== undefined

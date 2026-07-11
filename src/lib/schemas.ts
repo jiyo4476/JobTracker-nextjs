@@ -140,11 +140,15 @@ export const jobTagsPatchSchema = z.object({
   { message: 'At least one tag array is required' }
 )
 
+// hourly_rate_* is capped so hourly * 2080 * 100 (annual-equivalent cents)
+// stays within the integer column's range (int4 max ~2.1B).
 const nullableMoney = z.number()
   .nonnegative()
+  .max(10_000, 'Must be at most $10,000/hr')
   .refine(value => Number(value.toFixed(2)) === value, 'Must have at most 2 decimal places')
   .nullable()
-const nullableAnnualSalary = z.number().int().positive().max(1_000_000).nullable()
+// salary_min/salary_max are annual-equivalent cents, matching jobPatchSchema's contract.
+const nullableAnnualSalary = z.number().int().positive().max(100_000_000, 'Must be at most $1,000,000').nullable()
 const nullableCurrency = z.string().regex(/^[A-Z]{3}$/, 'Must be a 3-letter ISO 4217 code').nullable()
 
 export const jobSalaryPatchSchema = z.object({
@@ -166,6 +170,14 @@ export const jobSalaryPatchSchema = z.object({
     path: ['salary_max'],
   })
   .refine(value => !(
+    value.salary_min !== undefined &&
+    value.salary_max !== undefined &&
+    (value.salary_min === null) !== (value.salary_max === null)
+  ), {
+    message: 'salary_min and salary_max must both be set or both be cleared',
+    path: ['salary_max'],
+  })
+  .refine(value => !(
     value.salary_min != null &&
     value.salary_max != null &&
     value.salary_min > value.salary_max
@@ -180,6 +192,14 @@ export const jobSalaryPatchSchema = z.object({
     path: ['hourly_rate_max'],
   })
   .refine(value => !(
+    value.hourly_rate_min !== undefined &&
+    value.hourly_rate_max !== undefined &&
+    (value.hourly_rate_min === null) !== (value.hourly_rate_max === null)
+  ), {
+    message: 'hourly_rate_min and hourly_rate_max must both be set or both be cleared',
+    path: ['hourly_rate_max'],
+  })
+  .refine(value => !(
     value.hourly_rate_min != null &&
     value.hourly_rate_max != null &&
     value.hourly_rate_min > value.hourly_rate_max
@@ -189,14 +209,14 @@ export const jobSalaryPatchSchema = z.object({
   })
   .refine(value => !(
     value.salary_type === 'annual' &&
-    (value.salary_min === undefined || value.salary_max === undefined)
+    (value.salary_min == null || value.salary_max == null)
   ), {
     message: 'salary_min and salary_max are required when changing salary_type to annual',
     path: ['salary_min'],
   })
   .refine(value => !(
     value.salary_type === 'hourly' &&
-    (value.hourly_rate_min === undefined || value.hourly_rate_max === undefined)
+    (value.hourly_rate_min == null || value.hourly_rate_max == null)
   ), {
     message: 'hourly_rate_min and hourly_rate_max are required when changing salary_type to hourly',
     path: ['hourly_rate_min'],

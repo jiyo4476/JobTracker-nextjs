@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { X } from 'lucide-react'
+import { toast } from 'sonner'
 import {
   useJob,
   usePatchJob,
@@ -77,7 +78,12 @@ type SalaryFormState = {
   salaryText: string
 }
 
-function salaryStateFromJob(job: JobDetail): SalaryFormState {
+type SalarySource = Pick<
+  JobDetail,
+  'salaryType' | 'salaryMin' | 'salaryMax' | 'hourlyRateMin' | 'hourlyRateMax' | 'salaryCurrency' | 'salaryText'
+>
+
+function salaryStateFromJob(job: SalarySource): SalaryFormState {
   return {
     salaryType: (job.salaryType as SalaryFormState['salaryType']) ?? '',
     salaryMin: job.salaryMin != null ? String(Math.round(job.salaryMin / 100)) : '',
@@ -122,12 +128,23 @@ function formatCurrencyRange(form: SalaryFormState) {
 }
 
 function preventParentFormSubmit(event: React.KeyboardEvent) {
-  if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
+  // Blocklist (rather than allowlist) so any future control added to these
+  // nested cards — select, button, etc. — is guarded by default; textareas
+  // are exempted since Enter there is meant to insert a newline.
+  if (event.key === 'Enter' && !(event.target instanceof HTMLTextAreaElement)) {
     event.preventDefault()
   }
 }
 
-function JobSalaryEditor({ jobId, job }: { jobId: string; job: JobDetail }) {
+function JobSalaryEditor({
+  jobId,
+  job,
+  onDirtyChange,
+}: {
+  jobId: string
+  job: JobDetail
+  onDirtyChange?: (dirty: boolean) => void
+}) {
   const patchSalary = usePatchJobSalary()
   const [form, setForm] = React.useState(() => salaryStateFromJob(job))
 
@@ -143,12 +160,18 @@ function JobSalaryEditor({ jobId, job }: { jobId: string; job: JobDetail }) {
   const hourlyPrecisionInvalid = form.salaryType === 'hourly' && (
     hasMoreThanTwoDecimalPlaces(hourlyMin) || hasMoreThanTwoDecimalPlaces(hourlyMax)
   )
+  const annualIntegerInvalid = form.salaryType === 'annual' && (
+    (annualMin !== null && !Number.isNaN(annualMin) && !Number.isInteger(annualMin)) ||
+    (annualMax !== null && !Number.isNaN(annualMax) && !Number.isInteger(annualMax))
+  )
   const rangeInvalid = activeMin != null && activeMax != null && activeMin > activeMax
   const currencyInvalid = !/^[A-Z]{3}$/.test(form.salaryCurrency)
   const validationMessage = numberInvalid
     ? 'Salary values must be numbers.'
     : hourlyPrecisionInvalid
       ? 'Hourly values must have at most 2 decimal places.'
+      : annualIntegerInvalid
+        ? 'Annual salary must be a whole dollar amount.'
     : salaryRangeProvided && !salaryRangeComplete
       ? 'Provide both min and max, or clear both.'
       : rangeInvalid
@@ -160,30 +183,44 @@ function JobSalaryEditor({ jobId, job }: { jobId: string; job: JobDetail }) {
   const isDirty = JSON.stringify(form) !== JSON.stringify(current)
   const canSave = isDirty && !validationMessage && !patchSalary.isPending
 
+  React.useEffect(() => {
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
+  React.useEffect(() => () => onDirtyChange?.(false), [onDirtyChange])
+
   function updateField(field: keyof SalaryFormState, value: string) {
     setForm(currentForm => ({ ...currentForm, [field]: field === 'salaryCurrency' ? value.toUpperCase() : value }))
   }
 
   function handleSave() {
     if (!canSave) return
-    const structuredType = form.salaryType || (annualMin !== null || annualMax !== null ? 'annual' : null)
     const body: Record<string, unknown> = {
-      salary_type: structuredType,
       salary_currency: form.salaryCurrency || null,
       salary_text: form.salaryText.trim() || null,
     }
     if (form.salaryType === 'hourly') {
+      body.salary_type = 'hourly'
       body.salary_min = null
       body.salary_max = null
       body.hourly_rate_min = hourlyMin
       body.hourly_rate_max = hourlyMax
+    } else if (form.salaryType === 'annual') {
+      body.salary_type = 'annual'
+      body.salary_min = annualMin !== null ? Math.round(annualMin * 100) : null
+      body.salary_max = annualMax !== null ? Math.round(annualMax * 100) : null
+      body.hourly_rate_min = null
+      body.hourly_rate_max = null
     } else {
-      body.salary_min = annualMin
-      body.salary_max = annualMax
+      body.salary_type = null
+      body.salary_min = null
+      body.salary_max = null
       body.hourly_rate_min = null
       body.hourly_rate_max = null
     }
-    patchSalary.mutate({ id: jobId, body })
+    patchSalary.mutate(
+      { id: jobId, body },
+      { onSuccess: data => setForm(salaryStateFromJob(data)) }
+    )
   }
 
   return (
@@ -233,7 +270,7 @@ function JobSalaryEditor({ jobId, job }: { jobId: string; job: JobDetail }) {
           </div>
         </div>
 
-        {form.salaryType === 'hourly' ? (
+        {form.salaryType === 'hourly' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label htmlFor="hourly_min_editor" className="block text-sm font-medium text-slate-700 mb-1.5">Hourly Min</label>
@@ -244,7 +281,8 @@ function JobSalaryEditor({ jobId, job }: { jobId: string; job: JobDetail }) {
               <Input id="hourly_max_editor" inputMode="decimal" value={form.hourlyRateMax} onChange={e => updateField('hourlyRateMax', e.target.value)} placeholder="80.00" />
             </div>
           </div>
-        ) : (
+        )}
+        {form.salaryType === 'annual' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label htmlFor="salary_min_editor" className="block text-sm font-medium text-slate-700 mb-1.5">Annual Min</label>
@@ -356,7 +394,15 @@ function TagColumn({
   )
 }
 
-function JobTagsEditor({ jobId, job }: { jobId: string; job: JobDetail }) {
+function JobTagsEditor({
+  jobId,
+  job,
+  onDirtyChange,
+}: {
+  jobId: string
+  job: JobDetail
+  onDirtyChange?: (dirty: boolean) => void
+}) {
   const patchTags = usePatchJobTags()
   const [skills, setSkills] = React.useState(job.skills)
   const [software, setSoftware] = React.useState(job.software)
@@ -368,17 +414,32 @@ function JobTagsEditor({ jobId, job }: { jobId: string; job: JobDetail }) {
     !sameTagSet(keywords, job.keywords) ||
     !sameTagSet(certifications, job.certifications)
 
+  React.useEffect(() => {
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
+  React.useEffect(() => () => onDirtyChange?.(false), [onDirtyChange])
+
   function handleSave() {
     if (!isDirty) return
-    patchTags.mutate({
-      id: jobId,
-      body: {
-        skills: skills.map(item => item.name),
-        software: software.map(item => item.name),
-        keywords: keywords.map(item => item.name),
-        certifications: certifications.map(item => item.name),
+    patchTags.mutate(
+      {
+        id: jobId,
+        body: {
+          skills: skills.map(item => item.name),
+          software: software.map(item => item.name),
+          keywords: keywords.map(item => item.name),
+          certifications: certifications.map(item => item.name),
+        },
       },
-    })
+      {
+        onSuccess: data => {
+          setSkills(data.skills)
+          setSoftware(data.software)
+          setKeywords(data.keywords)
+          setCertifications(data.certifications)
+        },
+      }
+    )
   }
 
   return (
@@ -440,19 +501,28 @@ export default function EditJobPage({ params }: { params: Promise<{ id: string }
   const router = useRouter()
   const { data: job, isLoading } = useJob(id)
   const patchJob = usePatchJob()
+  const salaryDirtyRef = React.useRef(false)
+  const tagsDirtyRef = React.useRef(false)
+  const setSalaryDirty = React.useCallback((dirty: boolean) => { salaryDirtyRef.current = dirty }, [])
+  const setTagsDirty = React.useCallback((dirty: boolean) => { tagsDirtyRef.current = dirty }, [])
 
   const {
     register,
     handleSubmit,
-    formState: { errors, isDirty },
+    formState: { errors },
     reset,
   } = useForm<JobPatchFormValues>({
     resolver: zodResolver(jobPatchSchema),
   })
 
-  // Pre-populate once data arrives
+  // Pre-populate exactly once, when data first arrives. Using a ref (rather
+  // than gating on formState.isDirty) avoids a landmine where isDirty, once
+  // true, never goes false again for the life of this component instance —
+  // which would permanently block re-population.
+  const initializedRef = React.useRef(false)
   React.useEffect(() => {
-    if (!job || isDirty) return
+    if (!job || initializedRef.current) return
+    initializedRef.current = true
     reset({
       job_title: job.jobTitle ?? undefined,
       job_location: job.jobLocation ?? undefined,
@@ -474,7 +544,7 @@ export default function EditJobPage({ params }: { params: Promise<{ id: string }
       security_clearance_req: job.securityClearanceReq ?? undefined,
       notes: job.notes ?? undefined,
     })
-  }, [isDirty, job, reset])
+  }, [job, reset])
 
   async function onSubmit(values: JobPatchFormValues) {
     // Strip undefined values while preserving intentional empty-string clears.
@@ -484,6 +554,10 @@ export default function EditJobPage({ params }: { params: Promise<{ id: string }
 
     try {
       await patchJob.mutateAsync({ id, body })
+      if (salaryDirtyRef.current || tagsDirtyRef.current) {
+        toast.warning('Basic info saved. Salary/tag changes are still unsaved — use their Save buttons before leaving.')
+        return
+      }
       router.push(`/jobs/${id}`)
     } catch {
       // Error surfaced via patchJob.isError / patchJob.error below
@@ -511,7 +585,7 @@ export default function EditJobPage({ params }: { params: Promise<{ id: string }
         description={job.companyName ?? 'Edit all fields for this job listing'}
       />
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={e => handleSubmit(onSubmit)(e)} className="space-y-6">
 
         {/* ── Basic Info ─────────────────────────────────────────── */}
         <Card>
@@ -599,7 +673,7 @@ export default function EditJobPage({ params }: { params: Promise<{ id: string }
           </CardContent>
         </Card>
 
-        <JobSalaryEditor key={`salary-${id}`} jobId={id} job={job} />
+        <JobSalaryEditor key={`salary-${id}`} jobId={id} job={job} onDirtyChange={setSalaryDirty} />
 
         {/* ── Dates ──────────────────────────────────────────────── */}
         <Card>
@@ -746,7 +820,7 @@ export default function EditJobPage({ params }: { params: Promise<{ id: string }
           </CardContent>
         </Card>
 
-        <JobTagsEditor key={`tags-${id}`} jobId={id} job={job} />
+        <JobTagsEditor key={`tags-${id}`} jobId={id} job={job} onDirtyChange={setTagsDirty} />
 
         {patchJob.isError && (
           <p className="text-sm text-red-600">

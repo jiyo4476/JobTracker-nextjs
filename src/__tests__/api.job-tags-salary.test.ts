@@ -73,6 +73,16 @@ describe('PATCH /api/jobs/[id]/salary', () => {
     expect(res.status).toBe(400)
   })
 
+  it('rejects hourly rates high enough to overflow the annual-equivalent cents column', async () => {
+    vi.mocked(requireApiKey).mockResolvedValue(true)
+    const { PATCH } = await import('@/app/api/jobs/[id]/salary/route')
+    const res = await PATCH(
+      makeReq('/api/jobs/1/salary', { hourly_rate_min: 15000, hourly_rate_max: 20000 }),
+      makeParams('1')
+    )
+    expect(res.status).toBe(400)
+  })
+
   it('rejects changing salary type without the matching range', async () => {
     vi.mocked(requireApiKey).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/jobs/[id]/salary/route')
@@ -83,7 +93,27 @@ describe('PATCH /api/jobs/[id]/salary', () => {
     expect(res.status).toBe(400)
   })
 
-  it('converts annual dollar values to persisted cents', async () => {
+  it('rejects switching to annual when salary_max is explicitly nulled instead of set', async () => {
+    vi.mocked(requireApiKey).mockResolvedValue(true)
+    const { PATCH } = await import('@/app/api/jobs/[id]/salary/route')
+    const res = await PATCH(
+      makeReq('/api/jobs/1/salary', { salary_type: 'annual', salary_min: 8000000, salary_max: null }),
+      makeParams('1')
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('rejects a half-open range (salary_min set, salary_max null) even without an explicit salary_type', async () => {
+    vi.mocked(requireApiKey).mockResolvedValue(true)
+    const { PATCH } = await import('@/app/api/jobs/[id]/salary/route')
+    const res = await PATCH(
+      makeReq('/api/jobs/1/salary', { salary_min: 8000000, salary_max: null }),
+      makeParams('1')
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('persists annual salary values as cents directly, matching PATCH /api/jobs/[id]', async () => {
     vi.mocked(requireApiKey).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     const updateChain = makeChain([{ id: 1, salaryMin: 8000000, salaryMax: 12000000 }])
@@ -93,8 +123,8 @@ describe('PATCH /api/jobs/[id]/salary', () => {
     const res = await PATCH(
       makeReq('/api/jobs/1/salary', {
         salary_type: 'annual',
-        salary_min: 80000,
-        salary_max: 120000,
+        salary_min: 8000000,
+        salary_max: 12000000,
         salary_currency: 'USD',
       }),
       makeParams('1')
@@ -123,8 +153,8 @@ describe('PATCH /api/jobs/[id]/salary', () => {
     const { PATCH } = await import('@/app/api/jobs/[id]/salary/route')
     const res = await PATCH(
       makeReq('/api/jobs/1/salary', {
-        salary_min: 90000,
-        salary_max: 120000,
+        salary_min: 9000000,
+        salary_max: 12000000,
         salary_currency: 'USD',
       }),
       makeParams('1')

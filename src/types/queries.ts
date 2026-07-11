@@ -129,6 +129,24 @@ export interface JobListItem {
   createdAt: string
 }
 
+export type SalaryPatchResponse = Pick<
+  JobDetail,
+  | 'id'
+  | 'salaryType'
+  | 'salaryMin'
+  | 'salaryMax'
+  | 'hourlyRateMin'
+  | 'hourlyRateMax'
+  | 'annualEquivalentMin'
+  | 'annualEquivalentMax'
+  | 'salaryCurrency'
+  | 'salaryText'
+>
+
+export type TagsPatchResponse = Pick<JobDetail, 'skills' | 'software' | 'keywords' | 'certifications'> & {
+  counts: Record<'skills' | 'software' | 'keywords' | 'certifications', number>
+}
+
 export interface JobsResponse {
   jobs: JobListItem[]
   total: number
