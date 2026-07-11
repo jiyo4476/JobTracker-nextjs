@@ -44,11 +44,44 @@ describe('requireApiKey forward-auth JWT path (AUTHENTIK_FORWARD_AUTH_ENABLED)',
     await expect(requireApiKey(req)).resolves.toBe(true)
   })
 
+  // The forward-auth JWT is issued per-proxy-provider, so it must be checked against
+  // config.audiences the same way verifyOAuthToken checks bearer tokens — otherwise a
+  // JWT minted for a different application behind the same Authentik instance/JWKS
+  // would also verify here if this backend were ever reached by a path that skips the
+  // Traefik ForwardAuth hop.
+  it('verifies the JWT audience against config.audiences, not just issuer/signature', async () => {
+    vi.mocked(jwtVerify).mockResolvedValue({
+      payload: { iss: OAUTH_ENV.AUTHENTIK_ISSUER },
+      protectedHeader: { alg: 'RS256' },
+      key: undefined,
+    } as never)
+
+    const req = new NextRequest('http://localhost/api/test', {
+      headers: { 'x-authentik-jwt': 'valid-forward-auth-jwt' },
+    })
+    await requireApiKey(req)
+
+    expect(jwtVerify).toHaveBeenCalledWith(
+      'valid-forward-auth-jwt',
+      expect.anything(),
+      expect.objectContaining({ audience: expect.arrayContaining(['job-tracker']) }),
+    )
+  })
+
   it('rejects a request with an invalid/unverifiable X-authentik-jwt header', async () => {
     vi.mocked(jwtVerify).mockRejectedValue(new Error('signature verification failed'))
 
     const req = new NextRequest('http://localhost/api/test', {
       headers: { 'x-authentik-jwt': 'forged-jwt' },
+    })
+    await expect(requireApiKey(req)).resolves.toBe(false)
+  })
+
+  it('rejects a request when jwtVerify throws for a wrong-audience token', async () => {
+    vi.mocked(jwtVerify).mockRejectedValue(new Error('unexpected "aud" claim value'))
+
+    const req = new NextRequest('http://localhost/api/test', {
+      headers: { 'x-authentik-jwt': 'wrong-audience-jwt' },
     })
     await expect(requireApiKey(req)).resolves.toBe(false)
   })
