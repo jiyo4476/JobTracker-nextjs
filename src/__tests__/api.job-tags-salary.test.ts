@@ -113,6 +113,43 @@ describe('PATCH /api/jobs/[id]/salary', () => {
     expect(res.status).toBe(400)
   })
 
+  it('rejects salary_currency codes that are not 3 uppercase letters', async () => {
+    vi.mocked(requireApiKey).mockResolvedValue(true)
+    const { PATCH } = await import('@/app/api/jobs/[id]/salary/route')
+    for (const salary_currency of ['us', 'USD1', 'usd']) {
+      const res = await PATCH(
+        makeReq('/api/jobs/1/salary', { salary_currency }),
+        makeParams('1')
+      )
+      expect(res.status).toBe(400)
+    }
+  })
+
+  it('rejects a partial annual range with only salary_min provided', async () => {
+    vi.mocked(requireApiKey).mockResolvedValue(true)
+    const { PATCH } = await import('@/app/api/jobs/[id]/salary/route')
+    const res = await PATCH(
+      makeReq('/api/jobs/1/salary', { salary_min: 8000000 }),
+      makeParams('1')
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('rejects dual annual + hourly ranges when salary_type is omitted', async () => {
+    vi.mocked(requireApiKey).mockResolvedValue(true)
+    const { PATCH } = await import('@/app/api/jobs/[id]/salary/route')
+    const res = await PATCH(
+      makeReq('/api/jobs/1/salary', {
+        salary_min: 8000000,
+        salary_max: 12000000,
+        hourly_rate_min: 50,
+        hourly_rate_max: 60,
+      }),
+      makeParams('1')
+    )
+    expect(res.status).toBe(400)
+  })
+
   it('persists annual salary values as cents directly, matching PATCH /api/jobs/[id]', async () => {
     vi.mocked(requireApiKey).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
@@ -255,6 +292,48 @@ describe('PATCH /api/jobs/[id]/tags', () => {
     expect(json.invalid.skills).toEqual(['Missing Skill'])
   })
 
+  it('rejects a payload with no tag arrays', async () => {
+    vi.mocked(requireApiKey).mockResolvedValue(true)
+    const { PATCH } = await import('@/app/api/jobs/[id]/tags/route')
+    const res = await PATCH(makeReq('/api/jobs/1/tags', {}), makeParams('1'))
+    expect(res.status).toBe(400)
+  })
+
+  it('rejects empty or whitespace-only tag names', async () => {
+    vi.mocked(requireApiKey).mockResolvedValue(true)
+    const { PATCH } = await import('@/app/api/jobs/[id]/tags/route')
+    const res = await PATCH(
+      makeReq('/api/jobs/1/tags', { skills: ['   '] }),
+      makeParams('1')
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('de-duplicates repeated tag names before validating and persisting', async () => {
+    vi.mocked(requireApiKey).mockResolvedValue(true)
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    mockDb.select
+      .mockReturnValueOnce(makeChain([{ id: 1 }]))
+      .mockReturnValueOnce(makeChain([{ id: 10, name: 'Python' }]))
+      .mockReturnValueOnce(makeChain([{ id: 10, name: 'Python' }]))
+      .mockReturnValueOnce(makeChain([]))
+      .mockReturnValueOnce(makeChain([]))
+      .mockReturnValueOnce(makeChain([]))
+    const tx = {
+      delete: vi.fn(() => makeChain([])),
+      insert: vi.fn(() => makeChain([])),
+      update: vi.fn(() => makeChain([])),
+    }
+    mockDb.transaction.mockImplementation(async (callback: (value: typeof tx) => Promise<void>) => callback(tx))
+
+    const { PATCH } = await import('@/app/api/jobs/[id]/tags/route')
+    const res = await PATCH(makeReq('/api/jobs/1/tags', { skills: ['Python', 'Python'] }), makeParams('1'))
+
+    expect(res.status).toBe(200)
+    expect(tx.insert).toHaveBeenCalledTimes(1)
+    expect(tx.insert.mock.results[0].value.values).toHaveBeenCalledWith([{ jobId: 1, skillId: 10 }])
+  })
+
   it('replaces provided tag groups and returns counts', async () => {
     vi.mocked(requireApiKey).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
@@ -305,5 +384,28 @@ describe('GET /api/tags', () => {
     const { GET } = await import('@/app/api/tags/route')
     const res = await GET(new NextRequest('http://localhost/api/tags?type=bad'))
     expect(res.status).toBe(400)
+  })
+
+  it('caps results at 20 via .limit(20)', async () => {
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    const chain = makeChain([{ id: 1, name: 'TypeScript' }])
+    mockDb.select.mockReturnValue(chain)
+
+    const { GET } = await import('@/app/api/tags/route')
+    const res = await GET(new NextRequest('http://localhost/api/tags?type=skills&q=script'))
+
+    expect(res.status).toBe(200)
+    expect(chain.limit).toHaveBeenCalledWith(20)
+  })
+
+  it('does not throw on query strings containing ilike wildcard characters', async () => {
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    mockDb.select.mockReturnValue(makeChain([]))
+
+    const { GET } = await import('@/app/api/tags/route')
+    const res = await GET(new NextRequest(`http://localhost/api/tags?type=skills&q=${encodeURIComponent('100%_c\\')}`))
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual([])
   })
 })

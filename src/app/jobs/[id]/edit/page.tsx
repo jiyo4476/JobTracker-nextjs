@@ -154,6 +154,7 @@ function JobSalaryEditor({
   const hourlyMax = parseOptionalNumber(form.hourlyRateMax)
   const activeMin = form.salaryType === 'hourly' ? hourlyMin : annualMin
   const activeMax = form.salaryType === 'hourly' ? hourlyMax : annualMax
+  const salaryRangeRequired = form.salaryType === 'annual' || form.salaryType === 'hourly'
   const salaryRangeProvided = activeMin !== null || activeMax !== null
   const salaryRangeComplete = activeMin !== null && activeMax !== null
   const numberInvalid = Number.isNaN(activeMin) || Number.isNaN(activeMax)
@@ -172,8 +173,10 @@ function JobSalaryEditor({
       ? 'Hourly values must have at most 2 decimal places.'
       : annualIntegerInvalid
         ? 'Annual salary must be a whole dollar amount.'
-    : salaryRangeProvided && !salaryRangeComplete
-      ? 'Provide both min and max, or clear both.'
+    : (salaryRangeProvided || salaryRangeRequired) && !salaryRangeComplete
+      ? salaryRangeRequired
+        ? 'Min and max are both required for the selected salary type.'
+        : 'Provide both min and max, or clear both.'
       : rangeInvalid
         ? 'Min must be less than or equal to max.'
         : currencyInvalid
