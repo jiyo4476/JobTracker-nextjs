@@ -10,10 +10,11 @@ import {
   char,
   date,
   timestamp,
-  unique,
+  uniqueIndex,
   index,
   primaryKey,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { sourcePlatformValues } from "@/lib/source-platforms";
 
 // ── ENUMs ────────────────────────────────────────────────────────────────────
@@ -66,6 +67,8 @@ export const salaryTypeEnum = pgEnum("salary_type_enum", ["annual", "hourly"]);
 
 export const companies = pgTable("companies", {
   id: serial("id").primaryKey(),
+  // Also has a pg_trgm GIN index (companies_name_trgm_idx, see
+  // migrations/0004_add_search_trgm_indexes.sql) backing the /api/jobs `q` search.
   name: text("name").unique().notNull(),
   website: text("website"),
   industry: text("industry"),
@@ -83,7 +86,7 @@ export const jobs = pgTable(
   "jobs",
   {
     id: serial("id").primaryKey(),
-    companyId: integer("company_id").references(() => companies.id),
+    companyId: integer("company_id").references(() => companies.id, { onDelete: "set null" }),
     jobTitle: text("job_title").notNull(),
     jobLink: text("job_link"),
     jobLocation: text("job_location"),
@@ -130,7 +133,13 @@ export const jobs = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
   (t) => [
-    unique("jobs_external_dedup").on(t.externalJobId, t.sourcePlatform).nullsNotDistinct(),
+    // Partial unique index: only scraped jobs (external_job_id set) participate in
+    // dedup. Manually-created jobs always have external_job_id NULL and must not
+    // collide with each other — a plain UNIQUE NULLS NOT DISTINCT constraint would
+    // treat every (NULL, NULL) row as a duplicate of the first.
+    uniqueIndex("jobs_external_dedup")
+      .on(t.externalJobId, t.sourcePlatform)
+      .where(sql`${t.externalJobId} IS NOT NULL`),
     index("jobs_company_id_idx").on(t.companyId),
     index("jobs_interview_stage_idx").on(t.interviewStage),
     index("jobs_date_found_idx").on(t.dateFound),
@@ -143,6 +152,10 @@ export const jobs = pgTable(
     // generated migration file:
     //   CREATE INDEX jobs_description_fts_idx ON jobs
     //   USING GIN (to_tsvector('english', coalesce(job_description, '')));
+    //
+    // jobs.job_title also has a pg_trgm GIN index (jobs_job_title_trgm_idx, see
+    // migrations/0004_add_search_trgm_indexes.sql) so the ilike() branch in the
+    // /api/jobs `q` search is index-backed alongside the description tsvector match.
   ]
 );
 

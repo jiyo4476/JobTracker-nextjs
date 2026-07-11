@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 const DEFAULT_AUTHENTIK_BASE_URL = "https://auth.yjimmy.dev";
@@ -6,8 +7,11 @@ const DEFAULT_AUTHENTIK_APP_SLUG = "job-tracker";
 const DEFAULT_AUTHENTIK_TRUSTED_ISSUERS = [
   "https://auth.yjimmy.dev/application/o/job-tracker-scraper/",
   "https://auth.yjimmy.dev/application/o/job-tracker-extension/",
-  "https://auth.yjimmy.dev/application/o/job-tracker-scraper/",
 ];
+
+// Authentik signs tokens with RS256; pin it explicitly so a malicious token
+// can't try to downgrade to a weaker/none algorithm.
+const JWT_ALGORITHMS = ["RS256"];
 
 const jwksByUri = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
@@ -24,8 +28,20 @@ type IntrospectionResponse = {
 };
 
 // Validates OAuth2 Bearer tokens issued by Authentik for external callers.
-// Same-origin browser requests (no Authorization header + Origin/Referer matches host)
-// are allowed so the web UI can call its own API after Authentik protects the app.
+//
+// Same-origin browser requests (no Authorization header) are allowed through one of
+// two paths:
+//   - AUTHENTIK_FORWARD_AUTH_ENABLED=true (real deployments behind the Authentik
+//     forward-auth outpost, e.g. Traefik ForwardAuth): every request that reaches
+//     this app already passed Authentik's login wall, and the outpost injects a
+//     signed `X-authentik-jwt` header as cryptographic proof of that. We verify its
+//     signature against Authentik's JWKS — this cannot be forged by a client that
+//     talks to the app directly, unlike a client-supplied Origin/Referer header.
+//   - Otherwise (local `npm run dev` / `docker compose up`, where no such proxy sits
+//     in front): fall back to a same-origin Origin/Referer check. This fallback is
+//     trivially forgeable by any non-browser client that simply sets a matching
+//     Origin header — it must never be relied on once a real deployment can enable
+//     the JWT path instead.
 export async function requireApiKey(
   req: NextRequest,
   options: RequireApiKeyOptions = {},
@@ -36,28 +52,60 @@ export async function requireApiKey(
 
   // Temporary migration fallback for callers that have not moved to OAuth2 yet.
   // Remove API_KEY from the environment to require Authentik tokens exclusively.
-  if (key && auth === `Bearer ${key}`) return true;
+  if (key && auth && safeCompare(auth, `Bearer ${key}`)) return true;
 
-  // Allow same-origin browser requests that carry no auth header.
-  // Parse origin URL and compare hostname+port explicitly to avoid substring spoofing
-  // (e.g. "https://localhost.evil.com" containing "localhost").
   if (allowSameOrigin && !auth) {
+    if (process.env.AUTHENTIK_FORWARD_AUTH_ENABLED === "true") {
+      const proxyJwt = req.headers.get("x-authentik-jwt");
+      return proxyJwt ? verifyForwardAuthJwt(proxyJwt) : false;
+    }
+
+    // Local/dev fallback — only reachable when forward-auth isn't configured.
+    // Parse origin URL and compare hostname+port explicitly to avoid substring spoofing
+    // (e.g. "https://localhost.evil.com" containing "localhost").
     const host = req.headers.get("host") ?? ""; // "hostname:port" or "hostname"
     // Referer includes the full path (e.g. "https://localhost:3000/jobs/42");
     // new URL().host extracts just "localhost:3000" for comparison.
     const rawOrigin = req.headers.get("origin") ?? req.headers.get("referer") ?? "";
-    if (rawOrigin === "") return true; // no origin → same-server request (e.g. RSC fetch)
     try {
       const { host: parsedHost } = new URL(rawOrigin);
       if (host !== "" && parsedHost === host) return true;
     } catch {
-      // malformed origin — fall through to reject
+      // empty or malformed origin — fall through to reject
     }
   }
 
   if (!auth?.startsWith("Bearer ")) return false;
 
   return verifyOAuthToken(auth.slice("Bearer ".length));
+}
+
+// Verifies the signed JWT that Authentik's forward-auth outpost injects as
+// `X-authentik-jwt` for every request it forwards. We deliberately pin verification
+// to our own statically configured issuer/JWKS (getOAuthConfig()) rather than the
+// `X-authentik-meta-jwks` header the outpost also sends — trusting a header-supplied
+// JWKS URL would let a client that bypasses the outpost point verification at a
+// JWKS of its own choosing, defeating the whole check.
+async function verifyForwardAuthJwt(token: string): Promise<boolean> {
+  const config = getOAuthConfig();
+  try {
+    await jwtVerify(token, getJwks(config.jwksUri), {
+      issuer: config.issuer,
+      algorithms: JWT_ALGORITHMS,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Constant-time string comparison to avoid leaking the shared API_KEY secret
+// via response-timing differences.
+function safeCompare(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
 }
 
 async function verifyOAuthToken(token: string): Promise<boolean> {
@@ -67,6 +115,7 @@ async function verifyOAuthToken(token: string): Promise<boolean> {
       const result = await jwtVerify(token, getJwks(provider.jwksUri), {
         issuer: provider.issuer,
         audience: config.audiences,
+        algorithms: JWT_ALGORITHMS,
       });
       if (config.requiredScopes.length === 0) return true;
 

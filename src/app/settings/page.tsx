@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -11,6 +12,10 @@ async function handleExport(format: 'json' | 'csv', setLoading: (v: boolean) => 
   setLoading(true)
   try {
     const res = await fetch('/api/export?format=' + format)
+    if (!res.ok) {
+      toast.error('Export failed')
+      return
+    }
     const blob = await res.blob()
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -18,6 +23,8 @@ async function handleExport(format: 'json' | 'csv', setLoading: (v: boolean) => 
     a.download = 'jobs.' + format
     a.click()
     URL.revokeObjectURL(url)
+  } catch {
+    toast.error('Export failed')
   } finally {
     setLoading(false)
   }

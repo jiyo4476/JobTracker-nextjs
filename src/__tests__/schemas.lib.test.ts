@@ -27,6 +27,16 @@ describe('manualJobSchema', () => {
     expect(manualJobSchema.safeParse({}).success).toBe(false)
   })
 
+  it('fails when job_title is whitespace-only', () => {
+    expect(manualJobSchema.safeParse({ job_title: '   ' }).success).toBe(false)
+  })
+
+  it('trims surrounding whitespace from job_title', () => {
+    const result = manualJobSchema.safeParse({ job_title: '  Engineer  ' })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.job_title).toBe('Engineer')
+  })
+
   it('fails when job_link is not a valid URL', () => {
     expect(manualJobSchema.safeParse({ job_title: 'Engineer', job_link: 'not-a-url' }).success).toBe(false)
   })

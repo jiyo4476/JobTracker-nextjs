@@ -2,9 +2,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { jobs } from '@/db/schema'
 import { sourcePlatformEnum } from '@/lib/schemas'
+import { logger, serializeError } from '@/lib/logger'
 import { eq, sql, and, gte, lte } from 'drizzle-orm'
 
 export async function GET(req: NextRequest) {
+  try {
+    return await getAnalytics(req)
+  } catch (err) {
+    logger.error('GET /api/analytics failed', serializeError(err))
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+async function getAnalytics(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const fromRaw = searchParams.get('from')
   const toRaw = searchParams.get('to')

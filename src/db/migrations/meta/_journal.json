@@ -22,6 +22,20 @@
       "when": 1783645402873,
       "tag": "0002_adorable_nocturne",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783784701815,
+      "tag": "0003_legal_yellowjacket",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783794671447,
+      "tag": "0004_add_search_trgm_indexes",
+      "breakpoints": true
     }
   ]
 }

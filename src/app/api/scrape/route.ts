@@ -4,14 +4,20 @@ import { requireApiKey } from '@/lib/auth'
 import { scrapePayloadSchema } from '@/lib/schemas'
 import { extractTags } from '@/lib/nlp-extract'
 import { logger, serializeError } from '@/lib/logger'
+import { escapeLikePattern } from '@/lib/db-utils'
 import {
   companies, jobs, skills, software as softwareTable, keywords, certifications,
   jobSkills, jobSoftware, jobKeywords, jobCertifications,
 } from '@/db/schema'
 import { eq, and, ilike, sql } from 'drizzle-orm'
 
+// Postgres unique_violation error code, surfaced as `.code` by the `postgres` driver.
+const PG_UNIQUE_VIOLATION = '23505'
+
 export async function POST(req: NextRequest) {
-  if (!(await requireApiKey(req))) {
+  // External-only endpoint (Python scraper via OAuth2 bearer token) — the browser
+  // UI never calls this directly, so the same-origin bypass must not apply here.
+  if (!(await requireApiKey(req, { allowSameOrigin: false }))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -90,6 +96,11 @@ export async function POST(req: NextRequest) {
     // 4. Fuzzy cross-platform dedup: same company + same title within the last 7 days.
     // Jobs with NULL date_posted fall back to date_found (set on every insert), so an
     // old undated posting ages out of the window instead of blocking new jobs forever.
+    // Note: this check-then-insert has a residual race under concurrent scrapes of the
+    // same brand-new job under different external_job_ids — there's no DB constraint
+    // backstop for the fuzzy case (unlike the exact-match case below), so a very tight
+    // race can still create a duplicate row. Low likelihood given the scraper runs
+    // requests sequentially per platform; revisit with an advisory lock if it recurs.
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
     const fuzzyMatch = await db
       .select({ id: jobs.id })
@@ -97,7 +108,7 @@ export async function POST(req: NextRequest) {
       .where(
         and(
           eq(jobs.companyId, companyId),
-          ilike(jobs.jobTitle, data.job_title),
+          ilike(jobs.jobTitle, escapeLikePattern(data.job_title)),
           sql`COALESCE(${jobs.datePosted}, ${jobs.dateFound}) >= ${sevenDaysAgo}`
         )
       )
@@ -108,37 +119,55 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ action: 'duplicate_skipped', job_id: fuzzyMatch[0].id })
     }
 
-    // 5. Insert new job
-    const [newJob] = await db
-      .insert(jobs)
-      .values({
-        companyId,
-        jobTitle: data.job_title,
-        jobLink: data.job_link,
-        jobLocation: data.job_location,
-        isRemote: data.is_remote,
-        sourcePlatform: data.source_platform,
-        externalJobId: data.external_job_id,
-        jobType: data.job_type,
-        experienceLevel: data.experience_level,
-        jobDescription: data.job_description,
-        salaryType: data.salary_type,
-        salaryMin: data.salary_min,
-        salaryMax: data.salary_max,
-        hourlyRateMin: data.hourly_rate_min?.toString(),
-        hourlyRateMax: data.hourly_rate_max?.toString(),
-        annualEquivalentMin,
-        annualEquivalentMax,
-        salaryText: data.salary_text,
-        postingMdPath: data.posting_md_path,
-        securityClearanceReq: data.security_clearance_req,
-        datePosted: data.date_posted,
-        dateFound: new Date().toISOString().slice(0, 10),
-        lastScrapedAt: new Date(),
-      })
-      .returning({ id: jobs.id })
-
-    const jobId = newJob.id
+    // 5. Insert new job. A concurrent request for the same (external_job_id, source_platform)
+    // that raced past the exact-match check above will hit the jobs_external_dedup unique
+    // constraint here — catch that specifically and respond the same way the exact-match
+    // branch would have, instead of falling through to a generic 500.
+    let jobId: number
+    try {
+      const [newJob] = await db
+        .insert(jobs)
+        .values({
+          companyId,
+          jobTitle: data.job_title,
+          jobLink: data.job_link,
+          jobLocation: data.job_location,
+          isRemote: data.is_remote,
+          sourcePlatform: data.source_platform,
+          externalJobId: data.external_job_id,
+          jobType: data.job_type,
+          experienceLevel: data.experience_level,
+          jobDescription: data.job_description,
+          salaryType: data.salary_type,
+          salaryMin: data.salary_min,
+          salaryMax: data.salary_max,
+          hourlyRateMin: data.hourly_rate_min?.toString(),
+          hourlyRateMax: data.hourly_rate_max?.toString(),
+          annualEquivalentMin,
+          annualEquivalentMax,
+          salaryText: data.salary_text,
+          postingMdPath: data.posting_md_path,
+          securityClearanceReq: data.security_clearance_req,
+          datePosted: data.date_posted,
+          dateFound: new Date().toISOString().slice(0, 10),
+          lastScrapedAt: new Date(),
+        })
+        .returning({ id: jobs.id })
+      jobId = newJob.id
+    } catch (err) {
+      if ((err as { code?: string }).code === PG_UNIQUE_VIOLATION) {
+        const [racedMatch] = await db
+          .select({ id: jobs.id })
+          .from(jobs)
+          .where(and(eq(jobs.externalJobId, data.external_job_id), eq(jobs.sourcePlatform, data.source_platform)))
+          .limit(1)
+        if (racedMatch) {
+          logger.info('scrape: duplicate skipped (race)', { existingJobId: racedMatch.id, platform: data.source_platform })
+          return NextResponse.json({ action: 'duplicate_skipped', job_id: racedMatch.id })
+        }
+      }
+      throw err
+    }
 
     // 6. Upsert tags (skills, software, keywords, certifications).
     // One batch INSERT per tag type rather than one round-trip per tag name.

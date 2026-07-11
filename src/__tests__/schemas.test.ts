@@ -52,6 +52,10 @@ describe('scrapePayloadSchema', () => {
     expect(scrapePayloadSchema.safeParse(rest).success).toBe(false)
   })
 
+  it('fails when job_title is whitespace-only', () => {
+    expect(scrapePayloadSchema.safeParse({ ...validPayload, job_title: '   ' }).success).toBe(false)
+  })
+
   it('fails when job_link is missing', () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { job_link: _jl, ...rest } = validPayload
@@ -135,6 +139,16 @@ describe('jobPatchSchema', () => {
 
   it('fails with invalid interview_stage enum', () => {
     expect(jobPatchSchema.safeParse({ interview_stage: 'chatting' }).success).toBe(false)
+  })
+
+  it('fails when job_title is whitespace-only', () => {
+    expect(jobPatchSchema.safeParse({ job_title: '   ' }).success).toBe(false)
+  })
+
+  it('trims surrounding whitespace from job_title', () => {
+    const result = jobPatchSchema.safeParse({ job_title: '  Engineer  ' })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.job_title).toBe('Engineer')
   })
 
   it('accepts valid ISO dates for date fields', () => {
