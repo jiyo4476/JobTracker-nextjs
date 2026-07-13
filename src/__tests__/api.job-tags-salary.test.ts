@@ -21,7 +21,7 @@ import { db } from '@/db'
 function makeChain(result: unknown) {
   const chain: Record<string, unknown> = {}
   const terminal = Promise.resolve(result)
-  const methods = ['from', 'innerJoin', 'where', 'orderBy', 'limit', 'set', 'values', 'returning']
+  const methods = ['from', 'innerJoin', 'where', 'orderBy', 'limit', 'set', 'values', 'returning', 'onConflictDoNothing']
   methods.forEach(m => { chain[m] = vi.fn(() => chain) })
   chain.then = terminal.then.bind(terminal)
   chain.catch = terminal.catch.bind(terminal)
@@ -274,12 +274,23 @@ describe('PATCH /api/jobs/[id]/tags', () => {
     vi.resetModules()
   })
 
-  it('rejects unknown tag names', async () => {
+  it('creates unknown tag names before linking them to the job', async () => {
     vi.mocked(requireApiKey).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    mockDb.insert.mockReturnValue(makeChain([]))
     mockDb.select
       .mockReturnValueOnce(makeChain([{ id: 1 }]))
-      .mockReturnValueOnce(makeChain([{ id: 10, name: 'Python' }]))
+      .mockReturnValueOnce(makeChain([{ id: 10, name: 'Python' }, { id: 11, name: 'Missing Skill' }]))
+      .mockReturnValueOnce(makeChain([{ id: 10, name: 'Python' }, { id: 11, name: 'Missing Skill' }]))
+      .mockReturnValueOnce(makeChain([]))
+      .mockReturnValueOnce(makeChain([]))
+      .mockReturnValueOnce(makeChain([]))
+    const tx = {
+      delete: vi.fn(() => makeChain([])),
+      insert: vi.fn(() => makeChain([])),
+      update: vi.fn(() => makeChain([])),
+    }
+    mockDb.transaction.mockImplementation(async (callback: (value: typeof tx) => Promise<void>) => callback(tx))
 
     const { PATCH } = await import('@/app/api/jobs/[id]/tags/route')
     const res = await PATCH(
@@ -287,9 +298,12 @@ describe('PATCH /api/jobs/[id]/tags', () => {
       makeParams('1')
     )
 
-    expect(res.status).toBe(400)
-    const json = await res.json()
-    expect(json.invalid.skills).toEqual(['Missing Skill'])
+    expect(res.status).toBe(200)
+    expect(mockDb.insert.mock.results[0].value.values).toHaveBeenCalledWith([
+      { name: 'Python' },
+      { name: 'Missing Skill' },
+    ])
+    expect(mockDb.insert.mock.results[0].value.onConflictDoNothing).toHaveBeenCalled()
   })
 
   it('rejects a payload with no tag arrays', async () => {
@@ -312,6 +326,7 @@ describe('PATCH /api/jobs/[id]/tags', () => {
   it('de-duplicates repeated tag names before validating and persisting', async () => {
     vi.mocked(requireApiKey).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    mockDb.insert.mockReturnValue(makeChain([]))
     mockDb.select
       .mockReturnValueOnce(makeChain([{ id: 1 }]))
       .mockReturnValueOnce(makeChain([{ id: 10, name: 'Python' }]))
@@ -337,6 +352,7 @@ describe('PATCH /api/jobs/[id]/tags', () => {
   it('replaces provided tag groups and returns counts', async () => {
     vi.mocked(requireApiKey).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    mockDb.insert.mockReturnValue(makeChain([]))
     mockDb.select
       .mockReturnValueOnce(makeChain([{ id: 1 }]))
       .mockReturnValueOnce(makeChain([{ id: 10, name: 'Python' }]))

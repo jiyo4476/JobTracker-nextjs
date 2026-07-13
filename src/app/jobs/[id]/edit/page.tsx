@@ -345,6 +345,12 @@ function TagColumn({
     onChange(value.filter(item => item.name !== name))
   }
 
+  function addCustomTag() {
+    const name = query.trim()
+    if (!name || selectedNames.has(name)) return
+    addTag({ id: 0, name })
+  }
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
@@ -355,7 +361,7 @@ function TagColumn({
         {value.length === 0 ? (
           <span className="text-xs text-slate-500">None</span>
         ) : value.map(item => (
-          <Badge key={item.id} variant={type === 'skills' ? 'default' : type === 'certifications' ? 'warning' : 'secondary'} className="gap-1 pr-1">
+          <Badge key={`${type}:${item.name}`} variant={type === 'skills' ? 'default' : type === 'certifications' ? 'warning' : 'secondary'} className="gap-1 pr-1">
             {item.name}
             <button
               type="button"
@@ -371,13 +377,17 @@ function TagColumn({
       <Input
         value={query}
         onChange={e => setQuery(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            addCustomTag()
+          }
+        }}
         placeholder={`Add ${title.toLowerCase()}`}
       />
       {query.trim() && (
         <div className="max-h-36 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-sm">
-          {options.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-slate-500">No matches</p>
-          ) : options.map(option => {
+          {options.map(option => {
             const selected = selectedNames.has(option.name)
             return (
               <button
@@ -392,6 +402,15 @@ function TagColumn({
               </button>
             )
           })}
+          {!options.some(option => option.name.toLocaleLowerCase() === query.trim().toLocaleLowerCase()) && (
+            <button
+              type="button"
+              onClick={addCustomTag}
+              className="w-full px-3 py-2 text-left text-sm font-medium text-blue-600 hover:bg-blue-50"
+            >
+              Add “{query.trim()}”
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -641,7 +660,7 @@ export default function EditJobPage({ params }: { params: Promise<{ id: string }
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label htmlFor="job_type" className={labelClass}>Job Type</label>
-                <select id="job_type" {...register('job_type')} className={SELECT_CLASS}>
+                <select id="job_type" {...register('job_type', { setValueAs: value => value || undefined })} className={SELECT_CLASS}>
                   <option value="">— Select —</option>
                   {JOB_TYPES.map(t => (
                     <option key={t.value} value={t.value}>{t.label}</option>
@@ -651,7 +670,7 @@ export default function EditJobPage({ params }: { params: Promise<{ id: string }
               </div>
               <div>
                 <label htmlFor="experience_level" className={labelClass}>Experience Level</label>
-                <select id="experience_level" {...register('experience_level')} className={SELECT_CLASS}>
+                <select id="experience_level" {...register('experience_level', { setValueAs: value => value || undefined })} className={SELECT_CLASS}>
                   <option value="">— Select —</option>
                   {EXPERIENCE_LEVELS.map(l => (
                     <option key={l.value} value={l.value}>{l.label}</option>
@@ -742,7 +761,7 @@ export default function EditJobPage({ params }: { params: Promise<{ id: string }
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label htmlFor="interview_stage" className={labelClass}>Interview Stage</label>
-                <select id="interview_stage" {...register('interview_stage')} className={SELECT_CLASS}>
+                <select id="interview_stage" {...register('interview_stage', { setValueAs: value => value || undefined })} className={SELECT_CLASS}>
                   <option value="">— Select —</option>
                   {STAGE_OPTIONS.map(s => (
                     <option key={s.value} value={s.value}>{s.label}</option>

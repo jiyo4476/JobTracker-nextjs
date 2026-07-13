@@ -24,6 +24,16 @@ function uniqueNames(values: string[] | undefined) {
   return Array.from(new Set(values.map(value => value.trim()).filter(Boolean)))
 }
 
+async function createAndReadTagRows(
+  names: string[],
+  create: () => PromiseLike<unknown>,
+  read: () => PromiseLike<TagRow[]>,
+) {
+  if (names.length === 0) return []
+  await create()
+  return read()
+}
+
 async function readJobTags(jobId: number) {
   const [skillRows, softwareRows, keywordRows, certificationRows] = await Promise.all([
     db.select({ id: skills.id, name: skills.name }).from(skills).innerJoin(jobSkills, eq(skills.id, jobSkills.skillId)).where(eq(jobSkills.jobId, jobId)),
@@ -44,11 +54,6 @@ async function readJobTags(jobId: number) {
       certifications: certificationRows.length,
     },
   }
-}
-
-function invalidNames(requested: string[], rows: TagRow[]) {
-  const found = new Set(rows.map(row => row.name))
-  return requested.filter(name => !found.has(name))
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -75,28 +80,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const lookupRows: Partial<Record<TagKey, TagRow[]>> = {}
-  if (requested.skills) lookupRows.skills = requested.skills.length
-    ? await db.select({ id: skills.id, name: skills.name }).from(skills).where(inArray(skills.name, requested.skills))
-    : []
-  if (requested.software) lookupRows.software = requested.software.length
-    ? await db.select({ id: softwareTable.id, name: softwareTable.name }).from(softwareTable).where(inArray(softwareTable.name, requested.software))
-    : []
-  if (requested.keywords) lookupRows.keywords = requested.keywords.length
-    ? await db.select({ id: keywords.id, name: keywords.name }).from(keywords).where(inArray(keywords.name, requested.keywords))
-    : []
-  if (requested.certifications) lookupRows.certifications = requested.certifications.length
-    ? await db.select({ id: certifications.id, name: certifications.name }).from(certifications).where(inArray(certifications.name, requested.certifications))
-    : []
-
-  const invalid: Partial<Record<TagKey, string[]>> = {}
-  for (const key of Object.keys(requested) as TagKey[]) {
-    if (!requested[key]) continue
-    const missing = invalidNames(requested[key], lookupRows[key] ?? [])
-    if (missing.length > 0) invalid[key] = missing
-  }
-  if (Object.keys(invalid).length > 0) {
-    return NextResponse.json({ error: 'Invalid tag names', invalid }, { status: 400 })
-  }
+  if (requested.skills) lookupRows.skills = await createAndReadTagRows(
+    requested.skills,
+    () => db.insert(skills).values(requested.skills!.map(name => ({ name }))).onConflictDoNothing(),
+    () => db.select({ id: skills.id, name: skills.name }).from(skills).where(inArray(skills.name, requested.skills!)),
+  )
+  if (requested.software) lookupRows.software = await createAndReadTagRows(
+    requested.software,
+    () => db.insert(softwareTable).values(requested.software!.map(name => ({ name }))).onConflictDoNothing(),
+    () => db.select({ id: softwareTable.id, name: softwareTable.name }).from(softwareTable).where(inArray(softwareTable.name, requested.software!)),
+  )
+  if (requested.keywords) lookupRows.keywords = await createAndReadTagRows(
+    requested.keywords,
+    () => db.insert(keywords).values(requested.keywords!.map(name => ({ name }))).onConflictDoNothing(),
+    () => db.select({ id: keywords.id, name: keywords.name }).from(keywords).where(inArray(keywords.name, requested.keywords!)),
+  )
+  if (requested.certifications) lookupRows.certifications = await createAndReadTagRows(
+    requested.certifications,
+    () => db.insert(certifications).values(requested.certifications!.map(name => ({ name }))).onConflictDoNothing(),
+    () => db.select({ id: certifications.id, name: certifications.name }).from(certifications).where(inArray(certifications.name, requested.certifications!)),
+  )
 
   try {
     await db.transaction(async tx => {
