@@ -17,6 +17,7 @@ import { X } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   useJob,
+  useCompanies,
   usePatchJob,
   usePatchJobSalary,
   usePatchJobTags,
@@ -503,6 +504,7 @@ export default function EditJobPage({ params }: { params: Promise<{ id: string }
   const { id } = React.use(params)
   const router = useRouter()
   const { data: job, isLoading } = useJob(id)
+  const { data: companies = [] } = useCompanies()
   const patchJob = usePatchJob()
   const salaryDirtyRef = React.useRef(false)
   const tagsDirtyRef = React.useRef(false)
@@ -528,6 +530,7 @@ export default function EditJobPage({ params }: { params: Promise<{ id: string }
     initializedRef.current = true
     reset({
       job_title: job.jobTitle ?? undefined,
+      company_id: job.companyId,
       job_location: job.jobLocation ?? undefined,
       is_remote: job.isRemote ?? undefined,
       job_type: (job.jobType as JobPatchFormValues['job_type']) ?? undefined,
@@ -599,6 +602,23 @@ export default function EditJobPage({ params }: { params: Promise<{ id: string }
               <label htmlFor="job_title" className={labelClass}>Job Title *</label>
               <Input id="job_title" {...register('job_title')} placeholder="e.g. Senior Software Engineer" />
               {errors.job_title && <p className={errorClass}>{errors.job_title.message}</p>}
+            </div>
+
+            <div>
+              <label htmlFor="company_id" className={labelClass}>Company</label>
+              <select
+                id="company_id"
+                className={SELECT_CLASS}
+                {...register('company_id', {
+                  setValueAs: value => value === '' ? null : Number(value),
+                })}
+              >
+                <option value="">No company</option>
+                {companies.map(company => (
+                  <option key={company.id} value={company.id}>{company.name}</option>
+                ))}
+              </select>
+              {errors.company_id && <p className={errorClass}>{errors.company_id.message}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">

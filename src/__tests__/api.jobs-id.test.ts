@@ -141,6 +141,21 @@ describe('PATCH /api/jobs/[id]', () => {
     expect(json).toHaveProperty('success', true)
   })
 
+  it('updates the company relationship when company_id is provided', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    const updateChain = makeChain(undefined)
+    mockDb.update.mockReturnValue(updateChain)
+
+    const { PATCH } = await import('@/app/api/jobs/[id]/route')
+    const res = await PATCH(makeReq('1', { company_id: 42 }), makeParams('1'))
+
+    expect(res.status).toBe(200)
+    expect(updateChain.set).toHaveBeenCalledWith(
+      expect.objectContaining({ companyId: 42 }),
+    )
+  })
+
   it('inserts stage history row when interview_stage changes', async () => {
     vi.mocked(requireApiKey).mockReturnValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>

@@ -53,6 +53,7 @@ const patchDateString = z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/, 'Must be ISO 
 
 export const jobPatchSchema = z.object({
   job_title: z.string().trim().min(1).max(500).optional(),
+  company_id: z.number().int().positive().nullable().optional(),
   job_location: z.string().max(300).optional(),
   is_remote: z.boolean().optional(),
   job_description: z.string().max(50_000).optional(),
@@ -119,14 +120,14 @@ export const userSkillCreateSchema = z
   })
 
 export const companyPatchSchema = z.object({
-  name: z.string().max(500).optional(),
-  website: httpUrlSchema.optional(),
-  industry: z.string().max(300).optional(),
-  hq_location: z.string().max(300).optional(),
-  glassdoor_url: httpUrlSchema.optional(),
-  linkedin_url: httpUrlSchema.optional(),
-  notes: z.string().max(20_000).optional(),
-})
+  name: z.string().trim().min(1).max(500).optional(),
+  website: httpUrlSchema.nullable().optional(),
+  industry: z.string().max(300).nullable().optional(),
+  hq_location: z.string().max(300).nullable().optional(),
+  glassdoor_url: httpUrlSchema.nullable().optional(),
+  linkedin_url: httpUrlSchema.nullable().optional(),
+  notes: z.string().max(20_000).nullable().optional(),
+}).strict()
 
 export const resumeVersionCreateSchema = z.object({
   label: z.string().min(1).max(200),
