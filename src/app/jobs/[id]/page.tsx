@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { JobTagsEditor } from '@/components/jobs/JobTagsEditor'
 import {
   useJob,
   usePatchJob,
@@ -187,13 +188,6 @@ export default function JobDetailPage() {
   }
 
   const salary = formatSalary(job.salaryMin, job.salaryMax, job.salaryType, job.salaryText)
-  const allTags = [
-    ...job.skills.map(s => ({ ...s, group: 'skill' })),
-    ...job.software.map(s => ({ ...s, group: 'software' })),
-    ...job.keywords.map(k => ({ ...k, group: 'keyword' })),
-    ...job.certifications.map(c => ({ ...c, group: 'cert' })),
-  ]
-
   function handleMarkApplied() {
     patchJob.mutate({
       id,
@@ -207,6 +201,10 @@ export default function JobDetailPage() {
 
   function handleStageChange(e: React.ChangeEvent<HTMLSelectElement>) {
     patchJob.mutate({ id, body: { interview_stage: e.target.value } })
+  }
+
+  function handlePostingStatusChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    patchJob.mutate({ id, body: { is_active: e.target.value === 'active' } })
   }
 
   function handleNotesBlur() {
@@ -328,27 +326,7 @@ export default function JobDetailPage() {
             </CardContent>
           </Card>
 
-          {allTags.length > 0 && (
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Skills & Tags</CardTitle></CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-1.5">
-                  {job.skills.map(s => (
-                    <Badge key={`skill-${s.id}`}>{s.name}</Badge>
-                  ))}
-                  {job.software.map(s => (
-                    <Badge key={`sw-${s.id}`} variant="secondary">{s.name}</Badge>
-                  ))}
-                  {job.keywords.map(k => (
-                    <Badge key={`kw-${k.id}`} variant="secondary">{k.name}</Badge>
-                  ))}
-                  {job.certifications.map(c => (
-                    <Badge key={`cert-${c.id}`} variant="warning">{c.name}</Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <JobTagsEditor jobId={id} job={job} />
 
           <Card>
             <CardHeader><CardTitle className="text-sm">Notes</CardTitle></CardHeader>
@@ -379,6 +357,19 @@ export default function JobDetailPage() {
                   {STAGE_OPTIONS.map(o => (
                     <option key={o.value} value={o.value}>{o.label}</option>
                   ))}
+                </select>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Posting Status</span>
+                <select
+                  value={job.isActive === false ? 'inactive' : 'active'}
+                  onChange={handlePostingStatusChange}
+                  disabled={patchJob.isPending}
+                  className="text-sm border rounded px-2 py-1 bg-background"
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
                 </select>
               </div>
 
