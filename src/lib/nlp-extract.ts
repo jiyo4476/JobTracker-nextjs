@@ -5,6 +5,35 @@ export interface ExtractedTags {
   certifications: string[]
 }
 
+const MAX_TAGS_PER_TAXONOMY = 100
+
+function mergeTagList(provided: string[], extracted: string[]): string[] {
+  const merged: string[] = []
+  const seen = new Set<string>()
+
+  for (const name of [...provided, ...extracted]) {
+    const normalized = name.trim().toLowerCase()
+    if (!normalized || seen.has(normalized)) continue
+    seen.add(normalized)
+    merged.push(name)
+    if (merged.length === MAX_TAGS_PER_TAXONOMY) break
+  }
+
+  return merged
+}
+
+export function mergeExtractedTags(
+  provided: ExtractedTags,
+  extracted: ExtractedTags,
+): ExtractedTags {
+  return {
+    skills: mergeTagList(provided.skills, extracted.skills),
+    software: mergeTagList(provided.software, extracted.software),
+    keywords: mergeTagList(provided.keywords, extracted.keywords),
+    certifications: mergeTagList(provided.certifications, extracted.certifications),
+  }
+}
+
 // Full SWE skill list — mirrors the DB seed in 0001_seed_swe_skills.sql.
 // Aliases (e.g. 'Bash', 'k8s') are included so they can be detected and then
 // collapsed to their canonical form by deduplicateSkills().

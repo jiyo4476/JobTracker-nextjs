@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { scrapePayloadSchema } from '@/lib/schemas'
-import { extractTags } from '@/lib/nlp-extract'
+import { extractTags, mergeExtractedTags } from '@/lib/nlp-extract'
 import { logger, serializeError } from '@/lib/logger'
 import { escapeLikePattern } from '@/lib/db-utils'
 import {
@@ -33,24 +33,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
-  // NLP fallback: extract skills from description whenever the scraper sends none.
-  // Keywords/software/certs from the scraper are preserved regardless — we only
-  // supplement missing skills, not override data the scraper already provided.
+  // Run the backend taxonomy pass even when the caller already extracted tags.
+  // Caller values stay first; backend-only matches supplement local extraction.
   const extracted =
-    parsed.data.skills.length === 0 && parsed.data.job_description
+    parsed.data.job_description?.trim()
       ? extractTags(parsed.data.job_description)
       : null
 
+  const mergedTags = extracted
+    ? mergeExtractedTags(
+        {
+          skills: parsed.data.skills,
+          software: parsed.data.software,
+          keywords: parsed.data.keywords,
+          certifications: parsed.data.certifications,
+        },
+        extracted,
+      )
+    : null
+
   if (extracted) {
-    logger.debug('NLP skill extraction used', {
+    logger.debug('NLP taxonomy merge used', {
       platform: parsed.data.source_platform,
-      skills: extracted.skills.length,
+      merged: {
+        skills: mergedTags?.skills.length ?? 0,
+        software: mergedTags?.software.length ?? 0,
+        keywords: mergedTags?.keywords.length ?? 0,
+        certifications: mergedTags?.certifications.length ?? 0,
+      },
     })
   }
 
   const data = {
     ...parsed.data,
-    skills: extracted ? extracted.skills : parsed.data.skills,
+    ...(mergedTags ?? {}),
   }
 
   try {
