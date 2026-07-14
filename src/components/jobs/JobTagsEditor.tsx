@@ -96,6 +96,7 @@ function TagColumn({
 
 export function JobTagsEditor({ jobId, job }: { jobId: string; job: JobDetail }) {
   const patchTags = usePatchJobTags()
+  const [isEditing, setIsEditing] = useState(false)
   const [skills, setSkills] = useState(job.skills)
   const [software, setSoftware] = useState(job.software)
   const [keywords, setKeywords] = useState(job.keywords)
@@ -108,40 +109,71 @@ export function JobTagsEditor({ jobId, job }: { jobId: string; job: JobDetail })
 
   function save() {
     if (!isDirty) return
-    patchTags.mutate({
-      id: jobId,
-      body: {
-        skills: skills.map(item => item.name),
-        software: software.map(item => item.name),
-        keywords: keywords.map(item => item.name),
-        certifications: certifications.map(item => item.name),
+    patchTags.mutate(
+      {
+        id: jobId,
+        body: {
+          skills: skills.map(item => item.name),
+          software: software.map(item => item.name),
+          keywords: keywords.map(item => item.name),
+          certifications: certifications.map(item => item.name),
+        },
       },
-    })
+      { onSuccess: () => setIsEditing(false) },
+    )
+  }
+
+  function cancel() {
+    setSkills(job.skills)
+    setSoftware(job.software)
+    setKeywords(job.keywords)
+    setCertifications(job.certifications)
+    setIsEditing(false)
   }
 
   return (
     <Card>
-      <CardHeader><CardTitle className="text-sm">Skills & Tags</CardTitle></CardHeader>
+      <CardHeader>
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="text-sm">Skills & Tags</CardTitle>
+          {!isEditing && <Button type="button" variant="outline" size="sm" onClick={() => setIsEditing(true)}>Edit</Button>}
+        </div>
+      </CardHeader>
       <CardContent className="space-y-5">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <TagColumn title="Skills" type="skills" value={skills} onChange={setSkills} />
-          <TagColumn title="Software" type="software" value={software} onChange={setSoftware} />
-          <TagColumn title="Keywords" type="keywords" value={keywords} onChange={setKeywords} />
-          <TagColumn title="Certifications" type="certifications" value={certifications} onChange={setCertifications} />
-        </div>
-        <div className="flex gap-2">
-          <Button type="button" onClick={save} disabled={!isDirty || patchTags.isPending}>
-            {patchTags.isPending ? 'Saving...' : 'Save Skills & Tags'}
-          </Button>
-          <Button type="button" variant="outline" disabled={!isDirty || patchTags.isPending} onClick={() => {
-            setSkills(job.skills)
-            setSoftware(job.software)
-            setKeywords(job.keywords)
-            setCertifications(job.certifications)
-          }}>
-            Reset
-          </Button>
-        </div>
+        {isEditing ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <TagColumn title="Skills" type="skills" value={skills} onChange={setSkills} />
+              <TagColumn title="Software" type="software" value={software} onChange={setSoftware} />
+              <TagColumn title="Keywords" type="keywords" value={keywords} onChange={setKeywords} />
+              <TagColumn title="Certifications" type="certifications" value={certifications} onChange={setCertifications} />
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" onClick={save} disabled={!isDirty || patchTags.isPending}>
+                {patchTags.isPending ? 'Saving...' : 'Save'}
+              </Button>
+              <Button type="button" variant="outline" onClick={cancel} disabled={patchTags.isPending}>Cancel</Button>
+            </div>
+          </>
+        ) : (
+          <div className="space-y-3">
+            {[
+              ['Skills', job.skills, 'default'],
+              ['Software', job.software, 'secondary'],
+              ['Keywords', job.keywords, 'secondary'],
+              ['Certifications', job.certifications, 'warning'],
+            ].map(([label, items, variant]) => (
+              <div key={label as string}>
+                <p className="mb-1.5 text-xs font-medium text-slate-500">{label as string}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(items as LookupItem[]).length === 0
+                    ? <span className="text-sm text-slate-500">None</span>
+                    : (items as LookupItem[]).map(item => <Badge key={`${label}:${item.name}`} variant={variant as 'default' | 'secondary' | 'warning'}>{item.name}</Badge>)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   )
