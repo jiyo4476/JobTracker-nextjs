@@ -7,14 +7,18 @@ vi.mock('@/lib/auth', () => ({
 }))
 
 // Mock nlp-extract
-vi.mock('@/lib/nlp-extract', () => ({
-  extractTags: vi.fn().mockReturnValue({
-    skills: ['Python', 'Docker'],
-    software: ['GitHub'],
-    keywords: ['remote'],
-    certifications: [],
-  }),
-}))
+vi.mock('@/lib/nlp-extract', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/lib/nlp-extract')>()
+  return {
+    ...actual,
+    extractTags: vi.fn().mockReturnValue({
+      skills: ['Python', 'Docker'],
+      software: ['GitHub'],
+      keywords: ['remote'],
+      certifications: [],
+    }),
+  }
+})
 
 // Mock db
 vi.mock('@/db', () => ({
@@ -266,6 +270,30 @@ describe('POST /api/scrape', () => {
     expect(json.action).toBe('updated')
   })
 
+  it('attaches merged taxonomy matches when an exact job is updated', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    setupDbMocks('updated')
+    const { POST } = await import('@/app/api/scrape/route')
+
+    const res = await POST(makeRequest({
+      ...validBody,
+      job_description: 'Python and Docker are required.',
+      skills: ['TypeScript'],
+    }))
+
+    expect(res.status).toBe(200)
+    const insertedValues = vi.mocked(db.insert).mock.results
+      .map(result => result.value.values)
+      .flatMap(values => vi.mocked(values).mock.calls)
+      .map(([value]) => value)
+    expect(insertedValues).toContainEqual([
+      { name: 'TypeScript' },
+      { name: 'Python' },
+      { name: 'Docker' },
+    ])
+    expect(insertedValues).toContainEqual([{ jobId: 99, skillId: 99 }])
+  })
+
   it('returns 200 with action=duplicate_skipped when fuzzy match exists', async () => {
     vi.mocked(requireApiKey).mockReturnValue(true)
     setupDbMocks('duplicate')
@@ -303,7 +331,7 @@ describe('POST /api/scrape', () => {
     expect(vi.mocked(extractTags)).toHaveBeenCalledWith(bodyWithKeywordsOnly.job_description)
   })
 
-  it('does not call extractTags when skills are already provided', async () => {
+  it('calls extractTags when local taxonomy values are already provided', async () => {
     vi.mocked(requireApiKey).mockReturnValue(true)
     setupDbMocks('created')
     const { POST } = await import('@/app/api/scrape/route')
@@ -311,10 +339,12 @@ describe('POST /api/scrape', () => {
       ...validBody,
       job_description: 'We need Python experience.',
       skills: ['TypeScript'],
+      software: ['Jira'],
+      certifications: ['PMP'],
     }
     const res = await POST(makeRequest(bodyWithSkills))
     expect(res.status).toBe(201)
-    expect(vi.mocked(extractTags)).not.toHaveBeenCalled()
+    expect(vi.mocked(extractTags)).toHaveBeenCalledWith(bodyWithSkills.job_description)
   })
 
   it('returns 400 when posting_md_path uses uppercase characters', async () => {
@@ -384,11 +414,11 @@ describe('POST /api/scrape', () => {
     expect(rendered).not.toMatch(/"date_posted"\s+is\s+null/i)
   })
 
-  it('does not call extractTags when job_description is empty string and skills are empty', async () => {
+  it.each(['', '   '])('does not call extractTags when job_description is empty: %j', async jobDescription => {
     vi.mocked(requireApiKey).mockReturnValue(true)
     setupDbMocks('created')
     const { POST } = await import('@/app/api/scrape/route')
-    const res = await POST(makeRequest({ ...validBody, job_description: '', skills: [] }))
+    const res = await POST(makeRequest({ ...validBody, job_description: jobDescription, skills: [] }))
     expect(res.status).toBe(201)
     expect(vi.mocked(extractTags)).not.toHaveBeenCalled()
   })

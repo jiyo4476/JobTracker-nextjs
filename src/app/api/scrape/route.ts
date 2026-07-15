@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { scrapePayloadSchema } from '@/lib/schemas'
-import { extractTags } from '@/lib/nlp-extract'
+import { extractTags, mergeExtractedTags } from '@/lib/nlp-extract'
 import { logger, serializeError } from '@/lib/logger'
 import { escapeLikePattern } from '@/lib/db-utils'
 import {
@@ -13,6 +13,41 @@ import { eq, and, ilike, sql } from 'drizzle-orm'
 
 // Postgres unique_violation error code, surfaced as `.code` by the `postgres` driver.
 const PG_UNIQUE_VIOLATION = '23505'
+
+type Taxonomies = {
+  skills: string[]
+  software: string[]
+  keywords: string[]
+  certifications: string[]
+}
+
+async function attachTags(jobId: number, tags: Taxonomies) {
+  async function upsertLookup(
+    names: string[],
+    lookupTable: typeof skills | typeof softwareTable | typeof keywords | typeof certifications,
+  ) {
+    if (names.length === 0) return []
+    return db
+      .insert(lookupTable)
+      .values(names.map(name => ({ name })))
+      .onConflictDoUpdate({ target: lookupTable.name, set: { name: lookupTable.name } })
+      .returning({ id: lookupTable.id })
+  }
+
+  const [skillRows, softwareRows, keywordRows, certRows] = await Promise.all([
+    upsertLookup(tags.skills, skills),
+    upsertLookup(tags.software, softwareTable),
+    upsertLookup(tags.keywords, keywords),
+    upsertLookup(tags.certifications, certifications),
+  ])
+
+  await Promise.all([
+    skillRows.length > 0 && db.insert(jobSkills).values(skillRows.map(r => ({ jobId, skillId: r.id }))).onConflictDoNothing(),
+    softwareRows.length > 0 && db.insert(jobSoftware).values(softwareRows.map(r => ({ jobId, softwareId: r.id }))).onConflictDoNothing(),
+    keywordRows.length > 0 && db.insert(jobKeywords).values(keywordRows.map(r => ({ jobId, keywordId: r.id }))).onConflictDoNothing(),
+    certRows.length > 0 && db.insert(jobCertifications).values(certRows.map(r => ({ jobId, certificationId: r.id }))).onConflictDoNothing(),
+  ])
+}
 
 export async function POST(req: NextRequest) {
   // External-only endpoint (Python scraper via OAuth2 bearer token) — the browser
@@ -33,24 +68,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
-  // NLP fallback: extract skills from description whenever the scraper sends none.
-  // Keywords/software/certs from the scraper are preserved regardless — we only
-  // supplement missing skills, not override data the scraper already provided.
+  // Run the backend taxonomy pass even when the caller already extracted tags.
+  // Caller values stay first; backend-only matches supplement local extraction.
   const extracted =
-    parsed.data.skills.length === 0 && parsed.data.job_description
+    parsed.data.job_description?.trim()
       ? extractTags(parsed.data.job_description)
       : null
 
+  const mergedTags = extracted
+    ? mergeExtractedTags(
+        {
+          skills: parsed.data.skills,
+          software: parsed.data.software,
+          keywords: parsed.data.keywords,
+          certifications: parsed.data.certifications,
+        },
+        extracted,
+      )
+    : null
+
   if (extracted) {
-    logger.debug('NLP skill extraction used', {
+    logger.debug('NLP taxonomy merge used', {
       platform: parsed.data.source_platform,
-      skills: extracted.skills.length,
+      merged: {
+        skills: mergedTags?.skills.length ?? 0,
+        software: mergedTags?.software.length ?? 0,
+        keywords: mergedTags?.keywords.length ?? 0,
+        certifications: mergedTags?.certifications.length ?? 0,
+      },
     })
   }
 
   const data = {
     ...parsed.data,
-    skills: extracted ? extracted.skills : parsed.data.skills,
+    ...(mergedTags ?? {}),
   }
 
   try {
@@ -89,6 +140,7 @@ export async function POST(req: NextRequest) {
         .update(jobs)
         .set({ lastScrapedAt: new Date(), isActive: true, updatedAt: new Date() })
         .where(eq(jobs.id, exactMatch[0].id))
+      await attachTags(exactMatch[0].id, data)
       logger.info('scrape: job updated', { jobId: exactMatch[0].id, platform: data.source_platform })
       return NextResponse.json({ action: 'updated', job_id: exactMatch[0].id })
     }
@@ -169,33 +221,8 @@ export async function POST(req: NextRequest) {
       throw err
     }
 
-    // 6. Upsert tags (skills, software, keywords, certifications).
-    // One batch INSERT per tag type rather than one round-trip per tag name.
-    async function upsertLookup(
-      names: string[],
-      lookupTable: typeof skills | typeof softwareTable | typeof keywords | typeof certifications,
-    ) {
-      if (names.length === 0) return []
-      return db
-        .insert(lookupTable)
-        .values(names.map(name => ({ name })))
-        .onConflictDoUpdate({ target: lookupTable.name, set: { name: lookupTable.name } })
-        .returning({ id: lookupTable.id })
-    }
-
-    const [skillRows, softwareRows, keywordRows, certRows] = await Promise.all([
-      upsertLookup(data.skills, skills),
-      upsertLookup(data.software, softwareTable),
-      upsertLookup(data.keywords, keywords),
-      upsertLookup(data.certifications, certifications),
-    ])
-
-    await Promise.all([
-      skillRows.length > 0 && db.insert(jobSkills).values(skillRows.map(r => ({ jobId, skillId: r.id }))).onConflictDoNothing(),
-      softwareRows.length > 0 && db.insert(jobSoftware).values(softwareRows.map(r => ({ jobId, softwareId: r.id }))).onConflictDoNothing(),
-      keywordRows.length > 0 && db.insert(jobKeywords).values(keywordRows.map(r => ({ jobId, keywordId: r.id }))).onConflictDoNothing(),
-      certRows.length > 0 && db.insert(jobCertifications).values(certRows.map(r => ({ jobId, certificationId: r.id }))).onConflictDoNothing(),
-    ])
+    // 6. Upsert and attach all caller and backend taxonomy matches.
+    await attachTags(jobId, data)
 
     logger.info('scrape: job created', { jobId, platform: data.source_platform, company: data.company_name })
     return NextResponse.json({ action: 'created', job_id: jobId }, { status: 201 })

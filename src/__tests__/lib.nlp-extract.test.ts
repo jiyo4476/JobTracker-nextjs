@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { extractTags } from '@/lib/nlp-extract'
+import { extractTags, mergeExtractedTags } from '@/lib/nlp-extract'
 
 describe('extractTags', () => {
   it('detects known skills in a sample description', () => {
@@ -98,5 +98,51 @@ describe('extractTags', () => {
     expect(result.skills).toContain('Pandas')
     expect(result.skills).toContain('ETL Pipelines')
     expect(result.skills).toContain('Snowflake')
+  })
+})
+
+describe('mergeExtractedTags', () => {
+  it('keeps caller tags first and appends backend-only matches in every taxonomy', () => {
+    expect(
+      mergeExtractedTags(
+        {
+          skills: ['TypeScript'],
+          software: ['Jira'],
+          keywords: ['platform engineering'],
+          certifications: ['PMP'],
+        },
+        {
+          skills: ['TypeScript', 'Python'],
+          software: ['Jira', 'GitHub'],
+          keywords: ['platform engineering', 'remote'],
+          certifications: ['PMP', 'AWS Certified'],
+        },
+      ),
+    ).toEqual({
+      skills: ['TypeScript', 'Python'],
+      software: ['Jira', 'GitHub'],
+      keywords: ['platform engineering', 'remote'],
+      certifications: ['PMP', 'AWS Certified'],
+    })
+  })
+
+  it('deduplicates names case-insensitively while preserving caller spelling', () => {
+    const merged = mergeExtractedTags(
+      { skills: ['typescript'], software: [], keywords: [], certifications: [] },
+      { skills: ['TypeScript', 'Python'], software: [], keywords: [], certifications: [] },
+    )
+
+    expect(merged.skills).toEqual(['typescript', 'Python'])
+  })
+
+  it('caps merged taxonomies at 100 caller-first values', () => {
+    const callerSkills = Array.from({ length: 99 }, (_, index) => `Caller ${index}`)
+    const merged = mergeExtractedTags(
+      { skills: callerSkills, software: [], keywords: [], certifications: [] },
+      { skills: ['Backend one', 'Backend two'], software: [], keywords: [], certifications: [] },
+    )
+
+    expect(merged.skills).toHaveLength(100)
+    expect(merged.skills.at(-1)).toBe('Backend one')
   })
 })
