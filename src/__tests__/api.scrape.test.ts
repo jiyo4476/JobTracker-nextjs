@@ -206,14 +206,14 @@ describe('POST /api/scrape', () => {
   })
 
   it('returns 401 when requireApiKey returns false', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(false)
+    vi.mocked(requireApiKey).mockResolvedValue(false)
     const { POST } = await import('@/app/api/scrape/route')
     const res = await POST(makeRequest(validBody, false))
     expect(res.status).toBe(401)
   })
 
   it('calls requireApiKey with allowSameOrigin: false (external-only endpoint)', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const { POST } = await import('@/app/api/scrape/route')
     const req = makeRequest(validBody, false)
     await POST(req)
@@ -221,7 +221,7 @@ describe('POST /api/scrape', () => {
   })
 
   it('returns 400 when body is invalid JSON', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const { POST } = await import('@/app/api/scrape/route')
     const req = new NextRequest('http://localhost/api/scrape', {
       method: 'POST',
@@ -233,14 +233,14 @@ describe('POST /api/scrape', () => {
   })
 
   it('returns 400 when body fails Zod validation', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const { POST } = await import('@/app/api/scrape/route')
     const res = await POST(makeRequest({ job_title: 'Only title, missing rest' }))
     expect(res.status).toBe(400)
   })
 
   it('returns 201 with action=created on new job insert', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     setupDbMocks('created')
     const { POST } = await import('@/app/api/scrape/route')
     const res = await POST(makeRequest(validBody))
@@ -251,7 +251,7 @@ describe('POST /api/scrape', () => {
   })
 
   it('accepts google as a source_platform on new job insert', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     setupDbMocks('created')
     const { POST } = await import('@/app/api/scrape/route')
     const res = await POST(makeRequest({ ...validBody, source_platform: 'google' }))
@@ -261,7 +261,7 @@ describe('POST /api/scrape', () => {
   })
 
   it('returns 200 with action=updated when exact match exists', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     setupDbMocks('updated')
     const { POST } = await import('@/app/api/scrape/route')
     const res = await POST(makeRequest(validBody))
@@ -271,7 +271,7 @@ describe('POST /api/scrape', () => {
   })
 
   it('attaches merged taxonomy matches when an exact job is updated', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     setupDbMocks('updated')
     const { POST } = await import('@/app/api/scrape/route')
 
@@ -295,7 +295,7 @@ describe('POST /api/scrape', () => {
   })
 
   it('returns 200 with action=duplicate_skipped when fuzzy match exists', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     setupDbMocks('duplicate')
     const { POST } = await import('@/app/api/scrape/route')
     const res = await POST(makeRequest(validBody))
@@ -305,7 +305,7 @@ describe('POST /api/scrape', () => {
   })
 
   it('calls extractTags when skills are empty and job_description is present', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     setupDbMocks('created')
     const { POST } = await import('@/app/api/scrape/route')
     const bodyWithDescription = {
@@ -318,7 +318,7 @@ describe('POST /api/scrape', () => {
   })
 
   it('calls extractTags even when keywords are present but skills are empty', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     setupDbMocks('created')
     const { POST } = await import('@/app/api/scrape/route')
     const bodyWithKeywordsOnly = {
@@ -332,7 +332,7 @@ describe('POST /api/scrape', () => {
   })
 
   it('calls extractTags when local taxonomy values are already provided', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     setupDbMocks('created')
     const { POST } = await import('@/app/api/scrape/route')
     const bodyWithSkills = {
@@ -348,21 +348,21 @@ describe('POST /api/scrape', () => {
   })
 
   it('returns 400 when posting_md_path uses uppercase characters', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const { POST } = await import('@/app/api/scrape/route')
     const res = await POST(makeRequest({ ...validBody, posting_md_path: 'LinkedIn/Job123.MD' }))
     expect(res.status).toBe(400)
   })
 
   it('returns 400 when posting_md_path uses mixed-case extension', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const { POST } = await import('@/app/api/scrape/route')
     const res = await POST(makeRequest({ ...validBody, posting_md_path: 'linkedin/Job123.Md' }))
     expect(res.status).toBe(400)
   })
 
   it('accepts a valid lowercase posting_md_path', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     setupDbMocks('created')
     const { POST } = await import('@/app/api/scrape/route')
     const res = await POST(makeRequest({ ...validBody, posting_md_path: 'linkedin/job-123.md' }))
@@ -370,7 +370,7 @@ describe('POST /api/scrape', () => {
   })
 
   it('does not call extractTags when description is absent and tag arrays are empty', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     setupDbMocks('created')
     const { POST } = await import('@/app/api/scrape/route')
     const res = await POST(makeRequest(validBody))
@@ -379,7 +379,7 @@ describe('POST /api/scrape', () => {
   })
 
   it('skips as duplicate when a NULL date_posted row has a recent date_found', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     // The DB matches an undated row whose date_found is inside the 7-day window
     const captured = setupFuzzyCapture([{ id: 88 }])
     const { POST } = await import('@/app/api/scrape/route')
@@ -397,7 +397,7 @@ describe('POST /api/scrape', () => {
   })
 
   it('creates the job when a NULL date_posted row has an old date_found', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     // An undated row whose date_found fell out of the 7-day window no longer matches
     const captured = setupFuzzyCapture([])
     const { POST } = await import('@/app/api/scrape/route')
@@ -415,7 +415,7 @@ describe('POST /api/scrape', () => {
   })
 
   it.each(['', '   '])('does not call extractTags when job_description is empty: %j', async jobDescription => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     setupDbMocks('created')
     const { POST } = await import('@/app/api/scrape/route')
     const res = await POST(makeRequest({ ...validBody, job_description: jobDescription, skills: [] }))

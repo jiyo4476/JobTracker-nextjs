@@ -53,6 +53,28 @@ import {
   useUserSkills,
 } from '@/lib/queries'
 
+// The mocked useQuery/useMutation return the hook's config object verbatim,
+// so tests can call queryFn/mutationFn directly. The hooks' declared return
+// types (UseQueryResult/UseMutationResult) don't expose those, so cast the
+// result back to the config shape the mock actually returns.
+type QueryConfig = {
+  queryKey: readonly unknown[]
+  queryFn: () => Promise<unknown>
+}
+
+type MutationConfig<TVariables> = {
+  mutationFn: (variables: TVariables) => Promise<unknown>
+  onSuccess: (data: unknown, variables: TVariables) => void
+}
+
+function asQueryConfig(hookResult: unknown): QueryConfig {
+  return hookResult as QueryConfig
+}
+
+function asMutationConfig<TVariables>(hookResult: unknown): MutationConfig<TVariables> {
+  return hookResult as MutationConfig<TVariables>
+}
+
 describe('query hooks', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -61,7 +83,7 @@ describe('query hooks', () => {
   })
 
   it('serializes every supported jobs filter into the API query string', async () => {
-    const query = useJobs({
+    const query = asQueryConfig(useJobs({
       page: 2,
       q: 'react engineer',
       stage: 'applied',
@@ -75,7 +97,7 @@ describe('query hooks', () => {
       salary_min: 9000000,
       salary_max: 15000000,
       priority_min: 3,
-    })
+    }))
 
     await query.queryFn()
 
@@ -110,7 +132,7 @@ describe('query hooks', () => {
     ['useSoftware', () => useSoftware(), '/software'],
     ['useCertifications', () => useCertifications(), '/certifications'],
   ])('%s calls the expected read endpoint', async (_name, makeQuery, endpoint) => {
-    const query = makeQuery()
+    const query = asQueryConfig(makeQuery())
 
     await query.queryFn()
 
@@ -118,7 +140,7 @@ describe('query hooks', () => {
   })
 
   it('preserves false analytics filters when building the API query string', async () => {
-    const query = useAnalytics({ from: '2026-01-01', to: '2026-02-01', security_clearance: false })
+    const query = asQueryConfig(useAnalytics({ from: '2026-01-01', to: '2026-02-01', security_clearance: false }))
 
     await query.queryFn()
 
@@ -126,7 +148,7 @@ describe('query hooks', () => {
   })
 
   it('invalidates both the list and detail queries after a job delete succeeds', async () => {
-    const mutation = useDeleteJob()
+    const mutation = asMutationConfig<{ id: number }>(useDeleteJob())
 
     await mutation.mutationFn({ id: 42 })
     mutation.onSuccess(undefined, { id: 42 })
@@ -157,7 +179,7 @@ describe('query hooks', () => {
     body,
     invalidations,
   ) => {
-    const mutation = makeMutation()
+    const mutation = asMutationConfig(makeMutation())
 
     await mutation.mutationFn(variables)
     mutation.onSuccess(undefined, variables)
