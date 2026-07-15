@@ -7,6 +7,8 @@ import { jobs, skills, jobSkills } from '@/db/schema'
 import { inArray, sql } from 'drizzle-orm'
 
 // POST /api/jobs/backfill-skills
+// Legacy skills-only backfill. Prefer POST /api/jobs/backfill-tags, which is
+// cursor-bounded and attaches software and certifications as well (TAXONOMY-001).
 // Re-runs NLP skill extraction on every job that has a description but no linked skills.
 // Safe to call multiple times — uses INSERT ... ON CONFLICT DO NOTHING.
 // Accepts ?limit=N (default 100, max 500) to keep each call bounded.
