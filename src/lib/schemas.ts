@@ -53,6 +53,7 @@ const patchDateString = z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/, 'Must be ISO 
 
 export const jobPatchSchema = z.object({
   job_title: z.string().trim().min(1).max(500).optional(),
+  company_id: z.number().int().positive().nullable().optional(),
   job_location: z.string().max(300).optional(),
   is_remote: z.boolean().optional(),
   job_description: z.string().max(50_000).optional(),
@@ -63,15 +64,15 @@ export const jobPatchSchema = z.object({
   salary_max: z.number().int().optional(),
   hourly_rate_min: z.number().optional(),
   hourly_rate_max: z.number().optional(),
-  job_type: jobTypeEnum.optional(),
-  experience_level: experienceLevelEnum.optional(),
+  job_type: jobTypeEnum.nullable().optional(),
+  experience_level: experienceLevelEnum.nullable().optional(),
   security_clearance_req: z.boolean().optional(),
   has_applied: z.boolean().optional(),
   date_applied: patchDateString.optional(),
   heard_back: z.boolean().optional(),
   interview_stage: interviewStageEnum.optional(),
   is_active: z.boolean().optional(),
-  priority: z.number().int().min(1).max(5).optional(),
+  priority: z.number().int().min(1).max(5).nullable().optional(),
   notes: z.string().max(20_000).optional(),
   resume_version: z.string().max(200).optional(),
   rejection_reason: z.string().max(2_000).optional(),
@@ -119,14 +120,14 @@ export const userSkillCreateSchema = z
   })
 
 export const companyPatchSchema = z.object({
-  name: z.string().max(500).optional(),
-  website: httpUrlSchema.optional(),
-  industry: z.string().max(300).optional(),
-  hq_location: z.string().max(300).optional(),
-  glassdoor_url: httpUrlSchema.optional(),
-  linkedin_url: httpUrlSchema.optional(),
-  notes: z.string().max(20_000).optional(),
-})
+  name: z.string().trim().min(1).max(500).optional(),
+  website: httpUrlSchema.nullable().optional(),
+  industry: z.string().max(300).nullable().optional(),
+  hq_location: z.string().max(300).nullable().optional(),
+  glassdoor_url: httpUrlSchema.nullable().optional(),
+  linkedin_url: httpUrlSchema.nullable().optional(),
+  notes: z.string().max(20_000).nullable().optional(),
+}).strict()
 
 export const resumeVersionCreateSchema = z.object({
   label: z.string().min(1).max(200),
