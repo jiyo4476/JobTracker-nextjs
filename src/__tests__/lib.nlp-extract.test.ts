@@ -169,6 +169,35 @@ describe('extractTags', () => {
     expect(result.certifications).toContain('Google Cloud Professional Cloud Architect')
   })
 
+  it('matches exam codes surrounded by punctuation, but not inside longer tokens', () => {
+    const result = extractTags('Certs: AZ-900/AZ-104 track.')
+    expect(result.certifications).toContain('Microsoft Certified: Azure Fundamentals')
+    expect(result.certifications).toContain('Microsoft Certified: Azure Administrator')
+    // Word boundaries keep exam codes from firing inside part numbers
+    expect(extractTags('Model PLAZ-104 assembly line.').certifications).toHaveLength(0)
+  })
+
+  it('matches CompTIA A+ only with the CompTIA prefix — bare "A+" never fires', () => {
+    const withPrefix = extractTags('CompTIA A+ certification required.')
+    expect(withPrefix.certifications).toContain('CompTIA A+')
+    expect(withPrefix.certifications).not.toContain('CompTIA')
+    expect(extractTags('Candidates with A+ grades preferred.').certifications).toHaveLength(0)
+  })
+
+  it('resolves long-form aliases', () => {
+    const desc = 'Certified Ethical Hacker and Project Management Professional welcome. Amazon Web Services experience.'
+    const result = extractTags(desc)
+    expect(result.certifications).toContain('CEH')
+    expect(result.certifications).toContain('PMP')
+    expect(result.software).toContain('AWS')
+  })
+
+  it('suppresses a directly-matched umbrella even when the specific cert matched via alias', () => {
+    const result = extractTags('Security+ required; any CompTIA cert is a plus.')
+    expect(result.certifications).toContain('CompTIA Security+')
+    expect(result.certifications).not.toContain('CompTIA')
+  })
+
   it('suppresses umbrella certifications when a specific one matched', () => {
     const desc = 'Must hold AWS Certified Solutions Architect. CompTIA Security+ is a plus.'
     const result = extractTags(desc)

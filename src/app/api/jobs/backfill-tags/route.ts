@@ -19,7 +19,8 @@ import { inArray, sql } from 'drizzle-orm'
 // Params:
 //   ?limit=N     batch size (default 100, max 500)
 //   ?cursor=ID   resume after this job id (exclusive; default 0)
-//   ?dry_run=1   extract and report samples without writing anything
+//   ?dry_run=1   extract and report without writing anything (sample capped
+//                at the first 20 jobs of the batch; extracted counts cover all)
 //
 // Response reports per-category net-new link counts (junction rows actually
 // inserted), plus next_cursor/done for pagination. Safe to call repeatedly —
