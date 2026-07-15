@@ -27,13 +27,18 @@ import { toast } from 'sonner'
 
 const col = createColumnHelper<JobListItem>()
 
-function formatSalary(min: number | null, max: number | null): string {
-  if (!min && !max) return '—'
+export function formatSalary(min: number | null, max: number | null, text: string | null): string {
+  const rawText = text?.trim()
   // Salary values are stored as cents; divide by 100 for dollars, then 1,000 for "k".
-  const k = (v: number) => `$${Math.round(v / 100_000)}k`
-  if (min && max) return `${k(min)}–${k(max)}`
-  if (min) return `${k(min)}+`
-  return `up to ${k(max!)}`
+  const thousands = (value: number) => Math.round(value / 100_000)
+  const validMin = min != null && Number.isFinite(min) && thousands(min) > 0 ? min : null
+  const validMax = max != null && Number.isFinite(max) && thousands(max) > 0 ? max : null
+  const k = (value: number) => `$${thousands(value)}k`
+
+  if (validMin == null && validMax == null) return rawText || '—'
+  if (validMin != null && validMax != null) return `${k(validMin)}–${k(validMax)}`
+  if (validMin != null) return `${k(validMin)}+`
+  return validMax != null ? `up to ${k(validMax)}` : '—'
 }
 
 function formatDate(d: string | null): string {
@@ -250,7 +255,11 @@ export default function JobsClient() {
     }),
     col.accessor('annualEquivalentMin', {
       header: 'Salary',
-      cell: (info) => formatSalary(info.getValue() ?? null, info.row.original.annualEquivalentMax ?? null),
+      cell: (info) => formatSalary(
+        info.getValue() ?? null,
+        info.row.original.annualEquivalentMax ?? null,
+        info.row.original.salaryText ?? null,
+      ),
     }),
     col.accessor('dateFound', {
       header: 'Found',
