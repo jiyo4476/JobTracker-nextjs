@@ -94,7 +94,8 @@ describe('GET /api/stats', () => {
       expect(chains[i].where, `chain ${i} missing where`).toHaveBeenCalled()
     }
     expect(chains[4].leftJoin).toHaveBeenCalledTimes(2)
-    const [, activeJobJoin] = vi.mocked(chains[4].leftJoin).mock.calls[1]
+    const leftJoin = chains[4].leftJoin as ReturnType<typeof vi.fn>
+    const [, activeJobJoin] = leftJoin.mock.calls[1]
     const activeJobSql = new PgDialect().sqlToQuery(activeJobJoin as SQL)
     expect(activeJobSql.sql).toContain('"jobs"."is_active" = $1')
     expect(activeJobSql.params).toEqual([true])
