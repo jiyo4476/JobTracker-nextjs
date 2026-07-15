@@ -39,4 +39,16 @@ Build with **TypeScript**.
     expect(html).toContain('target="_blank"')
     expect(html).toContain('rel="noopener noreferrer"')
   })
+
+  it('repairs concatenated scraper Markdown for display', () => {
+    const source = '#Markdown Test **Company Overview **Deepgram builds voice AI. ****Company Operating Rhythm ****At Deepgram, we use AI.'
+    const html = renderToStaticMarkup(<JobDescriptionMarkdown>{source}</JobDescriptionMarkdown>)
+
+    expect(html).toContain('<h1')
+    expect(html).toContain('Markdown Test</h1>')
+    expect(html).toContain('<strong>Company Overview</strong>')
+    expect(html).toContain('<strong>Company Operating Rhythm</strong>')
+    expect(html).not.toContain('#Markdown Test')
+    expect(html).not.toContain('****')
+  })
 })
