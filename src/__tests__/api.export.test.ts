@@ -45,7 +45,7 @@ describe('GET /api/export', () => {
   })
 
   it('returns 401 without auth', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(false)
+    vi.mocked(requireApiKey).mockResolvedValue(false)
     const { GET } = await import('@/app/api/export/route')
     const req = new NextRequest('http://localhost/api/export')
     const res = await GET(req)
@@ -53,7 +53,7 @@ describe('GET /api/export', () => {
   })
 
   it('returns 200 JSON array by default', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const { GET } = await import('@/app/api/export/route')
     const req = new NextRequest('http://localhost/api/export')
     const res = await GET(req)
@@ -63,7 +63,7 @@ describe('GET /api/export', () => {
   })
 
   it('returns CSV with text/csv content-type when ?format=csv', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const { GET } = await import('@/app/api/export/route')
     const req = new NextRequest('http://localhost/api/export?format=csv')
     const res = await GET(req)
@@ -72,7 +72,7 @@ describe('GET /api/export', () => {
   })
 
   it('CSV response has a headers row', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const { GET } = await import('@/app/api/export/route')
     const req = new NextRequest('http://localhost/api/export?format=csv')
     const res = await GET(req)
@@ -84,7 +84,7 @@ describe('GET /api/export', () => {
   })
 
   it('CSV has Content-Disposition attachment header', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const { GET } = await import('@/app/api/export/route')
     const req = new NextRequest('http://localhost/api/export?format=csv')
     const res = await GET(req)
@@ -92,7 +92,7 @@ describe('GET /api/export', () => {
   })
 
   it('JSON response includes X-Export-Limit header set to 10000', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const { GET } = await import('@/app/api/export/route')
     const req = new NextRequest('http://localhost/api/export')
     const res = await GET(req)
@@ -100,7 +100,7 @@ describe('GET /api/export', () => {
   })
 
   it('CSV response includes X-Export-Limit header set to 10000', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const { GET } = await import('@/app/api/export/route')
     const req = new NextRequest('http://localhost/api/export?format=csv')
     const res = await GET(req)

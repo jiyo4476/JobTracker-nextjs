@@ -211,21 +211,21 @@ describe('POST /api/jobs', () => {
   const validBody = { job_title: 'Engineer', company_id: 1 }
 
   it('returns 401 without auth', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(false)
+    vi.mocked(requireApiKey).mockResolvedValue(false)
     const { POST } = await import('@/app/api/jobs/route')
     const res = await POST(makeReq(validBody))
     expect(res.status).toBe(401)
   })
 
   it('returns 400 for invalid body', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const { POST } = await import('@/app/api/jobs/route')
     const res = await POST(makeReq({ not_job_title: 'bad' }))
     expect(res.status).toBe(400)
   })
 
   it('returns 201 with job_id on success', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const { POST } = await import('@/app/api/jobs/route')
     const res = await POST(makeReq(validBody))
     expect(res.status).toBe(201)
