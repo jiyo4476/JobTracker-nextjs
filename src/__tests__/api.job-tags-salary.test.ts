@@ -427,7 +427,7 @@ describe('GET /api/tags', () => {
 
   it('returns 500 instead of throwing when the DB query fails', async () => {
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
-    mockDb.select.mockImplementation(() => {
+    mockDb.select.mockImplementationOnce(() => {
       throw new Error('connection lost')
     })
 
