@@ -1,13 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { PgDialect } from 'drizzle-orm/pg-core'
+import type { SQL } from 'drizzle-orm'
 
 vi.mock('@/db', () => ({
   db: { select: vi.fn() },
-}))
-
-vi.mock('@/db/schema', () => ({
-  jobs: {},
-  skills: {},
-  jobSkills: {},
 }))
 
 import { db } from '@/db'
@@ -98,6 +94,10 @@ describe('GET /api/stats', () => {
       expect(chains[i].where, `chain ${i} missing where`).toHaveBeenCalled()
     }
     expect(chains[4].leftJoin).toHaveBeenCalledTimes(2)
+    const [, activeJobJoin] = vi.mocked(chains[4].leftJoin).mock.calls[1]
+    const activeJobSql = new PgDialect().sqlToQuery(activeJobJoin as SQL)
+    expect(activeJobSql.sql).toContain('"jobs"."is_active" = $1')
+    expect(activeJobSql.params).toEqual([true])
   })
 
   it('sets Cache-Control header', async () => {
