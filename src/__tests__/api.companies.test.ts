@@ -149,6 +149,13 @@ describe('PATCH /api/companies/[id]', () => {
     expect(res.status).toBe(400)
   })
 
+  it('rejects camelCase fields instead of silently ignoring them', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    const { PATCH } = await import('@/app/api/companies/[id]/route')
+    const res = await PATCH(makeReq({ linkedinUrl: 'https://linkedin.com/company/acme' }), { params: Promise.resolve({ id: '1' }) })
+    expect(res.status).toBe(400)
+  })
+
   it('returns 200 on success', async () => {
     vi.mocked(requireApiKey).mockReturnValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
@@ -159,6 +166,19 @@ describe('PATCH /api/companies/[id]', () => {
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json).toHaveProperty('success', true)
+  })
+
+  it('allows optional company fields to be cleared', async () => {
+    vi.mocked(requireApiKey).mockResolvedValue(true)
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    const updateChain = makeUpdateChain()
+    mockDb.update.mockReturnValue(updateChain)
+
+    const { PATCH } = await import('@/app/api/companies/[id]/route')
+    const res = await PATCH(makeReq({ website: null, notes: null }), { params: Promise.resolve({ id: '1' }) })
+
+    expect(res.status).toBe(200)
+    expect(updateChain.set).toHaveBeenCalledWith(expect.objectContaining({ website: null, notes: null }))
   })
 
   it('returns 400 for non-numeric id', async () => {

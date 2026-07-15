@@ -146,6 +146,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
   await db.update(jobs).set({
     ...(d.job_title !== undefined && { jobTitle: d.job_title }),
+    ...(d.company_id !== undefined && { companyId: d.company_id }),
     ...(d.job_location !== undefined && { jobLocation: d.job_location }),
     ...(d.is_remote !== undefined && { isRemote: d.is_remote }),
     ...(d.job_description !== undefined && { jobDescription: d.job_description }),

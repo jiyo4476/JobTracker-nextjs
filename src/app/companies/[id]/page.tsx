@@ -35,8 +35,10 @@ export default function CompanyDetailPage() {
   const { data: company, isLoading } = useCompany(companyId)
   const patch = usePatchCompany()
 
-  function handleBlur(field: string, value: string) {
-    patch.mutate({ id: companyId, [field]: value || null })
+  function handleBlur(field: string, value: string, currentValue: string | null) {
+    const nextValue = field === 'name' ? value.trim() : value.trim() || null
+    if ((field === 'name' && !nextValue) || nextValue === currentValue) return
+    patch.mutate({ id: companyId, [field]: nextValue })
   }
 
   if (isLoading || !company) {
@@ -88,32 +90,35 @@ export default function CompanyDetailPage() {
           <Card>
             <CardHeader><CardTitle className="text-sm">Company Info</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm">
-              <div className="flex justify-between">
+              <div className="space-y-1">
+                <span className="text-slate-500">Company Name</span>
+                <Input defaultValue={company.name} onBlur={e => handleBlur('name', e.target.value, company.name)} className="h-7 text-xs" />
+              </div>
+              <div className="space-y-1">
                 <span className="text-slate-500">Industry</span>
-                <span>{company.industry ?? '—'}</span>
+                <Input defaultValue={company.industry ?? ''} onBlur={e => handleBlur('industry', e.target.value, company.industry)} className="h-7 text-xs" />
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Size</span>
                 <span>{company.size ?? '—'}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="space-y-1">
                 <span className="text-slate-500">HQ</span>
-                <span>{company.hqLocation ?? '—'}</span>
+                <Input defaultValue={company.hqLocation ?? ''} onBlur={e => handleBlur('hq_location', e.target.value, company.hqLocation)} className="h-7 text-xs" />
               </div>
-              <div className="flex justify-between items-center">
+              <div className="space-y-1">
                 <span className="text-slate-500">Website</span>
-                {company.website
-                  ? <a href={company.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-600 hover:underline">
-                      <ExternalLink className="h-3 w-3" />Visit
-                    </a>
-                  : <span>—</span>}
+                <div className="flex items-center gap-2">
+                  <Input defaultValue={company.website ?? ''} placeholder="https://company.com" onBlur={e => handleBlur('website', e.target.value, company.website)} className="h-7 text-xs" />
+                  {company.website && <a href={company.website} target="_blank" rel="noopener noreferrer" aria-label="Visit company website"><ExternalLink className="h-4 w-4" /></a>}
+                </div>
               </div>
               <div className="space-y-1">
                 <span className="text-slate-500">LinkedIn URL</span>
                 <Input
                   defaultValue={company.linkedinUrl ?? ''}
                   placeholder="https://linkedin.com/company/..."
-                  onBlur={e => handleBlur('linkedinUrl', e.target.value)}
+                  onBlur={e => handleBlur('linkedin_url', e.target.value, company.linkedinUrl)}
                   className="h-7 text-xs"
                 />
               </div>
@@ -122,7 +127,7 @@ export default function CompanyDetailPage() {
                 <Input
                   defaultValue={company.glassdoorUrl ?? ''}
                   placeholder="https://glassdoor.com/..."
-                  onBlur={e => handleBlur('glassdoorUrl', e.target.value)}
+                  onBlur={e => handleBlur('glassdoor_url', e.target.value, company.glassdoorUrl)}
                   className="h-7 text-xs"
                 />
               </div>
@@ -134,7 +139,7 @@ export default function CompanyDetailPage() {
               <Textarea
                 defaultValue={company.notes ?? ''}
                 placeholder="Add notes about this company..."
-                onBlur={e => handleBlur('notes', e.target.value)}
+                onBlur={e => handleBlur('notes', e.target.value, company.notes)}
                 className="min-h-[120px] text-sm resize-none"
               />
             </CardContent>

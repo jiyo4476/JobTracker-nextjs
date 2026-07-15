@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { JobTagsEditor } from '@/components/jobs/JobTagsEditor'
 import {
   useJob,
   usePatchJob,
@@ -30,6 +31,19 @@ const STAGE_OPTIONS = [
   { value: 'rejected', label: 'Rejected' },
   { value: 'withdrawn', label: 'Withdrawn' },
 ]
+
+const JOB_TYPE_OPTIONS = ['full_time', 'part_time', 'contract', 'internship', 'temp', 'freelance']
+const EXPERIENCE_OPTIONS = ['entry', 'mid', 'senior', 'lead', 'executive']
+
+type StatusDraft = {
+  stage: string
+  isActive: boolean
+  priority: number | null
+  location: string
+  jobType: string
+  experienceLevel: string
+  datePosted: string
+}
 
 function formatSalary(min: number | null, max: number | null, type: string | null, text: string | null): string {
   if (text) return text
@@ -169,7 +183,14 @@ export default function JobDetailPage() {
   const createContact = useCreateContact()
   const patchContact = usePatchContact()
   const deleteContact = useDeleteContact()
-  const notesRef = useRef<HTMLTextAreaElement>(null)
+  const [editingDescription, setEditingDescription] = useState(false)
+  const [descriptionDraft, setDescriptionDraft] = useState('')
+  const [editingNotes, setEditingNotes] = useState(false)
+  const [notesDraft, setNotesDraft] = useState('')
+  const [editingStatus, setEditingStatus] = useState(false)
+  const [statusDraft, setStatusDraft] = useState<StatusDraft>({
+    stage: 'not_applied', isActive: true, priority: null, location: '', jobType: '', experienceLevel: '', datePosted: '',
+  })
   const [showContactForm, setShowContactForm] = useState(false)
   const [contactForm, setContactForm] = useState<ContactFormState>(emptyContactForm)
   const [editingContactId, setEditingContactId] = useState<number | null>(null)
@@ -187,13 +208,6 @@ export default function JobDetailPage() {
   }
 
   const salary = formatSalary(job.salaryMin, job.salaryMax, job.salaryType, job.salaryText)
-  const allTags = [
-    ...job.skills.map(s => ({ ...s, group: 'skill' })),
-    ...job.software.map(s => ({ ...s, group: 'software' })),
-    ...job.keywords.map(k => ({ ...k, group: 'keyword' })),
-    ...job.certifications.map(c => ({ ...c, group: 'cert' })),
-  ]
-
   function handleMarkApplied() {
     patchJob.mutate({
       id,
@@ -205,23 +219,67 @@ export default function JobDetailPage() {
     })
   }
 
-  function handleStageChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    patchJob.mutate({ id, body: { interview_stage: e.target.value } })
+  function startDescriptionEdit() {
+    setDescriptionDraft(job?.jobDescription ?? '')
+    setEditingDescription(true)
   }
 
-  function handleNotesBlur() {
-    const value = notesRef.current?.value ?? ''
-    if (value !== (job?.notes ?? '')) {
-      patchJob.mutate({ id, body: { notes: value } })
-    }
+  function saveDescription() {
+    patchJob.mutate(
+      { id, body: { job_description: descriptionDraft } },
+      { onSuccess: () => setEditingDescription(false) },
+    )
+  }
+
+  function startNotesEdit() {
+    setNotesDraft(job?.notes ?? '')
+    setEditingNotes(true)
+  }
+
+  function saveNotes() {
+    patchJob.mutate(
+      { id, body: { notes: notesDraft } },
+      { onSuccess: () => setEditingNotes(false) },
+    )
+  }
+
+  function startStatusEdit() {
+    setStatusDraft({
+      stage: job?.interviewStage ?? 'not_applied',
+      isActive: job?.isActive !== false,
+      priority: job?.priority ?? null,
+      location: job?.jobLocation ?? '',
+      jobType: job?.jobType ?? '',
+      experienceLevel: job?.experienceLevel ?? '',
+      datePosted: job?.datePosted ?? '',
+    })
+    setEditingStatus(true)
+  }
+
+  function updateStatusDraft<K extends keyof StatusDraft>(field: K, value: StatusDraft[K]) {
+    setStatusDraft(current => ({ ...current, [field]: value }))
+  }
+
+  function saveStatus() {
+    patchJob.mutate(
+      {
+        id,
+        body: {
+          interview_stage: statusDraft.stage,
+          is_active: statusDraft.isActive,
+          priority: statusDraft.priority,
+          job_location: statusDraft.location,
+          job_type: statusDraft.jobType || null,
+          experience_level: statusDraft.experienceLevel || null,
+          date_posted: statusDraft.datePosted,
+        },
+      },
+      { onSuccess: () => setEditingStatus(false) },
+    )
   }
 
   function handleDelete() {
     deleteJob.mutate(id, { onSuccess: () => router.push('/jobs') })
-  }
-
-  function handlePriorityClick(star: number) {
-    patchJob.mutate({ id, body: { priority: star } })
   }
 
   function updateContactField(field: keyof ContactFormState, value: string) {
@@ -314,72 +372,72 @@ export default function JobDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Left 3 cols */}
-        <div className="col-span-3 space-y-4">
+        <div className="lg:col-span-3 space-y-4">
           <Card>
-            <CardHeader><CardTitle className="text-sm">Job Description</CardTitle></CardHeader>
-            <CardContent>
-              {job.jobDescription ? (
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-sm">Job Description</CardTitle>
+                {!editingDescription && <Button variant="outline" size="sm" onClick={startDescriptionEdit}>Edit</Button>}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {editingDescription ? (
+                <>
+                  <Textarea value={descriptionDraft} onChange={event => setDescriptionDraft(event.target.value)} className="min-h-64 resize-y text-sm" placeholder="Add the job description…" />
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={saveDescription} disabled={patchJob.isPending}>{patchJob.isPending ? 'Saving...' : 'Save'}</Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditingDescription(false)} disabled={patchJob.isPending}>Cancel</Button>
+                  </div>
+                </>
+              ) : job.jobDescription ? (
                 <p className="text-sm whitespace-pre-wrap leading-relaxed">{job.jobDescription}</p>
-              ) : (
-                <p className="text-sm text-slate-600 italic">No description available.</p>
-              )}
+              ) : <p className="text-sm text-slate-600 italic">No description available.</p>}
             </CardContent>
           </Card>
 
-          {allTags.length > 0 && (
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Skills & Tags</CardTitle></CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-1.5">
-                  {job.skills.map(s => (
-                    <Badge key={`skill-${s.id}`}>{s.name}</Badge>
-                  ))}
-                  {job.software.map(s => (
-                    <Badge key={`sw-${s.id}`} variant="secondary">{s.name}</Badge>
-                  ))}
-                  {job.keywords.map(k => (
-                    <Badge key={`kw-${k.id}`} variant="secondary">{k.name}</Badge>
-                  ))}
-                  {job.certifications.map(c => (
-                    <Badge key={`cert-${c.id}`} variant="warning">{c.name}</Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <JobTagsEditor jobId={id} job={job} />
 
           <Card>
-            <CardHeader><CardTitle className="text-sm">Notes</CardTitle></CardHeader>
-            <CardContent>
-              <Textarea
-                ref={notesRef}
-                defaultValue={job.notes ?? ''}
-                onBlur={handleNotesBlur}
-                placeholder="Add notes…"
-                className="min-h-28 resize-y text-sm"
-              />
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-sm">Notes</CardTitle>
+                {!editingNotes && <Button variant="outline" size="sm" onClick={startNotesEdit}>Edit</Button>}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {editingNotes ? (
+                <>
+                  <Textarea value={notesDraft} onChange={event => setNotesDraft(event.target.value)} placeholder="Add notes…" className="min-h-28 resize-y text-sm" />
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={saveNotes} disabled={patchJob.isPending}>{patchJob.isPending ? 'Saving...' : 'Save'}</Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditingNotes(false)} disabled={patchJob.isPending}>Cancel</Button>
+                  </div>
+                </>
+              ) : <p className="text-sm whitespace-pre-wrap">{job.notes || <span className="italic text-slate-500">No notes yet.</span>}</p>}
             </CardContent>
           </Card>
         </div>
 
         {/* Right 2 cols */}
-        <div className="col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-4">
           <Card>
-            <CardHeader><CardTitle className="text-sm">Status</CardTitle></CardHeader>
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-sm">Status & Posting Details</CardTitle>
+                {!editingStatus && <Button variant="outline" size="sm" onClick={startStatusEdit}>Edit</Button>}
+              </div>
+            </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">Stage</span>
-                <select
-                  value={job.interviewStage ?? 'not_applied'}
-                  onChange={handleStageChange}
-                  className="text-sm border rounded px-2 py-1 bg-background"
-                >
-                  {STAGE_OPTIONS.map(o => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
+                {editingStatus ? <select value={statusDraft.stage} onChange={event => updateStatusDraft('stage', event.target.value)} className="text-sm border rounded px-2 py-1 bg-background">{STAGE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select> : <span>{labelify(job.interviewStage)}</span>}
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Posting Status</span>
+                {editingStatus ? <select value={statusDraft.isActive ? 'active' : 'inactive'} onChange={event => updateStatusDraft('isActive', event.target.value === 'active')} className="text-sm border rounded px-2 py-1 bg-background"><option value="active">Active</option><option value="inactive">Inactive</option></select> : <span>{job.isActive === false ? 'Inactive' : 'Active'}</span>}
               </div>
 
               <div className="flex justify-between items-center">
@@ -389,19 +447,32 @@ export default function JobDetailPage() {
 
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">Priority</span>
-                <div className="flex gap-0.5">
-                  {[1, 2, 3, 4, 5].map(star => (
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-0.5">
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => editingStatus && updateStatusDraft('priority', star)}
+                        disabled={!editingStatus}
+                        className={cn(
+                          'text-lg leading-none',
+                          star <= (editingStatus ? (statusDraft.priority ?? 0) : (job.priority ?? 0)) ? 'text-amber-400' : 'text-slate-300'
+                        )}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                  {editingStatus && statusDraft.priority !== null && (
                     <button
-                      key={star}
-                      onClick={() => handlePriorityClick(star)}
-                      className={cn(
-                        'text-lg leading-none',
-                        star <= (job.priority ?? 0) ? 'text-amber-400' : 'text-slate-300'
-                      )}
+                      type="button"
+                      onClick={() => updateStatusDraft('priority', null)}
+                      className="text-xs text-slate-500 underline hover:text-slate-700"
                     >
-                      ★
+                      Clear
                     </button>
-                  ))}
+                  )}
                 </div>
               </div>
 
@@ -412,20 +483,17 @@ export default function JobDetailPage() {
 
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">Location</span>
-                <span>
-                  {job.jobLocation ?? '—'}
-                  {job.isRemote && <Badge variant="secondary" className="ml-1 text-xs">Remote</Badge>}
-                </span>
+                {editingStatus ? <Input value={statusDraft.location} onChange={event => updateStatusDraft('location', event.target.value)} className="h-8 max-w-52 text-sm" /> : <span>{job.jobLocation ?? '—'}{job.isRemote && <Badge variant="secondary" className="ml-1 text-xs">Remote</Badge>}</span>}
               </div>
 
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">Type</span>
-                <span>{labelify(job.jobType)}</span>
+                {editingStatus ? <select value={statusDraft.jobType} onChange={event => updateStatusDraft('jobType', event.target.value)} className="text-sm border rounded px-2 py-1 bg-background"><option value="">Not set</option>{JOB_TYPE_OPTIONS.map(option => <option key={option} value={option}>{labelify(option)}</option>)}</select> : <span>{labelify(job.jobType)}</span>}
               </div>
 
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">Experience</span>
-                <span>{labelify(job.experienceLevel)}</span>
+                {editingStatus ? <select value={statusDraft.experienceLevel} onChange={event => updateStatusDraft('experienceLevel', event.target.value)} className="text-sm border rounded px-2 py-1 bg-background"><option value="">Not set</option>{EXPERIENCE_OPTIONS.map(option => <option key={option} value={option}>{labelify(option)}</option>)}</select> : <span>{labelify(job.experienceLevel)}</span>}
               </div>
 
               <div className="flex justify-between items-center">
@@ -440,13 +508,19 @@ export default function JobDetailPage() {
 
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">Date Posted</span>
-                <span>{formatDate(job.datePosted)}</span>
+                {editingStatus ? <Input type="date" value={statusDraft.datePosted} onChange={event => updateStatusDraft('datePosted', event.target.value)} className="h-8 max-w-44 text-sm" /> : <span>{formatDate(job.datePosted)}</span>}
               </div>
 
               {job.securityClearanceReq && (
                 <div className="flex justify-between items-center">
                   <span className="text-slate-500">Clearance</span>
                   <Badge variant="destructive" className="text-xs">Required</Badge>
+                </div>
+              )}
+              {editingStatus && (
+                <div className="flex gap-2 pt-2">
+                  <Button size="sm" onClick={saveStatus} disabled={patchJob.isPending}>{patchJob.isPending ? 'Saving...' : 'Save'}</Button>
+                  <Button size="sm" variant="outline" onClick={() => setEditingStatus(false)} disabled={patchJob.isPending}>Cancel</Button>
                 </div>
               )}
             </CardContent>
