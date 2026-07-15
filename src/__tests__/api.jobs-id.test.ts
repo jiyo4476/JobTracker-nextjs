@@ -107,28 +107,28 @@ describe('PATCH /api/jobs/[id]', () => {
   })
 
   it('returns 401 without auth', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(false)
+    vi.mocked(requireApiKey).mockResolvedValue(false)
     const { PATCH } = await import('@/app/api/jobs/[id]/route')
     const res = await PATCH(makeReq('1', {}, false), makeParams('1'))
     expect(res.status).toBe(401)
   })
 
   it('returns 400 for non-numeric id', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/jobs/[id]/route')
     const res = await PATCH(makeReq('bad', { job_title: 'X' }), makeParams('bad'))
     expect(res.status).toBe(400)
   })
 
   it('returns 400 for invalid body', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/jobs/[id]/route')
     const res = await PATCH(makeReq('1', { interview_stage: 'invalid_stage_value' }), makeParams('1'))
     expect(res.status).toBe(400)
   })
 
   it('returns 200 on success', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     // select is called to read current stage for history tracking
     mockDb.select.mockReturnValue(makeChain([{ interviewStage: 'not_applied' }]))
@@ -142,7 +142,7 @@ describe('PATCH /api/jobs/[id]', () => {
   })
 
   it('updates the company relationship when company_id is provided', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     const updateChain = makeChain(undefined)
     mockDb.update.mockReturnValue(updateChain)
@@ -157,7 +157,7 @@ describe('PATCH /api/jobs/[id]', () => {
   })
 
   it('clears optional classification fields when null is provided', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     const updateChain = makeChain(undefined)
     mockDb.update.mockReturnValue(updateChain)
@@ -175,7 +175,7 @@ describe('PATCH /api/jobs/[id]', () => {
   })
 
   it('clears priority when null is provided', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     const updateChain = makeChain(undefined)
     mockDb.update.mockReturnValue(updateChain)
@@ -190,7 +190,7 @@ describe('PATCH /api/jobs/[id]', () => {
   })
 
   it('inserts stage history row when interview_stage changes', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     // current stage is applied; we're changing to phone_screen
     mockDb.select.mockReturnValue(makeChain([{ interviewStage: 'applied' }]))
@@ -207,7 +207,7 @@ describe('PATCH /api/jobs/[id]', () => {
 describe('PATCH /api/jobs/[id] — salary recomputation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
   })
 
   it('reads salary_type from DB and computes annualEquivalentMin when only hourly_rate_min is patched', async () => {
@@ -267,7 +267,7 @@ describe('DELETE /api/jobs/[id]', () => {
   })
 
   it('returns 401 without auth', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(false)
+    vi.mocked(requireApiKey).mockResolvedValue(false)
     const { DELETE } = await import('@/app/api/jobs/[id]/route')
     const req = new NextRequest('http://localhost/api/jobs/1', { method: 'DELETE' })
     const res = await DELETE(req, makeParams('1'))
@@ -275,7 +275,7 @@ describe('DELETE /api/jobs/[id]', () => {
   })
 
   it('returns 200 on soft delete', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.update.mockReturnValue(makeChain([{ id: 1 }]))
 
@@ -291,7 +291,7 @@ describe('DELETE /api/jobs/[id]', () => {
   })
 
   it('returns 404 when job is not found', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.update.mockReturnValue(makeChain([]))
 
@@ -305,7 +305,7 @@ describe('DELETE /api/jobs/[id]', () => {
   })
 
   it('returns 400 for non-numeric id', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const { DELETE } = await import('@/app/api/jobs/[id]/route')
     const req = new NextRequest('http://localhost/api/jobs/abc', {
       method: 'DELETE',
@@ -316,7 +316,7 @@ describe('DELETE /api/jobs/[id]', () => {
   })
 
   it('calls db.update (soft delete, not hard delete)', async () => {
-    vi.mocked(requireApiKey).mockReturnValue(true)
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.update.mockReturnValue(makeChain([{ id: 1 }]))
 
