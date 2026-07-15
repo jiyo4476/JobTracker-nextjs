@@ -47,8 +47,10 @@ async function getSkillsByClearance() {
     topSkillsForClearance(false),
   ])
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     clearance_required: clearanceRequired,
     clearance_not_required: clearanceNotRequired,
   })
+  res.headers.set('Cache-Control', 's-maxage=60, stale-while-revalidate=60')
+  return res
 }
