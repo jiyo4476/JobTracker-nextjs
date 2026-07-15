@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { JobTagsEditor } from '@/components/jobs/JobTagsEditor'
+import { JobDescriptionMarkdown } from '@/components/jobs/JobDescriptionMarkdown'
 import {
   useJob,
   usePatchJob,
@@ -392,7 +393,7 @@ export default function JobDetailPage() {
                   </div>
                 </>
               ) : job.jobDescription ? (
-                <p className="text-sm whitespace-pre-wrap leading-relaxed">{job.jobDescription}</p>
+                <JobDescriptionMarkdown>{job.jobDescription}</JobDescriptionMarkdown>
               ) : <p className="text-sm text-slate-600 italic">No description available.</p>}
             </CardContent>
           </Card>
