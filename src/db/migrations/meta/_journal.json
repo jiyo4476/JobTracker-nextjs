@@ -36,6 +36,13 @@
       "when": 1783794671447,
       "tag": "0004_add_search_trgm_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784146979767,
+      "tag": "0005_seed_software_certifications",
+      "breakpoints": true
     }
   ]
 }

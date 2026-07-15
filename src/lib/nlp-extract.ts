@@ -34,194 +34,365 @@ export function mergeExtractedTags(
   }
 }
 
-// Full SWE skill list — mirrors the DB seed in 0001_seed_swe_skills.sql.
-// Aliases (e.g. 'Bash', 'k8s') are included so they can be detected and then
-// collapsed to their canonical form by deduplicateSkills().
-const SKILLS = [
-  // Programming Languages
-  'TypeScript', 'JavaScript', 'Python', 'Kotlin', 'Swift', 'Scala', 'Haskell',
-  'Clojure', 'Elixir', 'Erlang', 'PowerShell', 'Ruby', 'Rust', 'Java', 'Go',
-  'PHP', 'C#', 'C++',
+// ── Canonical taxonomy catalog ────────────────────────────────────────────────
+// Each entry owns exactly one canonical term plus optional aliases, and belongs
+// to exactly one structured taxonomy (skills, software, or certifications).
+// A term detected via any alias is emitted as the entry's canonical form.
+// assertNoCrossCategoryTerms() below rejects any term that appears in more
+// than one structured catalog. KEYWORDS are contextual labels and exempt —
+// they intentionally overlap with skills (e.g. 'microservices', 'DevOps').
+export interface CatalogEntry {
+  canonical: string
+  aliases?: readonly string[]
+}
+
+// Skills: languages, practices, methods, and capabilities.
+// Named products/platforms (frameworks, databases, cloud services, CI/CD,
+// testing tools, monitoring products) live in SOFTWARE_CATALOG instead.
+export const SKILL_CATALOG: readonly CatalogEntry[] = [
+  // Programming & markup languages
+  { canonical: 'TypeScript' },
+  { canonical: 'JavaScript' },
+  { canonical: 'Python' },
+  { canonical: 'Kotlin' },
+  { canonical: 'Swift' },
+  { canonical: 'Scala' },
+  { canonical: 'Haskell' },
+  { canonical: 'Clojure' },
+  { canonical: 'Elixir' },
+  { canonical: 'Erlang' },
+  { canonical: 'PowerShell' },
+  { canonical: 'Ruby' },
+  { canonical: 'Rust' },
+  { canonical: 'Java' },
+  { canonical: 'Go' },
+  { canonical: 'PHP' },
+  { canonical: 'C#' },
+  { canonical: 'C++' },
   // 'Lua' omitted — false-positives on "evaluate", "valuable", etc.
-  // 'C', 'R', 'Go' omitted — single-letter / verb patterns fire too broadly in prose
-  //   ("Go to our website", "evaluate candidates", "required at assembly")
-  'Bash / Shell Scripting', 'Bash', 'Shell Scripting',
-
-  // Web — Frontend
-  'Accessibility (WCAG)', 'WCAG',
-  'Progressive Web Apps', 'PWA',
-  'Service Workers',
-  'TanStack Query', 'TanStack Table',
-  'Framer Motion',
-  'Tailwind CSS', 'Tailwind',
-  'Sass / SCSS', 'SCSS', 'Sass',
-  'CSS Modules', 'CSS3',
+  // 'C', 'R' omitted — single-letter patterns fire too broadly in prose
+  { canonical: 'Bash / Shell Scripting', aliases: ['Bash', 'Shell Scripting'] },
+  { canonical: 'HTML5' },
+  { canonical: 'CSS3' },
   // 'CSS' and 'HTML' omitted — too generic; CSS3/HTML5 are the canonical forms
-  'HTML5',
-  'SvelteKit', 'Svelte',
-  'Next.js', 'Nuxt.js', 'Remix',
-  'Angular', 'Vue.js', 'Vue',
-  'React Native', 'React',
-  'Redux', 'Zustand', 'Recoil', 'MobX',
-  'Webpack', 'Rollup', 'Vite', 'esbuild',
-  'Three.js', 'D3.js', 'D3',
-  'Recharts', 'Chart.js',
-  'WebSockets', 'WebRTC',
+  { canonical: 'Sass / SCSS', aliases: ['SCSS', 'Sass'] },
+  { canonical: 'CSS Modules' },
+  { canonical: 'SQL' },
+  // 'Assembly' kept — in an engineering job description context this rarely
+  // false-positives; "assembly of components" is uncommon in SWE postings
+  { canonical: 'Assembly' },
 
-  // Web — Backend
-  'OAuth 2.0 / OpenID Connect', 'OAuth 2.0', 'OpenID Connect', 'OAuth',
-  'REST API Design', 'REST API',
-  'WebSocket Server',
-  'ASP.NET Core', 'ASP.NET',
-  'Spring Boot', 'Spring',
-  'Ruby on Rails', 'Rails',
-  'Express.js', 'Express',
-  'Fastify', 'NestJS',
-  'Django', 'Flask', 'FastAPI',
-  'Laravel',
-  'Node.js',
-  'GraphQL', 'gRPC', 'tRPC', 'JWT',
+  // Web practices & capabilities
+  { canonical: 'Accessibility (WCAG)', aliases: ['WCAG'] },
+  { canonical: 'Progressive Web Apps', aliases: ['PWA'] },
+  { canonical: 'Service Workers' },
+  { canonical: 'WebSockets' },
+  { canonical: 'WebRTC' },
+
+  // API & protocol standards
+  { canonical: 'OAuth 2.0 / OpenID Connect', aliases: ['OAuth 2.0', 'OpenID Connect', 'OAuth'] },
+  { canonical: 'REST API Design', aliases: ['REST API'] },
+  { canonical: 'WebSocket Server' },
+  { canonical: 'GraphQL' },
+  { canonical: 'gRPC' },
+  { canonical: 'JWT' },
+
+  // Database practices
+  { canonical: 'Database Design' },
+  { canonical: 'Data Modeling' },
+  { canonical: 'Query Optimization' },
+
+  // Cloud & DevOps practices
+  { canonical: 'Infrastructure as Code', aliases: ['IaC'] },
+  { canonical: 'Site Reliability Engineering', aliases: ['SRE'] },
+  { canonical: 'Serverless / Lambda', aliases: ['Serverless', 'Lambda'] },
+  { canonical: 'Load Balancing' },
+  { canonical: 'Observability' },
+  { canonical: 'CDN' },
+  { canonical: 'CI/CD' },
+
+  // Data & ML capabilities
+  { canonical: 'Natural Language Processing', aliases: ['NLP'] },
+  { canonical: 'Machine Learning', aliases: ['ML'] },
+  { canonical: 'Deep Learning' },
+  { canonical: 'Computer Vision' },
+  { canonical: 'Feature Engineering' },
+  { canonical: 'Model Evaluation' },
+  { canonical: 'Data Warehousing' },
+  { canonical: 'ETL Pipelines', aliases: ['ETL'] },
+  { canonical: 'Vector Databases' },
+
+  // Mobile capabilities
+  { canonical: 'iOS Development', aliases: ['iOS'] },
+  { canonical: 'Android Development', aliases: ['Android'] },
+  { canonical: 'App Store Deployment' },
+
+  // Testing practices
+  { canonical: 'Test-Driven Development', aliases: ['TDD'] },
+  { canonical: 'End-to-End Testing', aliases: ['E2E Testing'] },
+  { canonical: 'Integration Testing' },
+  { canonical: 'Unit Testing' },
+  { canonical: 'Load Testing' },
+  { canonical: 'Performance Testing' },
+  { canonical: 'Mock / Stub / Spy' },
+
+  // Security practices
+  { canonical: 'Zero Trust Architecture', aliases: ['Zero Trust'] },
+  { canonical: 'Static Analysis (SAST)', aliases: ['SAST'] },
+  { canonical: 'Application Security', aliases: ['AppSec'] },
+  { canonical: 'Dependency Scanning' },
+  { canonical: 'Secret Management' },
+  { canonical: 'Penetration Testing', aliases: ['Pen Testing'] },
+  { canonical: 'SOC 2 Compliance', aliases: ['SOC 2'] },
+  { canonical: 'OWASP Top 10', aliases: ['OWASP'] },
+  { canonical: 'Encryption' },
+  // Security clearances are requirements, not certifications — kept under
+  // skills alongside the jobs.security_clearance_req column
+  { canonical: 'Security Clearance — TS/SCI', aliases: ['TS/SCI'] },
+  { canonical: 'Security Clearance — Secret' },
+
+  // Systems & networking
+  { canonical: 'Concurrency & Parallelism', aliases: ['Concurrency'] },
+  { canonical: 'Networking (TCP/IP)', aliases: ['TCP/IP'] },
+  // 'Networking' omitted — matches too broadly (e.g. "networking events")
+  { canonical: 'Operating Systems' },
+  { canonical: 'Memory Management' },
+  { canonical: 'Embedded Systems' },
+  { canonical: 'Protocol Buffers', aliases: ['Protobuf'] },
+  { canonical: 'Message Queues' },
+  { canonical: 'Compiler Design' },
+  { canonical: 'FPGA' },
+
+  // Architecture & design
+  { canonical: 'Event-Driven Architecture', aliases: ['Event-Driven'] },
+  { canonical: 'Domain-Driven Design', aliases: ['DDD'] },
+  { canonical: 'CQRS / Event Sourcing', aliases: ['CQRS'] },
+  { canonical: 'High Availability Design', aliases: ['High Availability'] },
+  { canonical: 'Performance Optimization' },
+  { canonical: 'Distributed Systems' },
+  { canonical: 'Clean Architecture' },
+  { canonical: 'Design Patterns' },
+  { canonical: 'Caching Strategies', aliases: ['Caching'] },
+  { canonical: 'Microservices' },
+  { canonical: 'System Design' },
+  { canonical: 'API Gateway' },
+
+  // Version control & collaboration practices (Git/GitHub/GitLab are SOFTWARE)
+  { canonical: 'Semantic Versioning', aliases: ['SemVer'] },
+  { canonical: 'Code Review' },
+  { canonical: 'Monorepo' },
+
+  // Process & soft skills
+  { canonical: 'Cross-Functional Collaboration' },
+  { canonical: 'Stakeholder Communication' },
+  { canonical: 'Agile / Scrum', aliases: ['Scrum', 'Agile'] },
+  { canonical: 'Technical Writing' },
+  { canonical: 'Problem Solving' },
+  { canonical: 'Kanban' },
+  { canonical: 'Mentoring' },
+  { canonical: 'Debugging' },
+]
+
+// Software: named tools, products, platforms, frameworks, and services.
+export const SOFTWARE_CATALOG: readonly CatalogEntry[] = [
+  // Workplace & collaboration tools
+  { canonical: 'Jira' },
+  { canonical: 'Confluence' },
+  { canonical: 'Slack' },
+  { canonical: 'Bitbucket' },
+  { canonical: 'VS Code' },
+  { canonical: 'IntelliJ' },
+  { canonical: 'Figma' },
+  { canonical: 'Notion' },
+  { canonical: 'Splunk' },
+  { canonical: 'Tableau' },
+  { canonical: 'Git' },
+  { canonical: 'GitHub' },
+  { canonical: 'GitLab' },
+
+  // Frontend frameworks & libraries
+  { canonical: 'React' },
+  { canonical: 'React Native' },
+  { canonical: 'Angular' },
+  { canonical: 'Vue.js', aliases: ['Vue'] },
+  { canonical: 'Svelte' },
+  { canonical: 'SvelteKit' },
+  { canonical: 'Next.js' },
+  { canonical: 'Nuxt.js' },
+  { canonical: 'Remix' },
+  { canonical: 'Redux' },
+  { canonical: 'Zustand' },
+  { canonical: 'Recoil' },
+  { canonical: 'MobX' },
+  { canonical: 'TanStack Query' },
+  { canonical: 'TanStack Table' },
+  { canonical: 'Framer Motion' },
+  { canonical: 'Tailwind CSS', aliases: ['Tailwind'] },
+  { canonical: 'Three.js' },
+  { canonical: 'D3.js', aliases: ['D3'] },
+  { canonical: 'Recharts' },
+  { canonical: 'Chart.js' },
+  { canonical: 'Webpack' },
+  { canonical: 'Rollup' },
+  { canonical: 'Vite' },
+  { canonical: 'esbuild' },
+
+  // Backend frameworks & runtimes
+  { canonical: 'Node.js' },
+  { canonical: 'Express.js', aliases: ['Express'] },
+  { canonical: 'Fastify' },
+  { canonical: 'NestJS' },
+  { canonical: 'Django' },
+  { canonical: 'Flask' },
+  { canonical: 'FastAPI' },
+  { canonical: 'Ruby on Rails', aliases: ['Rails'] },
+  { canonical: 'Laravel' },
+  { canonical: 'Spring Boot', aliases: ['Spring'] },
+  { canonical: 'ASP.NET Core', aliases: ['ASP.NET'] },
+  { canonical: 'tRPC' },
+
+  // ORMs & database tooling
+  { canonical: 'Prisma' },
+  { canonical: 'Drizzle ORM' },
+  { canonical: 'SQLAlchemy' },
+  { canonical: 'Hibernate' },
 
   // Databases
-  'Database Design', 'Data Modeling', 'Query Optimization',
-  'Drizzle ORM', 'SQLAlchemy', 'Hibernate', 'Prisma',
-  'CockroachDB', 'PlanetScale', 'Supabase',
-  'Elasticsearch',
-  'PostgreSQL', 'Postgres',
-  'MySQL', 'SQLite',
-  'DynamoDB', 'Cassandra', 'Neo4j',
-  'MongoDB', 'Redis',
-  'SQL',
+  { canonical: 'PostgreSQL', aliases: ['Postgres'] },
+  { canonical: 'MySQL' },
+  { canonical: 'SQLite' },
+  { canonical: 'MongoDB' },
+  { canonical: 'Redis' },
+  { canonical: 'Elasticsearch' },
+  { canonical: 'DynamoDB' },
+  { canonical: 'Cassandra' },
+  { canonical: 'Neo4j' },
+  { canonical: 'CockroachDB' },
+  { canonical: 'Supabase' },
+  { canonical: 'PlanetScale' },
 
-  // Cloud & DevOps
-  'Infrastructure as Code', 'IaC',
-  'Site Reliability Engineering', 'SRE',
-  'Serverless / Lambda', 'Serverless', 'Lambda',
-  'GitHub Actions', 'GitLab CI/CD', 'GitLab CI',
-  'Load Balancing',
-  'OpenTelemetry', 'Observability',
-  'Kubernetes', 'k8s',
-  'Terraform', 'Ansible', 'Pulumi',
-  'CircleCI', 'Jenkins',
-  'Prometheus', 'Grafana', 'Datadog',
-  'Docker', 'Helm',
-  'Cloudflare', 'Vercel', 'Netlify', 'Heroku', 'Railway',
-  'Nginx', 'Apache',
-  'Linux', 'CDN',
-  'AWS', 'GCP', 'Azure',
-  'CI/CD',
+  // Cloud platforms & hosting
+  { canonical: 'AWS', aliases: ['Amazon Web Services'] },
+  { canonical: 'GCP', aliases: ['Google Cloud Platform', 'Google Cloud'] },
+  { canonical: 'Azure' },
+  { canonical: 'Cloudflare' },
+  { canonical: 'Vercel' },
+  { canonical: 'Netlify' },
+  { canonical: 'Heroku' },
+  { canonical: 'Railway' },
 
-  // Data & ML
-  'Natural Language Processing', 'NLP',
-  'Machine Learning', 'ML',
-  'Deep Learning',
-  'Computer Vision',
-  'Hugging Face Transformers', 'Hugging Face',
-  'Feature Engineering', 'Model Evaluation',
-  'Data Warehousing', 'ETL Pipelines', 'ETL',
-  'Vector Databases',
-  'Jupyter Notebooks', 'Jupyter',
-  'LangChain', 'OpenAI API', 'OpenAI',
-  'scikit-learn', 'sklearn',
-  'PyTorch', 'TensorFlow', 'Keras',
-  'Pandas', 'NumPy', 'Matplotlib',
-  'MLflow',
-  'BigQuery', 'Snowflake',
-  'Airflow', 'Spark', 'Kafka',
-  'dbt',
+  // DevOps, CI/CD & infrastructure products
+  { canonical: 'Docker' },
+  { canonical: 'Kubernetes', aliases: ['k8s'] },
+  { canonical: 'Helm' },
+  { canonical: 'Terraform' },
+  { canonical: 'Ansible' },
+  { canonical: 'Pulumi' },
+  { canonical: 'GitHub Actions' },
+  { canonical: 'GitLab CI/CD', aliases: ['GitLab CI'] },
+  { canonical: 'CircleCI' },
+  { canonical: 'Jenkins' },
+  { canonical: 'Nginx' },
+  { canonical: 'Apache' },
+  { canonical: 'Linux' },
 
-  // Mobile
-  'iOS Development', 'iOS',
-  'Android Development', 'Android',
-  'App Store Deployment',
-  'Jetpack Compose',
-  'SwiftUI', 'Flutter', 'Expo',
+  // Monitoring & observability products
+  { canonical: 'Prometheus' },
+  { canonical: 'Grafana' },
+  { canonical: 'Datadog' },
+  { canonical: 'OpenTelemetry' },
 
-  // Testing
-  'Test-Driven Development', 'TDD',
-  'End-to-End Testing', 'E2E Testing',
-  'Integration Testing',
-  'Unit Testing',
-  'Load Testing', 'Performance Testing',
-  'Mock / Stub / Spy',
-  'Playwright', 'Cypress', 'Selenium',
-  'Vitest', 'Jest', 'PyTest', 'JUnit',
+  // Data & ML tools
+  { canonical: 'PyTorch' },
+  { canonical: 'TensorFlow' },
+  { canonical: 'Keras' },
+  { canonical: 'scikit-learn', aliases: ['sklearn'] },
+  { canonical: 'Hugging Face Transformers', aliases: ['Hugging Face'] },
+  { canonical: 'LangChain' },
+  { canonical: 'OpenAI API', aliases: ['OpenAI'] },
+  { canonical: 'Pandas' },
+  { canonical: 'NumPy' },
+  { canonical: 'Matplotlib' },
+  { canonical: 'Jupyter Notebooks', aliases: ['Jupyter'] },
+  { canonical: 'MLflow' },
+  { canonical: 'Spark' },
+  { canonical: 'Kafka' },
+  { canonical: 'RabbitMQ' },
+  { canonical: 'Airflow' },
+  { canonical: 'dbt' },
+  { canonical: 'Snowflake' },
+  { canonical: 'BigQuery' },
 
-  // Security
-  'Zero Trust Architecture', 'Zero Trust',
-  'Static Analysis (SAST)', 'SAST',
-  'Application Security', 'AppSec',
-  'Dependency Scanning',
-  'Secret Management',
-  'Penetration Testing', 'Pen Testing',
-  'SOC 2 Compliance', 'SOC 2',
-  'OWASP Top 10', 'OWASP',
-  'Encryption',
-  'Security Clearance — TS/SCI', 'TS/SCI',
-  'Security Clearance — Secret',
+  // Mobile frameworks & toolkits
+  { canonical: 'Flutter' },
+  { canonical: 'Expo' },
+  { canonical: 'SwiftUI' },
+  { canonical: 'Jetpack Compose' },
 
-  // Systems & Networking
-  'Concurrency & Parallelism', 'Concurrency',
-  'Networking (TCP/IP)', 'TCP/IP',
-  // 'Networking' omitted — matches too broadly (e.g. "networking events")
-  'Operating Systems',
-  'Memory Management',
-  'Embedded Systems',
-  'Protocol Buffers', 'Protobuf',
-  'Message Queues',
-  'Compiler Design',
-  // 'Assembly' kept — in an engineering job description context this rarely false-positives;
-  // "assembly of components" is uncommon in SWE postings vs. "Assembly language"
-  'Assembly',
-  'FPGA',
-
-  // Architecture & Design
-  'Event-Driven Architecture', 'Event-Driven',
-  'Domain-Driven Design', 'DDD',
-  'CQRS / Event Sourcing', 'CQRS',
-  'High Availability Design', 'High Availability',
-  'Performance Optimization',
-  'Distributed Systems',
-  'Clean Architecture',
-  'Design Patterns',
-  'Caching Strategies', 'Caching',
-  'Microservices',
-  'System Design',
-  'API Gateway',
-
-  // Version Control & Collaboration
-  'Semantic Versioning', 'SemVer',
-  'Code Review',
-  'Monorepo',
-  // GitHub and GitLab live in SOFTWARE; no need to duplicate them here
-  'Git',
-
-  // Process & Soft Skills
-  'Cross-Functional Collaboration',
-  'Stakeholder Communication',
-  'Agile / Scrum', 'Scrum', 'Agile',
-  'Technical Writing',
-  'Problem Solving',
-  'Kanban',
-  'Mentoring',
-  'Debugging',
+  // Testing tools
+  { canonical: 'Playwright' },
+  { canonical: 'Cypress' },
+  { canonical: 'Selenium' },
+  { canonical: 'Vitest' },
+  { canonical: 'Jest' },
+  { canonical: 'PyTest' },
+  { canonical: 'JUnit' },
 ]
 
-// GitHub and GitLab are tools (appear in SOFTWARE) — not listed in SKILLS to
-// avoid producing duplicate junction-table rows on the same job.
-const SOFTWARE = [
-  'Jira', 'Confluence', 'Slack', 'Bitbucket', 'VS Code', 'IntelliJ',
-  'Figma', 'Notion', 'Datadog', 'Splunk', 'Tableau',
-  'GitHub', 'GitLab',
+// Certifications: named credentials and licenses only. Security clearances are
+// NOT certifications — they live in SKILL_CATALOG (and jobs.security_clearance_req).
+// Umbrella terms ('AWS Certified', 'CompTIA') are kept as fallbacks but are
+// suppressed when a more specific certification from the same family matched —
+// see suppressGenericCertifications().
+export const CERTIFICATION_CATALOG: readonly CatalogEntry[] = [
+  // AWS
+  { canonical: 'AWS Certified Solutions Architect', aliases: ['AWS Solutions Architect'] },
+  { canonical: 'AWS Certified Developer' },
+  { canonical: 'AWS Certified SysOps Administrator' },
+  { canonical: 'AWS Certified DevOps Engineer' },
+  { canonical: 'AWS Certified Cloud Practitioner' },
+  { canonical: 'AWS Certified Security' },
+  { canonical: 'AWS Certified' },
+
+  // Azure
+  { canonical: 'Microsoft Certified: Azure Fundamentals', aliases: ['Azure Fundamentals', 'AZ-900'] },
+  { canonical: 'Microsoft Certified: Azure Administrator', aliases: ['Azure Administrator', 'AZ-104'] },
+  { canonical: 'Microsoft Certified: Azure Solutions Architect', aliases: ['Azure Solutions Architect', 'AZ-305'] },
+  { canonical: 'Microsoft Certified: Azure DevOps Engineer', aliases: ['Azure DevOps Engineer', 'AZ-400'] },
+  { canonical: 'Azure Certified' },
+
+  // Google Cloud
+  { canonical: 'Google Cloud Professional Cloud Architect', aliases: ['Professional Cloud Architect'] },
+  { canonical: 'Google Cloud Associate Cloud Engineer', aliases: ['Associate Cloud Engineer'] },
+  { canonical: 'Google Cloud Professional Data Engineer', aliases: ['Professional Data Engineer'] },
+  { canonical: 'GCP Certified', aliases: ['Google Cloud Certified'] },
+
+  // CompTIA — bare 'A+' omitted: false-positives on letter grades / ratings
+  { canonical: 'CompTIA Security+', aliases: ['Security+'] },
+  { canonical: 'CompTIA Network+', aliases: ['Network+'] },
+  { canonical: 'CompTIA A+' },
+  { canonical: 'CompTIA' },
+
+  // Security & management
+  { canonical: 'CISSP' },
+  { canonical: 'CISM' },
+  { canonical: 'CEH', aliases: ['Certified Ethical Hacker'] },
+  { canonical: 'PMP', aliases: ['Project Management Professional'] },
+  { canonical: 'CPA' },
+
+  // Kubernetes & HashiCorp
+  {
+    canonical: 'Certified Kubernetes Administrator (CKA)',
+    aliases: ['CKA', 'Certified Kubernetes Administrator', 'Kubernetes Administrator'],
+  },
+  {
+    canonical: 'Certified Kubernetes Application Developer (CKAD)',
+    aliases: ['CKAD', 'Certified Kubernetes Application Developer'],
+  },
+  { canonical: 'HashiCorp Terraform Associate', aliases: ['Terraform Associate'] },
 ]
 
-const CERTIFICATIONS = [
-  'AWS Certified', 'Azure Certified', 'GCP Certified',
-  'CPA', 'PMP', 'CISSP', 'CompTIA',
-  'Kubernetes Administrator', 'CKA',
-  'Terraform Associate',
-]
-
+// Contextual labels — not a structured taxonomy, so overlap with skills is fine.
 const KEYWORDS = [
   'remote', 'hybrid', 'on-site', 'full-stack', 'full stack',
   'backend', 'front-end', 'frontend',
@@ -233,100 +404,79 @@ const KEYWORDS = [
   'entry level', 'junior', 'mid-level',
 ]
 
+// Every canonical term and alias must live in exactly one structured catalog.
+// Runs at module load so a collision fails tests and the build immediately.
+function assertNoCrossCategoryTerms(catalogs: Record<string, readonly CatalogEntry[]>) {
+  const owner = new Map<string, string>()
+  for (const [taxonomy, entries] of Object.entries(catalogs)) {
+    for (const entry of entries) {
+      for (const term of [entry.canonical, ...(entry.aliases ?? [])]) {
+        const key = term.toLowerCase()
+        const existing = owner.get(key)
+        if (existing) {
+          throw new Error(
+            `Taxonomy catalog conflict: "${term}" appears in both ${existing} and ${taxonomy}`,
+          )
+        }
+        owner.set(key, taxonomy)
+      }
+    }
+  }
+}
+
+assertNoCrossCategoryTerms({
+  skills: SKILL_CATALOG,
+  software: SOFTWARE_CATALOG,
+  certifications: CERTIFICATION_CATALOG,
+})
+
 function escapeRegExp(term: string): string {
   return term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-function compileTerms(terms: string[]) {
-  return terms.map(term => ({
-    term,
-    pattern: new RegExp(`(?<![\\w])${escapeRegExp(term)}(?![\\w])`, 'i'),
+function compilePattern(term: string): RegExp {
+  return new RegExp(`(?<![\\w])${escapeRegExp(term)}(?![\\w])`, 'i')
+}
+
+interface CompiledEntry {
+  canonical: string
+  patterns: RegExp[]
+}
+
+function compileCatalog(entries: readonly CatalogEntry[]): CompiledEntry[] {
+  return entries.map(entry => ({
+    canonical: entry.canonical,
+    patterns: [entry.canonical, ...(entry.aliases ?? [])].map(compilePattern),
   }))
 }
 
-const SKILL_PATTERNS = compileTerms(SKILLS)
-const SOFTWARE_PATTERNS = compileTerms(SOFTWARE)
-const CERTIFICATION_PATTERNS = compileTerms(CERTIFICATIONS)
-const KEYWORD_PATTERNS = compileTerms(KEYWORDS)
+const SKILL_MATCHERS = compileCatalog(SKILL_CATALOG)
+const SOFTWARE_MATCHERS = compileCatalog(SOFTWARE_CATALOG)
+const CERTIFICATION_MATCHERS = compileCatalog(CERTIFICATION_CATALOG)
+const KEYWORD_PATTERNS = KEYWORDS.map(term => ({ term, pattern: compilePattern(term) }))
 
-function matchTerms(description: string, terms: ReturnType<typeof compileTerms>): string[] {
-  return terms
-    .filter(({ pattern }) => pattern.test(description))
-    .map(({ term }) => term)
+// Returns canonical names; matching any alias yields the entry's canonical
+// form, so alias/canonical co-mentions dedupe to a single entry by construction.
+function matchCatalog(description: string, matchers: CompiledEntry[]): string[] {
+  return matchers
+    .filter(({ patterns }) => patterns.some(pattern => pattern.test(description)))
+    .map(({ canonical }) => canonical)
 }
 
-// Alias → canonical name map. When both an alias and its canonical form are
-// detected (e.g. "k8s" and "Kubernetes" both appear), deduplicateSkills()
-// collapses them to the canonical form via a Set so only one entry survives.
-const CANONICAL: Record<string, string> = {
-  'Bash': 'Bash / Shell Scripting',
-  'Shell Scripting': 'Bash / Shell Scripting',
-  'Postgres': 'PostgreSQL',
-  'D3': 'D3.js',
-  'Vue': 'Vue.js',
-  'Rails': 'Ruby on Rails',
-  'Express': 'Express.js',
-  'k8s': 'Kubernetes',
-  'Serverless': 'Serverless / Lambda',
-  'Lambda': 'Serverless / Lambda',
-  'REST API': 'REST API Design',
-  'OAuth 2.0': 'OAuth 2.0 / OpenID Connect',
-  'OpenID Connect': 'OAuth 2.0 / OpenID Connect',
-  'OAuth': 'OAuth 2.0 / OpenID Connect',
-  'SCSS': 'Sass / SCSS',
-  'Sass': 'Sass / SCSS',
-  // CSS and HTML removed from CANONICAL — these aliases were dropped from SKILLS
-  // because they match too broadly; CSS3 and HTML5 are matched directly instead.
-  'IaC': 'Infrastructure as Code',
-  'SRE': 'Site Reliability Engineering',
-  'Tailwind': 'Tailwind CSS',
-  'NLP': 'Natural Language Processing',
-  'ML': 'Machine Learning',
-  'ETL': 'ETL Pipelines',
-  'Jupyter': 'Jupyter Notebooks',
-  'sklearn': 'scikit-learn',
-  'iOS': 'iOS Development',
-  'Android': 'Android Development',
-  'TDD': 'Test-Driven Development',
-  'E2E Testing': 'End-to-End Testing',
-  'AppSec': 'Application Security',
-  'SAST': 'Static Analysis (SAST)',
-  'Zero Trust': 'Zero Trust Architecture',
-  'Pen Testing': 'Penetration Testing',
-  'SOC 2': 'SOC 2 Compliance',
-  'OWASP': 'OWASP Top 10',
-  'TS/SCI': 'Security Clearance — TS/SCI',
-  'TCP/IP': 'Networking (TCP/IP)',
-  // 'Networking' removed — too broad, dropped from SKILLS
-  'Protobuf': 'Protocol Buffers',
-  'Concurrency': 'Concurrency & Parallelism',
-  'DDD': 'Domain-Driven Design',
-  'CQRS': 'CQRS / Event Sourcing',
-  'High Availability': 'High Availability Design',
-  'Event-Driven': 'Event-Driven Architecture',
-  'Caching': 'Caching Strategies',
-  'SemVer': 'Semantic Versioning',
-  'Scrum': 'Agile / Scrum',
-  'Agile': 'Agile / Scrum',
-  'PWA': 'Progressive Web Apps',
-  'WCAG': 'Accessibility (WCAG)',
-  'Hugging Face': 'Hugging Face Transformers',
-  'OpenAI': 'OpenAI API',
-  'GitLab CI': 'GitLab CI/CD',
-  'Spring': 'Spring Boot',
-  'ASP.NET': 'ASP.NET Core',
-}
-
-function deduplicateSkills(matched: string[]): string[] {
-  const result = new Set(matched.map(s => CANONICAL[s] ?? s))
-  return Array.from(result)
+// Drop an umbrella certification when a more specific one from the same family
+// matched — e.g. 'AWS Certified Solutions Architect' suppresses 'AWS Certified',
+// and 'CompTIA Security+' suppresses 'CompTIA'.
+function suppressGenericCertifications(matched: string[]): string[] {
+  return matched.filter(
+    name => !matched.some(other => other !== name && other.startsWith(`${name} `)),
+  )
 }
 
 export function extractTags(description: string): ExtractedTags {
   return {
-    skills: deduplicateSkills(matchTerms(description, SKILL_PATTERNS)),
-    software: matchTerms(description, SOFTWARE_PATTERNS),
-    keywords: matchTerms(description, KEYWORD_PATTERNS),
-    certifications: matchTerms(description, CERTIFICATION_PATTERNS),
+    skills: matchCatalog(description, SKILL_MATCHERS),
+    software: matchCatalog(description, SOFTWARE_MATCHERS),
+    keywords: KEYWORD_PATTERNS.filter(({ pattern }) => pattern.test(description)).map(({ term }) => term),
+    certifications: suppressGenericCertifications(matchCatalog(description, CERTIFICATION_MATCHERS)),
   }
 }

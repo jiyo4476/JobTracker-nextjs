@@ -12,10 +12,10 @@ vi.mock('@/lib/nlp-extract', async importOriginal => {
   return {
     ...actual,
     extractTags: vi.fn().mockReturnValue({
-      skills: ['Python', 'Docker'],
-      software: ['GitHub'],
+      skills: ['Python'],
+      software: ['Docker', 'GitHub'],
       keywords: ['remote'],
-      certifications: [],
+      certifications: ['CISSP'],
     }),
   }
 })
@@ -140,7 +140,9 @@ function setupDbMocks(scenario: 'created' | 'updated' | 'duplicate') {
       insertCallCount++
       if (insertCallCount === 1) return makeInsertMock({ returning: [{ id: 1 }], withConflictUpdate: true })
       if (insertCallCount === 2) return makeInsertMock({ returning: [{ id: 42 }] })
-      return makeInsertMock({ returning: [] })
+      // lookup upserts (skills/software/keywords/certifications) resolve to id 7
+      // so the junction inserts fire and can be asserted on
+      return makeInsertMock({ returning: [{ id: 7 }] })
     })
 
     mockDb.select.mockImplementation(() => ({
@@ -277,7 +279,7 @@ describe('POST /api/scrape', () => {
 
     const res = await POST(makeRequest({
       ...validBody,
-      job_description: 'Python and Docker are required.',
+      job_description: 'Python and Docker are required. CISSP preferred.',
       skills: ['TypeScript'],
     }))
 
@@ -286,12 +288,38 @@ describe('POST /api/scrape', () => {
       .map(result => result.value.values)
       .flatMap(values => vi.mocked(values).mock.calls)
       .map(([value]) => value)
-    expect(insertedValues).toContainEqual([
-      { name: 'TypeScript' },
-      { name: 'Python' },
-      { name: 'Docker' },
-    ])
+    // Each taxonomy gets its own caller-first lookup upsert…
+    expect(insertedValues).toContainEqual([{ name: 'TypeScript' }, { name: 'Python' }])
+    expect(insertedValues).toContainEqual([{ name: 'Docker' }, { name: 'GitHub' }])
+    expect(insertedValues).toContainEqual([{ name: 'CISSP' }])
+    // …and its own junction insert against the matched job
     expect(insertedValues).toContainEqual([{ jobId: 99, skillId: 99 }])
+    expect(insertedValues).toContainEqual([{ jobId: 99, softwareId: 99 }])
+    expect(insertedValues).toContainEqual([{ jobId: 99, certificationId: 99 }])
+  })
+
+  it('attaches merged taxonomy matches independently when a new job is created', async () => {
+    vi.mocked(requireApiKey).mockResolvedValue(true)
+    setupDbMocks('created')
+    const { POST } = await import('@/app/api/scrape/route')
+
+    const res = await POST(makeRequest({
+      ...validBody,
+      job_description: 'Python and Docker are required. CISSP preferred.',
+      skills: ['TypeScript'],
+    }))
+
+    expect(res.status).toBe(201)
+    const insertedValues = vi.mocked(db.insert).mock.results
+      .map(result => result.value.values)
+      .flatMap(values => vi.mocked(values).mock.calls)
+      .map(([value]) => value)
+    expect(insertedValues).toContainEqual([{ name: 'TypeScript' }, { name: 'Python' }])
+    expect(insertedValues).toContainEqual([{ name: 'Docker' }, { name: 'GitHub' }])
+    expect(insertedValues).toContainEqual([{ name: 'CISSP' }])
+    expect(insertedValues).toContainEqual([{ jobId: 42, skillId: 7 }])
+    expect(insertedValues).toContainEqual([{ jobId: 42, softwareId: 7 }])
+    expect(insertedValues).toContainEqual([{ jobId: 42, certificationId: 7 }])
   })
 
   it('returns 200 with action=duplicate_skipped when fuzzy match exists', async () => {
