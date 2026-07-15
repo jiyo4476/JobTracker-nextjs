@@ -72,7 +72,7 @@ export const jobPatchSchema = z.object({
   heard_back: z.boolean().optional(),
   interview_stage: interviewStageEnum.optional(),
   is_active: z.boolean().optional(),
-  priority: z.number().int().min(1).max(5).optional(),
+  priority: z.number().int().min(1).max(5).nullable().optional(),
   notes: z.string().max(20_000).optional(),
   resume_version: z.string().max(200).optional(),
   rejection_reason: z.string().max(2_000).optional(),

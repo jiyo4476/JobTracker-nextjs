@@ -267,7 +267,7 @@ export default function JobDetailPage() {
         body: {
           interview_stage: statusDraft.stage,
           is_active: statusDraft.isActive,
-          priority: statusDraft.priority ?? undefined,
+          priority: statusDraft.priority,
           job_location: statusDraft.location,
           job_type: statusDraft.jobType || null,
           experience_level: statusDraft.experienceLevel || null,
@@ -447,21 +447,32 @@ export default function JobDetailPage() {
 
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">Priority</span>
-                <div className="flex gap-0.5">
-                  {[1, 2, 3, 4, 5].map(star => (
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-0.5">
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => editingStatus && updateStatusDraft('priority', star)}
+                        disabled={!editingStatus}
+                        className={cn(
+                          'text-lg leading-none',
+                          star <= (editingStatus ? (statusDraft.priority ?? 0) : (job.priority ?? 0)) ? 'text-amber-400' : 'text-slate-300'
+                        )}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                  {editingStatus && statusDraft.priority !== null && (
                     <button
-                      key={star}
                       type="button"
-                      onClick={() => editingStatus && updateStatusDraft('priority', star)}
-                      disabled={!editingStatus}
-                      className={cn(
-                        'text-lg leading-none',
-                        star <= (editingStatus ? (statusDraft.priority ?? 0) : (job.priority ?? 0)) ? 'text-amber-400' : 'text-slate-300'
-                      )}
+                      onClick={() => updateStatusDraft('priority', null)}
+                      className="text-xs text-slate-500 underline hover:text-slate-700"
                     >
-                      ★
+                      Clear
                     </button>
-                  ))}
+                  )}
                 </div>
               </div>
 
