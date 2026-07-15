@@ -270,6 +270,30 @@ describe('POST /api/scrape', () => {
     expect(json.action).toBe('updated')
   })
 
+  it('attaches merged taxonomy matches when an exact job is updated', async () => {
+    vi.mocked(requireApiKey).mockReturnValue(true)
+    setupDbMocks('updated')
+    const { POST } = await import('@/app/api/scrape/route')
+
+    const res = await POST(makeRequest({
+      ...validBody,
+      job_description: 'Python and Docker are required.',
+      skills: ['TypeScript'],
+    }))
+
+    expect(res.status).toBe(200)
+    const insertedValues = vi.mocked(db.insert).mock.results
+      .map(result => result.value.values)
+      .flatMap(values => vi.mocked(values).mock.calls)
+      .map(([value]) => value)
+    expect(insertedValues).toContainEqual([
+      { name: 'TypeScript' },
+      { name: 'Python' },
+      { name: 'Docker' },
+    ])
+    expect(insertedValues).toContainEqual([{ jobId: 99, skillId: 99 }])
+  })
+
   it('returns 200 with action=duplicate_skipped when fuzzy match exists', async () => {
     vi.mocked(requireApiKey).mockReturnValue(true)
     setupDbMocks('duplicate')
