@@ -21,20 +21,12 @@ import {
 import { PageHeader } from '@/components/layout/PageHeader'
 import { StageBadge } from '@/components/jobs/StageBadge'
 import { useJobs, useDeleteJob, usePatchJob, type JobListItem } from '@/lib/queries'
+import { formatSalary } from '@/lib/salary-format'
 import { sourcePlatformOptions } from '@/lib/source-platforms'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 const col = createColumnHelper<JobListItem>()
-
-function formatSalary(min: number | null, max: number | null): string {
-  if (!min && !max) return '—'
-  // Salary values are stored as cents; divide by 100 for dollars, then 1,000 for "k".
-  const k = (v: number) => `$${Math.round(v / 100_000)}k`
-  if (min && max) return `${k(min)}–${k(max)}`
-  if (min) return `${k(min)}+`
-  return `up to ${k(max!)}`
-}
 
 function formatDate(d: string | null): string {
   if (!d) return '—'
@@ -250,7 +242,11 @@ export default function JobsClient() {
     }),
     col.accessor('annualEquivalentMin', {
       header: 'Salary',
-      cell: (info) => formatSalary(info.getValue() ?? null, info.row.original.annualEquivalentMax ?? null),
+      cell: (info) => formatSalary(
+        info.getValue() ?? null,
+        info.row.original.annualEquivalentMax ?? null,
+        info.row.original.salaryText ?? null,
+      ),
     }),
     col.accessor('dateFound', {
       header: 'Found',
