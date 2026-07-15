@@ -76,6 +76,14 @@ describe('GET /api/analytics/skills-by-clearance', () => {
     expect(sqlText(secondQuery)).toContain('security_clearance_req IS NOT TRUE')
   })
 
+  it('excludes soft-deleted jobs in both queries', async () => {
+    const { GET } = await import('@/app/api/analytics/skills-by-clearance/route')
+    await GET()
+    for (const call of mockDb.execute.mock.calls) {
+      expect(sqlText(call[0])).toContain('j.is_active IS TRUE')
+    }
+  })
+
   it('limits each list to the top 15 skills sorted by count desc, in SQL', async () => {
     const { GET } = await import('@/app/api/analytics/skills-by-clearance/route')
     await GET()
