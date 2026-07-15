@@ -1,18 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
+import { PgDialect } from 'drizzle-orm/pg-core'
 
 vi.mock('@/db', () => ({
   db: { execute: vi.fn() },
-}))
-
-vi.mock('@/db/schema', () => ({
-  jobs: {},
 }))
 
 import { db } from '@/db'
 
 function makeRequest(qs = '') {
   return new NextRequest(`http://localhost/api/analytics${qs}`)
+}
+
+// Render the SQL text of every db.execute call made during the request
+const dialect = new PgDialect()
+function executedSql() {
+  const mockDb = db as unknown as { execute: ReturnType<typeof vi.fn> }
+  return mockDb.execute.mock.calls.map(([query]) => dialect.sqlToQuery(query).sql)
 }
 
 describe('GET /api/analytics', () => {
@@ -50,6 +54,37 @@ describe('GET /api/analytics', () => {
     const { GET } = await import('@/app/api/analytics/route')
     const res = await GET(makeRequest('?security_clearance=true'))
     expect(res.status).toBe(200)
+  })
+
+  it('excludes soft-deleted jobs in every query', async () => {
+    const { GET } = await import('@/app/api/analytics/route')
+    await GET(makeRequest())
+    const queries = executedSql()
+    expect(queries).toHaveLength(4)
+    for (const q of queries) {
+      expect(q).toContain('is_active IS TRUE')
+    }
+  })
+
+  it('security_clearance=true filters with IS TRUE', async () => {
+    const { GET } = await import('@/app/api/analytics/route')
+    await GET(makeRequest('?security_clearance=true'))
+    const [skillDemand] = executedSql()
+    expect(skillDemand).toContain('security_clearance_req IS TRUE')
+  })
+
+  it('security_clearance=false treats NULL clearance as not required', async () => {
+    const { GET } = await import('@/app/api/analytics/route')
+    await GET(makeRequest('?security_clearance=false'))
+    const [skillDemand] = executedSql()
+    expect(skillDemand).toContain('security_clearance_req IS NOT TRUE')
+  })
+
+  it('omits the clearance filter when the param is absent', async () => {
+    const { GET } = await import('@/app/api/analytics/route')
+    await GET(makeRequest())
+    const [skillDemand] = executedSql()
+    expect(skillDemand).not.toContain('security_clearance_req')
   })
 
   it('ignores invalid platform param', async () => {

@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { jobs } from '@/db/schema'
 import { sourcePlatformEnum } from '@/lib/schemas'
 import { logger, serializeError } from '@/lib/logger'
-import { eq, sql, and, gte, lte } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 
 export async function GET(req: NextRequest) {
   try {
@@ -32,11 +31,19 @@ async function getAnalytics(req: NextRequest) {
     clearanceRaw === 'false' ? false :
     null
 
-  const dateFilters = []
-  if (from) dateFilters.push(gte(jobs.dateFound, from))
-  if (to) dateFilters.push(lte(jobs.dateFound, to))
-  if (platform) dateFilters.push(eq(jobs.sourcePlatform, platform))
-  const where = dateFilters.length > 0 ? and(...dateFilters) : undefined
+  // Base filter shared by all four queries: active (not soft-deleted) jobs
+  // within the optional date/platform scope.
+  const baseFilter = sql`is_active IS TRUE
+        ${from ? sql`AND date_found >= ${from}::date` : sql``}
+        ${to ? sql`AND date_found <= ${to}::date` : sql``}
+        ${platform ? sql`AND source_platform = ${platform}` : sql``}`
+
+  // NULL security_clearance_req counts as not-required (the column is nullable,
+  // default false) — same semantics as /api/analytics/skills-by-clearance.
+  const clearanceFilter =
+    clearance === null ? sql`` :
+    clearance ? sql`AND security_clearance_req IS TRUE` :
+    sql`AND security_clearance_req IS NOT TRUE`
 
   const [skillDemandOverTime, salaryDistribution, platformBreakdown, remoteVsOnsiteByWeek] = await Promise.all([
     // Top 15 skills by month over date_posted, optionally scoped by clearance.
@@ -44,11 +51,8 @@ async function getAnalytics(req: NextRequest) {
       WITH filtered_jobs AS (
         SELECT *
         FROM jobs
-        WHERE 1 = 1
-        ${from ? sql`AND date_found >= ${from}::date` : sql``}
-        ${to ? sql`AND date_found <= ${to}::date` : sql``}
-        ${platform ? sql`AND source_platform = ${platform}` : sql``}
-        ${clearance !== null ? sql`AND security_clearance_req = ${clearance}` : sql``}
+        WHERE ${baseFilter}
+        ${clearanceFilter}
       )
       SELECT s.name AS skill,
              DATE_TRUNC('month', j.date_posted::timestamp) AS month,
@@ -77,9 +81,7 @@ async function getAnalytics(req: NextRequest) {
              CAST(MAX(annual_equivalent_min) AS int) AS max_val
       FROM jobs
       WHERE annual_equivalent_min IS NOT NULL
-      ${from ? sql`AND date_found >= ${from}::date` : sql``}
-      ${to ? sql`AND date_found <= ${to}::date` : sql``}
-      ${platform ? sql`AND source_platform = ${platform}` : sql``}
+      AND ${baseFilter}
       GROUP BY job_type, experience_level
       ORDER BY job_type, experience_level
     `),
@@ -89,7 +91,7 @@ async function getAnalytics(req: NextRequest) {
       SELECT source_platform AS platform,
              CAST(COUNT(*) AS int) AS count
       FROM jobs
-      ${where ? sql`WHERE ${where}` : sql``}
+      WHERE ${baseFilter}
       GROUP BY source_platform
       ORDER BY count DESC
     `),
@@ -100,7 +102,7 @@ async function getAnalytics(req: NextRequest) {
              CAST(SUM(CASE WHEN is_remote = true THEN 1 ELSE 0 END) AS int) AS remote,
              CAST(SUM(CASE WHEN is_remote = false THEN 1 ELSE 0 END) AS int) AS onsite
       FROM jobs
-      ${where ? sql`WHERE ${where}` : sql``}
+      WHERE ${baseFilter}
       GROUP BY DATE_TRUNC('week', date_found::timestamp)
       ORDER BY week
     `),
