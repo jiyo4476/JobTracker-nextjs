@@ -16,7 +16,8 @@ export async function GET() {
 // the group's TOTAL skill occurrences (window aggregate runs over the whole
 // skill_counts CTE, before the LIMIT), rounded to 1 decimal.
 // NULL security_clearance_req is treated as not-required (`IS NOT TRUE`) — the
-// column defaults to false but is nullable.
+// column defaults to false but is nullable. Soft-deleted jobs (is_active not
+// true) are excluded.
 function topSkillsForClearance(clearanceRequired: boolean) {
   const clearanceFilter = clearanceRequired
     ? sql`j.security_clearance_req IS TRUE`
@@ -29,7 +30,8 @@ function topSkillsForClearance(clearanceRequired: boolean) {
       FROM job_skills js
       JOIN skills s ON js.skill_id = s.id
       JOIN jobs j ON js.job_id = j.id
-      WHERE ${clearanceFilter}
+      WHERE j.is_active IS TRUE
+        AND ${clearanceFilter}
       GROUP BY s.name
     )
     SELECT skill,
