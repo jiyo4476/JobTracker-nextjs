@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { JobTagsEditor } from '@/components/jobs/JobTagsEditor'
 import { JobDescriptionMarkdown } from '@/components/jobs/JobDescriptionMarkdown'
+import { JobSalaryInlineEditor } from '@/components/jobs/JobSalaryInlineEditor'
 import {
   useJob,
   usePatchJob,
@@ -479,8 +480,10 @@ export default function JobDetailPage() {
 
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">Salary</span>
-                <span>{salary}</span>
+                {!editingStatus && <span>{salary}</span>}
               </div>
+
+              {editingStatus && <JobSalaryInlineEditor jobId={id} job={job} />}
 
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">Location</span>

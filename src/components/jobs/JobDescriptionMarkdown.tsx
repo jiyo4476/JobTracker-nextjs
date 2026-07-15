@@ -39,11 +39,25 @@ const components: Components = {
   hr: () => <hr className="my-5 border-slate-200" />,
 }
 
+export function normalizeJobDescriptionMarkdown(source: string): string {
+  return source
+    // Scraped section headings can arrive as ****Heading ****Body when two
+    // adjacent bold spans lose their separator. Restore one complete span.
+    .replace(/\*{4}([^*\n]+?)\s+\*{4}/g, '\n\n**$1**\n\n')
+    // CommonMark does not recognize a closing emphasis marker preceded by a
+    // space. Move that space outside without changing the stored source.
+    .replace(/\*\*([^*\n]+?)\s+\*\*/g, '**$1** ')
+    // A leading ATX heading requires a space and must end before the next
+    // concatenated bold section.
+    .replace(/^(#{1,6})\s*([^*\n]+?)(?=\s+\*\*)/, '$1 $2\n\n')
+    .replace(/^(#{1,6})(?=\S)/gm, '$1 ')
+}
+
 export function JobDescriptionMarkdown({ children }: { children: string }) {
   return (
     <div className="break-words text-sm leading-relaxed text-slate-800 [&_input[type=checkbox]]:mr-2">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {children}
+        {normalizeJobDescriptionMarkdown(children)}
       </ReactMarkdown>
     </div>
   )
