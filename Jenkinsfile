@@ -28,6 +28,16 @@ pipeline {
                 sh 'npm test'
                 sh 'npm run build'
             }
+            post {
+                always {
+                    sh '''
+                        rm -rf .next next-env.d.ts tsconfig.tsbuildinfo
+                        if [ -d node_modules ]; then
+                            find node_modules -mindepth 1 -delete
+                        fi
+                    '''
+                }
+            }
         }
 
         stage('Build application image') {
