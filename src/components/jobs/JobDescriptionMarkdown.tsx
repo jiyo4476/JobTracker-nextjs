@@ -46,7 +46,20 @@ export function normalizeJobDescriptionMarkdown(source: string): string {
     .replace(/\*{4}([^*\n]+?)\s+\*{4}/g, '\n\n**$1**\n\n')
     // CommonMark does not recognize a closing emphasis marker preceded by a
     // space. Move that space outside without changing the stored source.
-    .replace(/\*\*([^*\n]+?)\s+\*\*/g, '**$1** ')
+    .replace(/\*\*([^\s*][^*\n]*?)\s+\*\*/g, '**$1** ')
+    // A leading space inside a bold marker also prevents CommonMark from
+    // recognizing the span. This commonly appears inside collapsed headings.
+    .replace(/\*\*\s+([^*\n]*?\S)\*\*/g, '**$1**')
+    // Payload cleanup in older extension versions flattened every newline.
+    // Restore ATX headings that can be identified unambiguously by their
+    // bold-only label, wherever they occur in the collapsed source.
+    .replace(/(^|[ \t]+)(#{1,6})\s*(?=\*\*)/gm, (_match, prefix: string, hashes: string) =>
+      prefix ? `\n\n${hashes} ` : `${hashes} `,
+    )
+    .replace(/^(#{1,6} \*\*[^*\n]+\*\*)[ \t]+/gm, '$1\n\n')
+    // Restore high-confidence collapsed list boundaries. Requiring terminal
+    // punctuation before the marker avoids changing hyphens within prose.
+    .replace(/([.!?:])\s+-\s+(?=[A-Z*])/g, '$1\n- ')
     // A leading ATX heading requires a space and must end before the next
     // concatenated bold section.
     .replace(/^(#{1,6})\s*([^*\n]+?)(?=\s+\*\*)/, '$1 $2\n\n')
