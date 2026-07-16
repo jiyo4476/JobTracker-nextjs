@@ -66,4 +66,22 @@ Build with **TypeScript**.
     expect(html).toContain('<li>Oversees testing.</li>')
     expect(html).not.toContain('# <strong>')
   })
+
+  it('leaves isolated inline hash-bold prose unchanged', () => {
+    const source = 'Use # **Release** notes when documenting v1.2 - Release Candidate.'
+    const html = renderToStaticMarkup(<JobDescriptionMarkdown>{source}</JobDescriptionMarkdown>)
+
+    expect(html).not.toContain('<h1')
+    expect(html).not.toContain('<ul')
+    expect(html).toContain('# <strong>Release</strong>')
+    expect(html).toContain('v1.2 - Release Candidate')
+  })
+
+  it('does not split punctuation-delimited hyphens in ordinary prose', () => {
+    const source = '- First real item. v1.2 - Release Candidate remains inline.'
+    const html = renderToStaticMarkup(<JobDescriptionMarkdown>{source}</JobDescriptionMarkdown>)
+
+    expect(html.match(/<li>/g)).toHaveLength(1)
+    expect(html).toContain('v1.2 - Release Candidate remains inline.')
+  })
 })

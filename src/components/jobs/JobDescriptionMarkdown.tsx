@@ -40,7 +40,7 @@ const components: Components = {
 }
 
 export function normalizeJobDescriptionMarkdown(source: string): string {
-  return source
+  const normalizedEmphasis = source
     // Scraped section headings can arrive as ****Heading ****Body when two
     // adjacent bold spans lose their separator. Restore one complete span.
     .replace(/\*{4}([^*\n]+?)\s+\*{4}/g, '\n\n**$1**\n\n')
@@ -50,16 +50,26 @@ export function normalizeJobDescriptionMarkdown(source: string): string {
     // A leading space inside a bold marker also prevents CommonMark from
     // recognizing the span. This commonly appears inside collapsed headings.
     .replace(/\*\*\s+([^*\n]*?\S)\*\*/g, '**$1**')
-    // Payload cleanup in older extension versions flattened every newline.
-    // Restore ATX headings that can be identified unambiguously by their
-    // bold-only label, wherever they occur in the collapsed source.
-    .replace(/(^|[ \t]+)(#{1,6})\s*(?=\*\*)/gm, (_match, prefix: string, hashes: string) =>
-      prefix ? `\n\n${hashes} ` : `${hashes} `,
-    )
+  const collapsedHeadingPattern = /(^|[ \t]+)(#{1,6})\s*(?=\*\*)/gm
+  const headingCandidates = [...normalizedEmphasis.matchAll(collapsedHeadingPattern)]
+  const hasCollapsedHeadingSequence = !normalizedEmphasis.includes('\n') && headingCandidates.length >= 2
+
+  const normalizedHeadings = hasCollapsedHeadingSequence
+    ? normalizedEmphasis.replace(collapsedHeadingPattern, (_match, prefix: string, hashes: string) =>
+        prefix ? `\n\n${hashes} ` : `${hashes} `,
+      )
+    : normalizedEmphasis
+
+  return normalizedHeadings
+    // A recovered bold-only heading ends before the following collapsed body.
     .replace(/^(#{1,6} \*\*[^*\n]+\*\*)[ \t]+/gm, '$1\n\n')
-    // Restore high-confidence collapsed list boundaries. Requiring terminal
-    // punctuation before the marker avoids changing hyphens within prose.
-    .replace(/([.!?:])\s+-\s+(?=[A-Z*])/g, '$1\n- ')
+    // Once heading recovery exposes an initial list marker, restore further
+    // items on that same collapsed list line. Ordinary prose remains intact.
+    .split('\n')
+    .map((line) =>
+      line.startsWith('- ') ? line.replace(/([.!?:])\s+-\s+(?=[A-Z*])/g, '$1\n- ') : line,
+    )
+    .join('\n')
     // A leading ATX heading requires a space and must end before the next
     // concatenated bold section.
     .replace(/^(#{1,6})\s*([^*\n]+?)(?=\s+\*\*)/, '$1 $2\n\n')
