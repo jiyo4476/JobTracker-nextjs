@@ -51,4 +51,37 @@ Build with **TypeScript**.
     expect(html).not.toContain('#Markdown Test')
     expect(html).not.toContain('****')
   })
+
+  it('repairs collapsed headings and lists from legacy extension payloads', () => {
+    const source =
+      '**Position Overview** Intro text. **Job Profile** # ** Position Overview** Body text. # **Job Description** - Manages quality. - Oversees testing. # **Qualifications** Successful candidates apply.'
+    const html = renderToStaticMarkup(<JobDescriptionMarkdown>{source}</JobDescriptionMarkdown>)
+
+    expect(html).toContain('<strong>Position Overview</strong>')
+    expect(html).toContain('<h1')
+    expect(html).toContain('<strong>Job Description</strong></h1>')
+    expect(html).toContain('<strong>Qualifications</strong></h1>')
+    expect(html).toContain('<ul')
+    expect(html).toContain('<li>Manages quality.</li>')
+    expect(html).toContain('<li>Oversees testing.</li>')
+    expect(html).not.toContain('# <strong>')
+  })
+
+  it('leaves isolated inline hash-bold prose unchanged', () => {
+    const source = 'Use # **Release** notes when documenting v1.2 - Release Candidate.'
+    const html = renderToStaticMarkup(<JobDescriptionMarkdown>{source}</JobDescriptionMarkdown>)
+
+    expect(html).not.toContain('<h1')
+    expect(html).not.toContain('<ul')
+    expect(html).toContain('# <strong>Release</strong>')
+    expect(html).toContain('v1.2 - Release Candidate')
+  })
+
+  it('does not split punctuation-delimited hyphens in ordinary prose', () => {
+    const source = '- First real item. v1.2 - Release Candidate remains inline.'
+    const html = renderToStaticMarkup(<JobDescriptionMarkdown>{source}</JobDescriptionMarkdown>)
+
+    expect(html.match(/<li>/g)).toHaveLength(1)
+    expect(html).toContain('v1.2 - Release Candidate remains inline.')
+  })
 })
