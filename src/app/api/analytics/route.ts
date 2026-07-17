@@ -82,6 +82,7 @@ async function getAnalytics(req: NextRequest) {
       FROM jobs
       WHERE annual_equivalent_min IS NOT NULL
       AND ${baseFilter}
+      ${clearanceFilter}
       GROUP BY job_type, experience_level
       ORDER BY job_type, experience_level
     `),
@@ -92,6 +93,7 @@ async function getAnalytics(req: NextRequest) {
              CAST(COUNT(*) AS int) AS count
       FROM jobs
       WHERE ${baseFilter}
+      ${clearanceFilter}
       GROUP BY source_platform
       ORDER BY count DESC
     `),
@@ -103,6 +105,7 @@ async function getAnalytics(req: NextRequest) {
              CAST(SUM(CASE WHEN is_remote = false THEN 1 ELSE 0 END) AS int) AS onsite
       FROM jobs
       WHERE ${baseFilter}
+      ${clearanceFilter}
       GROUP BY DATE_TRUNC('week', date_found::timestamp)
       ORDER BY week
     `),

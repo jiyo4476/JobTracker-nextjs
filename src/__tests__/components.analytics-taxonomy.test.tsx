@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AnalyticsClient } from '@/app/analytics/AnalyticsClient'
@@ -60,6 +60,26 @@ describe('analytics taxonomy reporting', () => {
     expect(window.location.search).toContain('from=2026-01-01')
     expect(window.location.search).toContain('platform=linkedin')
     expect(mocks.taxonomy).toHaveBeenLastCalledWith(expect.objectContaining({ category: 'software', from: '2026-01-01', platform: 'linkedin' }))
+  })
+
+  it('restores validated report state on browser Back and Forward navigation', async () => {
+    render(<AnalyticsClient initialState={initialState} />)
+    window.history.pushState(null, '', '/analytics?category=certifications&from=2026-02-01&platform=indeed&security_clearance=false')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Certifications' }).getAttribute('aria-selected')).toBe('true'))
+    expect(mocks.taxonomy).toHaveBeenLastCalledWith(expect.objectContaining({
+      category: 'certifications',
+      from: '2026-02-01',
+      platform: 'indeed',
+      security_clearance: false,
+    }))
+  })
+
+  it('applies clearance as a global filter to taxonomy and legacy analytics queries', () => {
+    render(<AnalyticsClient initialState={{ ...initialState, clearance: 'true' }} />)
+    expect(mocks.taxonomy).toHaveBeenLastCalledWith(expect.objectContaining({ security_clearance: true }))
+    expect(mocks.analytics).toHaveBeenLastCalledWith(expect.objectContaining({ security_clearance: true }))
   })
 
   it('renders category-specific loading, error, and no-data states', () => {

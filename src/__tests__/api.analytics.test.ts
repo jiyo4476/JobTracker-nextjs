@@ -50,7 +50,7 @@ describe('GET /api/analytics', () => {
     expect(res.status).toBe(200)
   })
 
-  it('returns 200 with security clearance skill chart query params', async () => {
+  it('returns 200 with the global security clearance query param', async () => {
     const { GET } = await import('@/app/api/analytics/route')
     const res = await GET(makeRequest('?security_clearance=true'))
     expect(res.status).toBe(200)
@@ -66,25 +66,28 @@ describe('GET /api/analytics', () => {
     }
   })
 
-  it('security_clearance=true filters with IS TRUE', async () => {
+  it('security_clearance=true filters every analytics query with IS TRUE', async () => {
     const { GET } = await import('@/app/api/analytics/route')
     await GET(makeRequest('?security_clearance=true'))
-    const [skillDemand] = executedSql()
-    expect(skillDemand).toContain('security_clearance_req IS TRUE')
+    for (const query of executedSql()) {
+      expect(query).toContain('security_clearance_req IS TRUE')
+    }
   })
 
-  it('security_clearance=false treats NULL clearance as not required', async () => {
+  it('security_clearance=false treats NULL clearance as not required in every query', async () => {
     const { GET } = await import('@/app/api/analytics/route')
     await GET(makeRequest('?security_clearance=false'))
-    const [skillDemand] = executedSql()
-    expect(skillDemand).toContain('security_clearance_req IS NOT TRUE')
+    for (const query of executedSql()) {
+      expect(query).toContain('security_clearance_req IS NOT TRUE')
+    }
   })
 
   it('omits the clearance filter when the param is absent', async () => {
     const { GET } = await import('@/app/api/analytics/route')
     await GET(makeRequest())
-    const [skillDemand] = executedSql()
-    expect(skillDemand).not.toContain('security_clearance_req')
+    for (const query of executedSql()) {
+      expect(query).not.toContain('security_clearance_req')
+    }
   })
 
   it('ignores invalid platform param', async () => {

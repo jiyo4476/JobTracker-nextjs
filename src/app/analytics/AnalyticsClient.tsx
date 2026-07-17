@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -23,8 +23,10 @@ import {
 import { sourcePlatformOptions } from '@/lib/source-platforms'
 import {
   analyticsUrl,
+  parseAnalyticsUrlState,
   TAXONOMY_CATEGORIES,
   taxonomyCsv,
+  taxonomyTooltipValue,
   type AnalyticsUrlState,
 } from './analytics-state'
 
@@ -82,7 +84,7 @@ function TaxonomyChart({ rows, categoryLabel }: { rows: TaxonomyAnalyticsRow[]; 
           <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
           <XAxis type="number" tick={{ fontSize: 11 }} />
           <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} />
-          <Tooltip formatter={(value, name, item) => name === 'count' ? [`${value} jobs (${item.payload.percentage}%)`, categoryLabel] : String(value)} />
+          <Tooltip formatter={(value, _name, item) => taxonomyTooltipValue(value, item.payload.percentage, categoryLabel)} />
           <Legend formatter={() => `${categoryLabel} job count`} />
           <Bar dataKey="count" name={categoryLabel} fill="#6366f1" />
         </BarChart>
@@ -99,6 +101,14 @@ export function AnalyticsClient({ initialState }: { initialState: AnalyticsUrlSt
   const analytics = useAnalytics(globalParams)
   const taxonomy = useTaxonomyAnalytics({ category: state.category, limit: 15, ...globalParams })
   const clearanceLabelId = useId()
+
+  useEffect(() => {
+    const restoreUrlState = () => {
+      setState(parseAnalyticsUrlState(Object.fromEntries(new URLSearchParams(window.location.search))))
+    }
+    window.addEventListener('popstate', restoreUrlState)
+    return () => window.removeEventListener('popstate', restoreUrlState)
+  }, [])
 
   function update(patch: Partial<AnalyticsUrlState>) {
     const next = { ...state, ...patch }
