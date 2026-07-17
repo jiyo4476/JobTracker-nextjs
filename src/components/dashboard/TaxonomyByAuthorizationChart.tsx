@@ -49,13 +49,14 @@ function clearanceEmphasis(
 ) {
   const comparison = new Map(clearanceNotRequired.map((row) => [row.name.toLowerCase(), row]))
   return clearanceRequired
-    .map((row) => {
+    .flatMap((row) => {
       const other = comparison.get(row.name.toLowerCase())
-      return {
+      if (!other) return []
+      return [{
         ...row,
-        percentageDelta: row.percentage - (other?.percentage ?? 0),
-        countDelta: row.count - (other?.count ?? 0),
-      }
+        percentageDelta: row.percentage - other.percentage,
+        countDelta: row.count - other.count,
+      }]
     })
     .filter((row) => row.percentageDelta > 0)
     .sort((a, b) => b.percentageDelta - a.percentageDelta || b.countDelta - a.countDelta || a.name.localeCompare(b.name))

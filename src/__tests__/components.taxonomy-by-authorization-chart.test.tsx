@@ -40,7 +40,12 @@ const data = {
     { name: 'AWS', count: 8, percentage: 40 },
     { name: 'Docker', count: 5, percentage: 25 },
   ],
-  clearance_not_required: [{ name: 'React', count: 12, percentage: 60 }],
+  clearance_not_required: [
+    { name: 'React', count: 12, percentage: 60 },
+    { name: 'Python', count: 4, percentage: 5 },
+    { name: 'AWS', count: 3, percentage: 4 },
+    { name: 'Docker', count: 2, percentage: 2 },
+  ],
 }
 
 describe('TaxonomyByAuthorizationChart', () => {
@@ -106,6 +111,29 @@ describe('TaxonomyByAuthorizationChart', () => {
     const insight = screen.getByText(/Clearance roles tend to emphasize/)
     expect(insight.textContent).toContain('CISSP')
     expect(insight.textContent).not.toContain('Python')
+  })
+
+  it('does not infer zero prevalence for values missing beyond the other top-15 cutoff', () => {
+    mocks.useComparison.mockReturnValue({
+      data: {
+        clearance_required: [
+          { name: 'Outside other top 15', count: 50, percentage: 40 },
+          { name: 'Shared value', count: 20, percentage: 20 },
+        ],
+        clearance_not_required: [
+          { name: 'Shared value', count: 10, percentage: 10 },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+      refetch: mocks.refetch,
+    })
+
+    render(<TaxonomyByAuthorizationChart />)
+
+    const insight = screen.getByText(/Clearance roles tend to emphasize/)
+    expect(insight.textContent).toContain('Shared value')
+    expect(insight.textContent).not.toContain('Outside other top 15')
   })
 
   it('renders tooltip taxonomy name, count, and percentage', () => {
