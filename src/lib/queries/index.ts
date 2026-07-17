@@ -8,6 +8,8 @@ import type {
   CompanyRow, CompanyDetail,
   JobDetail, JobsResponse, JobsParams,
   LookupItem, StatsResponse, ResumeVersion, UserSkill,
+  UserTaxonomyCategory, UserTaxonomyCreateVariables, UserTaxonomyGapResponse,
+  UserTaxonomyPatchVariables, UserTaxonomyResponse,
   AnalyticsParams, AnalyticsResponse,
   TaxonomyAnalyticsParams, TaxonomyAnalyticsResponse,
   SalaryPatchResponse, TagsPatchResponse,
@@ -20,6 +22,9 @@ export type {
   Contact,
   JobDetail, JobListItem, JobsResponse, JobsParams,
   LookupItem, StatsResponse, ResumeVersion, UserSkill,
+  UserTaxonomyCategory, UserTaxonomyCreatePayload, UserTaxonomyCreateVariables,
+  UserTaxonomyGapItem, UserTaxonomyGapResponse, UserTaxonomyItem, UserTaxonomyPatchPayload,
+  UserTaxonomyPatchVariables, UserTaxonomyResponse,
   AnalyticsParams, AnalyticsResponse,
   TaxonomyCategory, TaxonomyAnalyticsParams, TaxonomyAnalyticsResponse, TaxonomyAnalyticsRow,
   SkillDemandRow, SalaryDistributionRow, PlatformBreakdownRow, RemoteVsOnsiteRow,
@@ -408,6 +413,68 @@ export function useDeleteUserSkill() {
     },
     onError: () => {
       toast.error('Failed to remove skill')
+    },
+  })
+}
+
+export function useUserTaxonomies(category: UserTaxonomyCategory) {
+  return useQuery<UserTaxonomyResponse>({
+    queryKey: ['user-taxonomies', category],
+    queryFn: () => api.get<UserTaxonomyResponse>(`/user-taxonomies/${category}`),
+  })
+}
+
+export function useUserTaxonomyGap(category: UserTaxonomyCategory) {
+  return useQuery<UserTaxonomyGapResponse>({
+    queryKey: ['user-taxonomies', category, 'gap'],
+    queryFn: () => api.get<UserTaxonomyGapResponse>(`/user-taxonomies/${category}/gap?limit=100`),
+  })
+}
+
+export function useCreateUserTaxonomy() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ category, body }: UserTaxonomyCreateVariables) =>
+      api.post(`/user-taxonomies/${category}`, body),
+    onSuccess: (_data, { category }) => {
+      qc.invalidateQueries({ queryKey: ['user-taxonomies', category] })
+      qc.invalidateQueries({ queryKey: ['user-taxonomies', category, 'gap'] })
+      qc.invalidateQueries({ queryKey: ['tags', category] })
+    },
+    onError: () => {
+      toast.error('Failed to add profile item')
+    },
+  })
+}
+
+export function usePatchUserTaxonomy() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ category, taxonomyId, body }: UserTaxonomyPatchVariables) =>
+      api.patch(`/user-taxonomies/${category}/${taxonomyId}`, body),
+    onSuccess: (_data, { category }) => {
+      qc.invalidateQueries({ queryKey: ['user-taxonomies', category] })
+      qc.invalidateQueries({ queryKey: ['user-taxonomies', category, 'gap'] })
+    },
+    onError: () => {
+      toast.error('Failed to update profile item')
+    },
+  })
+}
+
+export function useDeleteUserTaxonomy() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ category, taxonomyId }: {
+      category: UserTaxonomyCategory
+      taxonomyId: number
+    }) => api.delete(`/user-taxonomies/${category}/${taxonomyId}`),
+    onSuccess: (_data, { category }) => {
+      qc.invalidateQueries({ queryKey: ['user-taxonomies', category] })
+      qc.invalidateQueries({ queryKey: ['user-taxonomies', category, 'gap'] })
+    },
+    onError: () => {
+      toast.error('Failed to remove profile item')
     },
   })
 }

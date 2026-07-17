@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { ResumeVersionsSettings } from './ResumeVersionsSettings'
-import { SkillGapSettings } from './SkillGapSettings'
+import { TaxonomyProfileAndGapSettings } from './TaxonomyProfileSettings'
 
 async function handleExport(format: 'json' | 'csv', setLoading: (v: boolean) => void) {
   setLoading(true)
@@ -35,12 +35,12 @@ export default function SettingsPage() {
   const [csvLoading, setCsvLoading] = useState(false)
 
   return (
-    <div className="p-8 max-w-4xl space-y-8">
+    <div className="max-w-6xl space-y-8 p-4 sm:p-6 lg:p-8">
       <PageHeader title="Settings" description="Configure your job search tracker" />
 
       <ResumeVersionsSettings />
 
-      <SkillGapSettings />
+      <TaxonomyProfileAndGapSettings />
 
       <Card>
         <CardHeader><CardTitle>Export Data</CardTitle></CardHeader>
