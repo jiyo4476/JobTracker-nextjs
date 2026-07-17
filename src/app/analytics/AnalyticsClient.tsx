@@ -111,7 +111,14 @@ export function AnalyticsClient({ initialState }: { initialState: AnalyticsUrlSt
   }, [])
 
   function update(patch: Partial<AnalyticsUrlState>) {
-    const next = { ...state, ...patch }
+    const merged = { ...state, ...patch }
+    const next = parseAnalyticsUrlState({
+      category: merged.category,
+      from: merged.from,
+      to: merged.to,
+      platform: merged.platform,
+      security_clearance: merged.clearance,
+    })
     setState(next)
     window.history.pushState(null, '', analyticsUrl(next))
   }

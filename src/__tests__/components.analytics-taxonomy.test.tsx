@@ -82,6 +82,23 @@ describe('analytics taxonomy reporting', () => {
     expect(mocks.analytics).toHaveBeenLastCalledWith(expect.objectContaining({ security_clearance: true }))
   })
 
+  it('rejects a reversed range created through the live date inputs', () => {
+    render(<AnalyticsClient initialState={{
+      ...initialState,
+      from: '2026-01-01',
+      to: '2026-02-01',
+    }} />)
+
+    fireEvent.change(screen.getByLabelText('From date'), { target: { value: '2026-03-01' } })
+
+    expect((screen.getByLabelText('From date') as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('To date') as HTMLInputElement).value).toBe('')
+    expect(window.location.search).not.toContain('from=')
+    expect(window.location.search).not.toContain('to=')
+    expect(mocks.taxonomy).toHaveBeenLastCalledWith(expect.objectContaining({ from: undefined, to: undefined }))
+    expect(mocks.analytics).toHaveBeenLastCalledWith(expect.objectContaining({ from: undefined, to: undefined }))
+  })
+
   it('renders category-specific loading, error, and no-data states', () => {
     mocks.taxonomy.mockReturnValueOnce({ data: undefined, isLoading: true, isError: false, refetch: vi.fn() })
     const loading = render(<AnalyticsClient initialState={{ ...initialState, category: 'certifications' }} />)
