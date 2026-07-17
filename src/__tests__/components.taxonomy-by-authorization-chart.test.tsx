@@ -29,7 +29,10 @@ vi.mock('recharts', () => ({
   Tooltip: () => null,
 }))
 
-import { TaxonomyByAuthorizationChart } from '@/components/dashboard/TaxonomyByAuthorizationChart'
+import {
+  TaxonomyByAuthorizationChart,
+  TaxonomyChartTooltip,
+} from '@/components/dashboard/TaxonomyByAuthorizationChart'
 
 const data = {
   clearance_required: [
@@ -59,13 +62,61 @@ describe('TaxonomyByAuthorizationChart', () => {
 
   it('restores and persists a valid category in the URL', async () => {
     window.history.replaceState({}, '', '/?taxonomy=certifications')
-    render(<TaxonomyByAuthorizationChart />)
+    const view = render(<TaxonomyByAuthorizationChart />)
 
     await waitFor(() => expect(mocks.useComparison).toHaveBeenLastCalledWith('certifications'))
     fireEvent.click(screen.getByRole('button', { name: 'Software' }))
+    view.rerender(<TaxonomyByAuthorizationChart />)
 
     expect(new URLSearchParams(window.location.search).get('taxonomy')).toBe('software')
     expect(screen.getByRole('heading', { name: 'Top 15 Software — Clearance Required' })).toBeTruthy()
+  })
+
+  it('derives the active category from URL changes after mount', () => {
+    const view = render(<TaxonomyByAuthorizationChart />)
+    expect(mocks.useComparison).toHaveBeenLastCalledWith('skills')
+
+    window.history.replaceState({}, '', '/?taxonomy=keywords')
+    view.rerender(<TaxonomyByAuthorizationChart />)
+
+    expect(mocks.useComparison).toHaveBeenLastCalledWith('keywords')
+    expect(screen.getByRole('heading', { name: 'Top 15 Keywords — Clearance Required' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Keywords' }).getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('only calls out values that are more prevalent in clearance roles', () => {
+    mocks.useComparison.mockReturnValue({
+      data: {
+        clearance_required: [
+          { name: 'Python', count: 100, percentage: 10 },
+          { name: 'CISSP', count: 30, percentage: 30 },
+        ],
+        clearance_not_required: [
+          { name: 'Python', count: 200, percentage: 20 },
+          { name: 'CISSP', count: 10, percentage: 5 },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+      refetch: mocks.refetch,
+    })
+
+    render(<TaxonomyByAuthorizationChart />)
+
+    const insight = screen.getByText(/Clearance roles tend to emphasize/)
+    expect(insight.textContent).toContain('CISSP')
+    expect(insight.textContent).not.toContain('Python')
+  })
+
+  it('renders tooltip taxonomy name, count, and percentage', () => {
+    render(<TaxonomyChartTooltip
+      active
+      label="TypeScript"
+      payload={[{ value: 1234, payload: { name: 'TypeScript', count: 1234, percentage: 12.34 } }]}
+    />)
+
+    expect(screen.getByText('TypeScript')).toBeTruthy()
+    expect(screen.getByText('1,234 jobs (12.3%)')).toBeTruthy()
   })
 
   it('shows loading and retryable error states', () => {

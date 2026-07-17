@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -21,6 +21,46 @@ function isTaxonomyCategory(value: string | null): value is TaxonomyCategory {
 
 function truncatedName(value: string) {
   return value.length > 22 ? `${value.slice(0, 19)}…` : value
+}
+
+export function TaxonomyChartTooltip({
+  active,
+  label,
+  payload,
+}: {
+  active?: boolean
+  label?: ReactNode
+  payload?: Array<{ value?: number; payload?: TaxonomyAnalyticsRow }>
+}) {
+  const row = payload?.[0]
+  if (!active || !row?.payload) return null
+
+  return (
+    <div className="rounded-md border bg-white px-3 py-2 text-sm shadow-sm">
+      <p className="font-medium">{label}</p>
+      <p>{row.payload.count.toLocaleString()} jobs ({row.payload.percentage.toFixed(1)}%)</p>
+    </div>
+  )
+}
+
+function clearanceEmphasis(
+  clearanceRequired: TaxonomyAnalyticsRow[],
+  clearanceNotRequired: TaxonomyAnalyticsRow[],
+) {
+  const comparison = new Map(clearanceNotRequired.map((row) => [row.name.toLowerCase(), row]))
+  return clearanceRequired
+    .map((row) => {
+      const other = comparison.get(row.name.toLowerCase())
+      return {
+        ...row,
+        percentageDelta: row.percentage - (other?.percentage ?? 0),
+        countDelta: row.count - (other?.count ?? 0),
+      }
+    })
+    .filter((row) => row.percentageDelta > 0)
+    .sort((a, b) => b.percentageDelta - a.percentageDelta || b.countDelta - a.countDelta || a.name.localeCompare(b.name))
+    .slice(0, 3)
+    .map((row) => row.name)
 }
 
 function ComparisonChart({
@@ -50,13 +90,7 @@ function ComparisonChart({
                 tick={{ fontSize: 11 }}
                 tickFormatter={truncatedName}
               />
-              <Tooltip
-                formatter={(value, _name, item) => [
-                  `${Number(value).toLocaleString()} (${item.payload.percentage.toFixed(1)}%)`,
-                  'Jobs',
-                ]}
-                labelFormatter={(label) => String(label)}
-              />
+              <Tooltip content={<TaxonomyChartTooltip />} />
               <Bar dataKey="count" fill={color} radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -82,21 +116,21 @@ function ComparisonSkeleton() {
 export function TaxonomyByAuthorizationChart() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [category, setCategory] = useState<TaxonomyCategory>(() => {
-    const urlCategory = searchParams.get('taxonomy')
-    return isTaxonomyCategory(urlCategory) ? urlCategory : 'skills'
-  })
+  const urlCategory = searchParams.get('taxonomy')
+  const category: TaxonomyCategory = isTaxonomyCategory(urlCategory) ? urlCategory : 'skills'
   const { data, isLoading, isError, refetch } = useTaxonomyClearanceComparison(category)
   const categoryLabel = categories.find((item) => item.value === category)!.label
 
   function selectCategory(nextCategory: TaxonomyCategory) {
-    setCategory(nextCategory)
     const nextParams = new URLSearchParams(searchParams.toString())
     nextParams.set('taxonomy', nextCategory)
     router.replace(`/?${nextParams.toString()}`, { scroll: false })
   }
 
-  const insightNames = (data?.clearance_required ?? []).slice(0, 3).map((item) => item.name)
+  const insightNames = clearanceEmphasis(
+    data?.clearance_required ?? [],
+    data?.clearance_not_required ?? [],
+  )
 
   return (
     <section className="mb-8" aria-labelledby="taxonomy-comparison-title">
