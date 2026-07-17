@@ -9,7 +9,7 @@ export type CompanyRow = {
 }
 
 export type CompanyDetail = CompanyRow & {
-  size: string | null
+  sizeRange: string | null
   notes: string | null
   glassdoorUrl: string | null
   linkedinUrl: string | null

@@ -79,6 +79,12 @@ describe('companyPatchSchema', () => {
   it('fails when glassdoor_url is not a valid URL', () => {
     expect(companyPatchSchema.safeParse({ glassdoor_url: 'not-a-url' }).success).toBe(false)
   })
+
+  it('accepts a nullable company size bucket and rejects unknown buckets', () => {
+    expect(companyPatchSchema.safeParse({ size_range: '51-200' }).success).toBe(true)
+    expect(companyPatchSchema.safeParse({ size_range: null }).success).toBe(true)
+    expect(companyPatchSchema.safeParse({ size_range: '500+' }).success).toBe(false)
+  })
 })
 
 // ─── api client (src/lib/api.ts) ──────────────────────────────────────────────

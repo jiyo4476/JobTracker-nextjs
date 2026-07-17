@@ -35,6 +35,7 @@ export function useCompany(id: number) {
   return useQuery<CompanyDetail>({
     queryKey: ['companies', id],
     queryFn: () => api.get<CompanyDetail>(`/companies/${id}`),
+    enabled: Number.isInteger(id) && id > 0,
   })
 }
 

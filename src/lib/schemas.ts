@@ -123,6 +123,7 @@ export const companyPatchSchema = z.object({
   name: z.string().trim().min(1).max(500).optional(),
   website: httpUrlSchema.nullable().optional(),
   industry: z.string().max(300).nullable().optional(),
+  size_range: z.enum(['1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5000+']).nullable().optional(),
   hq_location: z.string().max(300).nullable().optional(),
   glassdoor_url: httpUrlSchema.nullable().optional(),
   linkedin_url: httpUrlSchema.nullable().optional(),

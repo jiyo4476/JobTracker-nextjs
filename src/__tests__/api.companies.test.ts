@@ -36,7 +36,14 @@ function makeUpdateChain() {
   return chain
 }
 
-const mockCompany = { id: 1, name: 'Acme', website: 'https://acme.com', industry: 'Tech', hqLocation: 'NYC' }
+const mockCompany = {
+  id: 1,
+  name: 'Acme',
+  website: 'https://acme.com',
+  industry: 'Tech',
+  sizeRange: '51-200',
+  hqLocation: 'NYC',
+}
 
 describe('GET /api/companies', () => {
   beforeEach(() => {
@@ -96,6 +103,7 @@ describe('GET /api/companies/[id]', () => {
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json).toHaveProperty('name', 'Acme')
+    expect(json).toHaveProperty('sizeRange', '51-200')
     expect(json).toHaveProperty('jobs')
     expect(Array.isArray(json.jobs)).toBe(true)
   })
@@ -179,6 +187,19 @@ describe('PATCH /api/companies/[id]', () => {
 
     expect(res.status).toBe(200)
     expect(updateChain.set).toHaveBeenCalledWith(expect.objectContaining({ website: null, notes: null }))
+  })
+
+  it('maps the snake_case company size field to the database column', async () => {
+    vi.mocked(requireApiKey).mockResolvedValue(true)
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    const updateChain = makeUpdateChain()
+    mockDb.update.mockReturnValue(updateChain)
+
+    const { PATCH } = await import('@/app/api/companies/[id]/route')
+    const res = await PATCH(makeReq({ size_range: '51-200' }), { params: Promise.resolve({ id: '1' }) })
+
+    expect(res.status).toBe(200)
+    expect(updateChain.set).toHaveBeenCalledWith(expect.objectContaining({ sizeRange: '51-200' }))
   })
 
   it('returns 400 for non-numeric id', async () => {
