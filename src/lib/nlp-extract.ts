@@ -461,7 +461,7 @@ export const CERTIFICATION_CATALOG: readonly CatalogEntry[] = [
   // Bare CSM/PSM are omitted because they also name common job roles.
   { canonical: 'Certified ScrumMaster' },
   { canonical: 'Professional Scrum Master' },
-  { canonical: 'ITIL Foundation', aliases: ['ITIL'] },
+  { canonical: 'ITIL Foundation' },
   { canonical: 'Six Sigma Green Belt' },
   { canonical: 'Six Sigma Black Belt' },
   { canonical: 'CPA' },
@@ -525,7 +525,7 @@ export const KEYWORD_CATALOG: readonly CatalogEntry[] = [
   { canonical: 'part-time', aliases: ['part time'] },
   { canonical: 'full-time', aliases: ['full time'] },
   { canonical: 'visa sponsorship' },
-  { canonical: 'no sponsorship' },
+  { canonical: 'no sponsorship', aliases: ['no visa sponsorship'] },
   { canonical: 'equity' },
   { canonical: 'bonus' },
   { canonical: 'clearance required' },
@@ -582,12 +582,32 @@ const SOFTWARE_MATCHERS = compileCatalog(SOFTWARE_CATALOG)
 const CERTIFICATION_MATCHERS = compileCatalog(CERTIFICATION_CATALOG)
 const KEYWORD_MATCHERS = compileCatalog(KEYWORD_CATALOG)
 
+const NEGATED_SPONSORSHIP_PATTERNS = [
+  /\b(?:no|without)\s+(?:visa\s+)?sponsorship\b/i,
+  /\b(?:do not|does not|don't|doesn't|will not|won't|cannot|can't)\s+(?:offer|provide)\s+(?:visa\s+)?sponsorship\b/i,
+  /\b(?:unable|not able)\s+to\s+(?:offer|provide)?\s*(?:visa\s+)?sponsorship\b/i,
+  /\b(?:visa\s+)?sponsorship\s+(?:is|will be)\s+not\s+(?:available|offered|provided)\b/i,
+  /\bnot eligible for\s+(?:visa\s+)?sponsorship\b/i,
+]
+
 // Returns canonical names; matching any alias yields the entry's canonical
 // form, so alias/canonical co-mentions dedupe to a single entry by construction.
 function matchCatalog(description: string, matchers: CompiledEntry[]): string[] {
   return matchers
     .filter(({ patterns }) => patterns.some(pattern => pattern.test(description)))
     .map(({ canonical }) => canonical)
+}
+
+function matchKeywords(description: string): string[] {
+  const matched = matchCatalog(description, KEYWORD_MATCHERS)
+  if (!NEGATED_SPONSORSHIP_PATTERNS.some(pattern => pattern.test(description))) {
+    return matched
+  }
+  const normalized = new Set(matched.filter(keyword => keyword !== 'visa sponsorship'))
+  normalized.add('no sponsorship')
+  return KEYWORD_CATALOG
+    .map(({ canonical }) => canonical)
+    .filter(keyword => normalized.has(keyword))
 }
 
 // Drop an umbrella certification when a more specific one from the same family
@@ -603,7 +623,7 @@ export function extractTags(description: string): ExtractedTags {
   return {
     skills: matchCatalog(description, SKILL_MATCHERS),
     software: matchCatalog(description, SOFTWARE_MATCHERS),
-    keywords: matchCatalog(description, KEYWORD_MATCHERS),
+    keywords: matchKeywords(description),
     certifications: suppressGenericCertifications(matchCatalog(description, CERTIFICATION_MATCHERS)),
   }
 }

@@ -293,6 +293,32 @@ describe('extractTags', () => {
       'visa sponsorship',
     ]))
   })
+
+  it.each([
+    'No visa sponsorship is available for this role.',
+    'We do not offer visa sponsorship.',
+    'Candidates must be able to work without sponsorship.',
+    'We are unable to provide sponsorship.',
+    "We can't offer visa sponsorship.",
+    'Visa sponsorship is not available.',
+    'Applicants are not eligible for sponsorship.',
+  ])('does not classify negated sponsorship as available: %s', description => {
+    const result = extractTags(description)
+    expect(result.keywords).not.toContain('visa sponsorship')
+    expect(result.keywords).toContain('no sponsorship')
+  })
+
+  it('keeps normalized negative sponsorship in catalog order', () => {
+    expect(extractTags('Remote role with equity; visa sponsorship is not available.').keywords)
+      .toEqual(['remote', 'no sponsorship', 'equity'])
+  })
+
+  it('does not classify ordinary ITIL framework experience as a certification', () => {
+    expect(extractTags('Experience working with ITIL processes is preferred.').certifications)
+      .not.toContain('ITIL Foundation')
+    expect(extractTags('An ITIL Foundation certification is preferred.').certifications)
+      .toContain('ITIL Foundation')
+  })
 })
 
 describe('taxonomy catalog integrity', () => {
