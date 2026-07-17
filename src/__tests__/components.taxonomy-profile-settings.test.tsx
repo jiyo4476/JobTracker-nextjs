@@ -281,4 +281,30 @@ describe('TaxonomyProfileSettings', () => {
     expect(screen.getByText('1 demanded keyword exclusions are respected.')).toBeTruthy()
     expect(screen.getByText(/No keyword preferences gaps found/)).toBeTruthy()
   })
+
+  it('does not claim full coverage when gaps fall outside the returned demand page', () => {
+    mocks.useUserTaxonomyGap.mockReturnValue({
+      data: {
+        category: 'skills',
+        counts: { profile: 100, demanded: 102, matched: 100, excluded: 0, gaps: 2 },
+        items: [{
+          taxonomyId: 1,
+          name: 'Python',
+          jobCount: 20,
+          profileStatus: 'held',
+          matchState: 'matched',
+        }],
+        page: 1,
+        totalPages: 2,
+      },
+      isLoading: false,
+      isError: false,
+      refetch: mocks.refetch,
+    })
+
+    render(<TaxonomyProfileAndGapSettings />)
+
+    expect(screen.queryByText(/your profile covers current demand/)).toBeNull()
+    expect(screen.getByText('+2 more recommendations not shown')).toBeTruthy()
+  })
 })

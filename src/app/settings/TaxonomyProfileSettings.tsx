@@ -578,13 +578,17 @@ function GapAnalysis() {
               {category === 'keywords' && gap.data.counts.excluded > 0 && (
                 <p className="text-xs text-slate-600">{gap.data.counts.excluded} demanded keyword exclusions are respected.</p>
               )}
-              {recommendations.length === 0 ? (
+              {recommendations.length === 0 && gap.data.counts.demanded === 0 && (
                 <p className="text-sm text-slate-500">
-                  {gap.data.counts.demanded === 0
-                    ? `No ${config.label.toLowerCase()} demand appears in active saved jobs yet.`
-                    : `No ${config.label.toLowerCase()} gaps found — your profile covers current demand.`}
+                  No {config.label.toLowerCase()} demand appears in active saved jobs yet.
                 </p>
-              ) : (
+              )}
+              {recommendations.length === 0 && gap.data.counts.demanded > 0 && gap.data.counts.gaps === 0 && (
+                <p className="text-sm text-slate-500">
+                  No {config.label.toLowerCase()} gaps found — your profile covers current demand.
+                </p>
+              )}
+              {recommendations.length > 0 && (
                 <ol className="space-y-2" aria-label={`${config.label} recommendations`}>
                   {recommendations.map(item => (
                     <li key={item.taxonomyId} className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm">
