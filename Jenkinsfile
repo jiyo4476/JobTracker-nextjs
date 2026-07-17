@@ -16,12 +16,14 @@ pipeline {
         stage('Validate inside Node container') {
             agent {
                 docker {
-                    image 'node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293'
+                    image 'node:24.16-alpine@sha256:21f403ab171f2dc89bad4dd69d7721bfd15f084ccb46cdd225f31f2bc59b5c9a'
                     reuseNode true
                 }
             }
             steps {
                 sh 'node --version'
+                sh 'npm install --global npm@12.0.1'
+                sh 'npm --version'
                 sh 'npm ci'
                 sh 'npm run lint'
                 sh 'npm run typecheck'
