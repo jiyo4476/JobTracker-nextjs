@@ -343,6 +343,11 @@ export interface TaxonomyAnalyticsResponse {
   clearance_not_required?: TaxonomyAnalyticsRow[]
 }
 
+export interface TaxonomyClearanceComparison {
+  clearance_required: TaxonomyAnalyticsRow[]
+  clearance_not_required: TaxonomyAnalyticsRow[]
+}
+
 export interface SkillDemandRow {
   skill: string
   month: string

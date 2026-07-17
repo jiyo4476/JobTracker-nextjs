@@ -12,6 +12,7 @@ import type {
   UserTaxonomyPatchVariables, UserTaxonomyResponse,
   AnalyticsParams, AnalyticsResponse,
   TaxonomyAnalyticsParams, TaxonomyAnalyticsResponse,
+  TaxonomyCategory, TaxonomyClearanceComparison,
   SalaryPatchResponse, TagsPatchResponse,
 } from '@/types/queries'
 
@@ -27,6 +28,7 @@ export type {
   UserTaxonomyPatchVariables, UserTaxonomyResponse,
   AnalyticsParams, AnalyticsResponse,
   TaxonomyCategory, TaxonomyAnalyticsParams, TaxonomyAnalyticsResponse, TaxonomyAnalyticsRow,
+  TaxonomyClearanceComparison,
   SkillDemandRow, SalaryDistributionRow, PlatformBreakdownRow, RemoteVsOnsiteRow,
   SalaryPatchResponse, TagsPatchResponse,
 } from '@/types/queries'
@@ -316,6 +318,33 @@ export function useTaxonomyAnalytics(params: TaxonomyAnalyticsParams) {
   return useQuery<TaxonomyAnalyticsResponse>({
     queryKey: ['analytics', 'taxonomy', params],
     queryFn: () => api.get<TaxonomyAnalyticsResponse>(`/analytics/taxonomy?${qs.toString()}`),
+    staleTime: 60 * 60 * 1000,
+  })
+}
+
+export function useTaxonomyClearanceComparison(category: TaxonomyCategory) {
+  return useQuery<TaxonomyClearanceComparison>({
+    queryKey: ['analytics', 'taxonomy-clearance-comparison', category],
+    queryFn: async () => {
+      if (category === 'skills') {
+        const response = await api.get<{
+          clearance_required: Array<{ skill: string; count: number; percentage: number }>
+          clearance_not_required: Array<{ skill: string; count: number; percentage: number }>
+        }>('/analytics/skills-by-clearance')
+        return {
+          clearance_required: response.clearance_required.map(({ skill, ...row }) => ({ name: skill, ...row })),
+          clearance_not_required: response.clearance_not_required.map(({ skill, ...row }) => ({ name: skill, ...row })),
+        }
+      }
+
+      const response = await api.get<TaxonomyAnalyticsResponse>(
+        `/analytics/taxonomy?category=${category}&compare=clearance&limit=15`,
+      )
+      return {
+        clearance_required: response.clearance_required ?? [],
+        clearance_not_required: response.clearance_not_required ?? [],
+      }
+    },
     staleTime: 60 * 60 * 1000,
   })
 }

@@ -54,6 +54,7 @@ import {
   useTagLookup,
   useTagLookupByIds,
   useTaxonomyAnalytics,
+  useTaxonomyClearanceComparison,
   useUserSkills,
   useUserTaxonomies,
   useUserTaxonomyGap,
@@ -248,6 +249,34 @@ describe('query hooks', () => {
     expect(api.get).toHaveBeenCalledWith(
       '/analytics/taxonomy?category=software&compare=clearance&limit=20&from=2026-01-01&to=2026-02-01&platform=linkedin',
     )
+  })
+
+  it('uses the legacy skills comparison endpoint and normalizes skill names', async () => {
+    vi.mocked(api.get).mockResolvedValueOnce({
+      clearance_required: [{ skill: 'Python', count: 2, percentage: 50 }],
+      clearance_not_required: [],
+    })
+    const query = asQueryConfig(useTaxonomyClearanceComparison('skills'))
+
+    await expect(query.queryFn()).resolves.toEqual({
+      clearance_required: [{ name: 'Python', count: 2, percentage: 50 }],
+      clearance_not_required: [],
+    })
+    expect(api.get).toHaveBeenCalledWith('/analytics/skills-by-clearance')
+  })
+
+  it('uses category-safe comparison analytics for non-skill taxonomies', async () => {
+    vi.mocked(api.get).mockResolvedValueOnce({
+      category: 'software',
+      percentage_denominator: 'assignments',
+      clearance_required: [],
+      clearance_not_required: [],
+    })
+    const query = asQueryConfig(useTaxonomyClearanceComparison('software'))
+
+    await query.queryFn()
+
+    expect(api.get).toHaveBeenCalledWith('/analytics/taxonomy?category=software&compare=clearance&limit=15')
   })
 
   it('invalidates both the list and detail queries after a job delete succeeds', async () => {

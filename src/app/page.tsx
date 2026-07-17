@@ -1,5 +1,7 @@
 'use client'
 
+import { Suspense } from 'react'
+
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -9,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useStats, useActivity } from '@/lib/queries'
 import { StageBadge } from '@/components/jobs/StageBadge'
+import { TaxonomyByAuthorizationChart } from '@/components/dashboard/TaxonomyByAuthorizationChart'
 
 const KPI_LABELS = ['Total Jobs', 'Applied', 'Active Interviews', 'Stale Listings'] as const
 
@@ -63,6 +66,10 @@ export default function DashboardPage() {
           </Card>
         ))}
       </div>
+
+      <Suspense fallback={<ChartSkeleton height="h-[420px]" />}>
+        <TaxonomyByAuthorizationChart />
+      </Suspense>
 
       <div className="grid grid-cols-2 gap-6 mb-8">
         <Card>
