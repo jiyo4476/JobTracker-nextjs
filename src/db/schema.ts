@@ -13,6 +13,7 @@ import {
   uniqueIndex,
   index,
   primaryKey,
+  check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { sourcePlatformValues } from "@/lib/source-platforms";
@@ -252,6 +253,51 @@ export const userSkills = pgTable(
   },
   (t) => [primaryKey({ columns: [t.skillId] })]
 );
+
+export const softwareFamiliarityEnum = pgEnum("software_familiarity_enum", [
+  "learning",
+  "familiar",
+  "proficient",
+  "expert",
+]);
+
+export const keywordPreferenceEnum = pgEnum("keyword_preference_enum", [
+  "interest",
+  "exclusion",
+]);
+
+export const userSoftware = pgTable("user_software", {
+  softwareId: integer("software_id")
+    .primaryKey()
+    .references(() => software.id, { onDelete: "cascade" }),
+  familiarity: softwareFamiliarityEnum("familiarity"),
+});
+
+export const userCertifications = pgTable(
+  "user_certifications",
+  {
+    certificationId: integer("certification_id")
+      .primaryKey()
+      .references(() => certifications.id, { onDelete: "cascade" }),
+    issuer: text("issuer"),
+    earnedDate: date("earned_date"),
+    expiresAt: date("expires_at"),
+    credentialUrl: text("credential_url"),
+  },
+  (t) => [
+    check(
+      "user_certifications_dates_check",
+      sql`${t.earnedDate} IS NULL OR ${t.expiresAt} IS NULL OR ${t.expiresAt} >= ${t.earnedDate}`,
+    ),
+  ],
+);
+
+export const userKeywords = pgTable("user_keywords", {
+  keywordId: integer("keyword_id")
+    .primaryKey()
+    .references(() => keywords.id, { onDelete: "cascade" }),
+  preference: keywordPreferenceEnum("preference").default("interest").notNull(),
+});
 
 // ── job_status_history ────────────────────────────────────────────────────────
 // Written every time interview_stage changes. Powers the recent activity feed.

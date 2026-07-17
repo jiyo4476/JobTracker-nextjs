@@ -34,7 +34,16 @@ function makeParams(id: string) {
 describe('GET /api/user-skills', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
+  it('returns 401 without auth', async () => {
+    vi.mocked(requireApiKey).mockResolvedValue(false)
+    const { GET } = await import('@/app/api/user-skills/route')
+    const req = new NextRequest('http://localhost/api/user-skills')
+    const res = await GET(req)
+    expect(res.status).toBe(401)
+  })
+
   it('returns list of user skills joined with skill names', async () => {
+    vi.mocked(requireApiKey).mockResolvedValue(true)
     const mockRows = [
       { skillId: 1, name: 'TypeScript', hasSkill: true },
       { skillId: 2, name: 'Python', hasSkill: false },
@@ -43,7 +52,10 @@ describe('GET /api/user-skills', () => {
     mockDb.select.mockReturnValue(makeChain(mockRows))
 
     const { GET } = await import('@/app/api/user-skills/route')
-    const res = await GET()
+    const req = new NextRequest('http://localhost/api/user-skills', {
+      headers: { authorization: 'Bearer test-key' },
+    })
+    const res = await GET(req)
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json).toEqual(mockRows)

@@ -43,6 +43,13 @@
       "when": 1784146979767,
       "tag": "0005_seed_software_certifications",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784271131243,
+      "tag": "0006_colossal_ezekiel",
+      "breakpoints": true
     }
   ]
 }
