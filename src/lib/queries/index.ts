@@ -123,10 +123,10 @@ export function usePatchJobTags() {
     onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: ['job', String(id)] })
       qc.invalidateQueries({ queryKey: ['jobs'] })
-      toast.success('Tags updated')
+      toast.success('Job qualifications and keywords updated')
     },
     onError: () => {
-      toast.error('Tag update failed')
+      toast.error('Could not update job qualifications and keywords')
     },
   })
 }
