@@ -108,7 +108,7 @@ export default function CompanyDetailPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Size</span>
-                <span>{company.size ?? '—'}</span>
+                <span>{company.sizeRange ?? '—'}</span>
               </div>
               <div className="space-y-1">
                 <span className="text-slate-500">HQ</span>

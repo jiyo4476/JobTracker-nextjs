@@ -42,7 +42,7 @@ const company: CompanyDetail = {
   hqLocation: 'Denver, CO',
   jobCount: 2,
   avgSalaryMax: null,
-  size: '51-200',
+  sizeRange: '51-200',
   notes: 'Builds useful things.',
   glassdoorUrl: null,
   linkedinUrl: 'https://linkedin.com/company/acme',
@@ -72,6 +72,7 @@ describe('CompanyEditPage', () => {
     const values = companyToFormValues(company)
 
     expect(values.description).toBe('Builds useful things.')
+    expect(values.size).toBe('51-200')
     expect(buildCompanyPatch({ ...values, website: '', size: '', linkedinUrl: '' })).toEqual({
       name: 'Acme Corp',
       website: null,

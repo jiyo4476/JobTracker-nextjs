@@ -53,8 +53,8 @@ export function companyToFormValues(company: CompanyDetail): CompanyEditValues {
     website: company.website ?? '',
     hqLocation: company.hqLocation ?? '',
     industry: company.industry ?? '',
-    size: company.size && COMPANY_SIZES.includes(company.size as (typeof COMPANY_SIZES)[number])
-      ? company.size as (typeof COMPANY_SIZES)[number]
+    size: company.sizeRange && COMPANY_SIZES.includes(company.sizeRange as (typeof COMPANY_SIZES)[number])
+      ? company.sizeRange as (typeof COMPANY_SIZES)[number]
       : '',
     description: company.notes ?? '',
     linkedinUrl: company.linkedinUrl ?? '',
@@ -99,8 +99,9 @@ export default function CompanyEditPage() {
   })
 
   useEffect(() => {
-    if (company) reset(companyToFormValues(company))
-  }, [company, reset])
+    // Refetches must not discard edits the user has already made.
+    if (company && !isDirty) reset(companyToFormValues(company))
+  }, [company, isDirty, reset])
 
   const descriptionLength = (useWatch({ control, name: 'description' }) ?? '').length
   const detailHref = isValidId ? `/companies/${companyId}` : '/companies'

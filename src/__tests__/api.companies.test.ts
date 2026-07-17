@@ -36,7 +36,14 @@ function makeUpdateChain() {
   return chain
 }
 
-const mockCompany = { id: 1, name: 'Acme', website: 'https://acme.com', industry: 'Tech', hqLocation: 'NYC' }
+const mockCompany = {
+  id: 1,
+  name: 'Acme',
+  website: 'https://acme.com',
+  industry: 'Tech',
+  sizeRange: '51-200',
+  hqLocation: 'NYC',
+}
 
 describe('GET /api/companies', () => {
   beforeEach(() => {
@@ -96,6 +103,7 @@ describe('GET /api/companies/[id]', () => {
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json).toHaveProperty('name', 'Acme')
+    expect(json).toHaveProperty('sizeRange', '51-200')
     expect(json).toHaveProperty('jobs')
     expect(Array.isArray(json.jobs)).toBe(true)
   })
