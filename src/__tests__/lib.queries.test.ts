@@ -50,6 +50,7 @@ import {
   useSkills,
   useSoftware,
   useStats,
+  useTaxonomyAnalytics,
   useUserSkills,
 } from '@/lib/queries'
 
@@ -94,6 +95,9 @@ describe('query hooks', () => {
       is_remote: 'false',
       is_active: 'false',
       skill_ids: '1,2,3',
+      software_ids: '4,5',
+      certification_ids: '6',
+      keyword_ids: '7,8',
       salary_min: 9000000,
       salary_max: 15000000,
       priority_min: 3,
@@ -115,6 +119,9 @@ describe('query hooks', () => {
     expect(params.get('is_remote')).toBe('false')
     expect(params.get('is_active')).toBe('false')
     expect(params.get('skill_ids')).toBe('1,2,3')
+    expect(params.get('software_ids')).toBe('4,5')
+    expect(params.get('certification_ids')).toBe('6')
+    expect(params.get('keyword_ids')).toBe('7,8')
     expect(params.get('salary_min')).toBe('9000000')
     expect(params.get('salary_max')).toBe('15000000')
     expect(params.get('priority_min')).toBe('3')
@@ -145,6 +152,23 @@ describe('query hooks', () => {
     await query.queryFn()
 
     expect(api.get).toHaveBeenCalledWith('/analytics?from=2026-01-01&to=2026-02-01&security_clearance=false')
+  })
+
+  it('serializes the category-safe taxonomy analytics contract', async () => {
+    const query = asQueryConfig(useTaxonomyAnalytics({
+      category: 'software',
+      compare: 'clearance',
+      limit: 20,
+      from: '2026-01-01',
+      to: '2026-02-01',
+      platform: 'linkedin',
+    }))
+
+    await query.queryFn()
+
+    expect(api.get).toHaveBeenCalledWith(
+      '/analytics/taxonomy?category=software&compare=clearance&limit=20&from=2026-01-01&to=2026-02-01&platform=linkedin',
+    )
   })
 
   it('invalidates both the list and detail queries after a job delete succeeds', async () => {
