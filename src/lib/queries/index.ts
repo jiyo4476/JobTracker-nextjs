@@ -9,6 +9,7 @@ import type {
   JobDetail, JobsResponse, JobsParams,
   LookupItem, StatsResponse, ResumeVersion, UserSkill,
   AnalyticsParams, AnalyticsResponse,
+  TaxonomyAnalyticsParams, TaxonomyAnalyticsResponse,
   SalaryPatchResponse, TagsPatchResponse,
 } from '@/types/queries'
 
@@ -20,6 +21,7 @@ export type {
   JobDetail, JobListItem, JobsResponse, JobsParams,
   LookupItem, StatsResponse, ResumeVersion, UserSkill,
   AnalyticsParams, AnalyticsResponse,
+  TaxonomyCategory, TaxonomyAnalyticsParams, TaxonomyAnalyticsResponse, TaxonomyAnalyticsRow,
   SkillDemandRow, SalaryDistributionRow, PlatformBreakdownRow, RemoteVsOnsiteRow,
   SalaryPatchResponse, TagsPatchResponse,
 } from '@/types/queries'
@@ -248,6 +250,9 @@ export function useJobs(params: JobsParams = {}) {
   if (params.is_remote) qs.set('is_remote', params.is_remote)
   if (params.is_active) qs.set('is_active', params.is_active)
   if (params.skill_ids) qs.set('skill_ids', params.skill_ids)
+  if (params.software_ids) qs.set('software_ids', params.software_ids)
+  if (params.certification_ids) qs.set('certification_ids', params.certification_ids)
+  if (params.keyword_ids) qs.set('keyword_ids', params.keyword_ids)
   if (params.salary_min !== undefined) qs.set('salary_min', String(params.salary_min))
   if (params.salary_max !== undefined) qs.set('salary_max', String(params.salary_max))
   if (params.priority_min !== undefined) qs.set('priority_min', String(params.priority_min))
@@ -276,6 +281,24 @@ export function useAnalytics(params?: AnalyticsParams) {
   return useQuery<AnalyticsResponse>({
     queryKey: ['analytics', params],
     queryFn: () => api.get<AnalyticsResponse>(`/analytics${query ? `?${query}` : ''}`),
+  })
+}
+
+export function useTaxonomyAnalytics(params: TaxonomyAnalyticsParams) {
+  const qs = new URLSearchParams({ category: params.category })
+  if (params.compare) qs.set('compare', params.compare)
+  if (params.limit !== undefined) qs.set('limit', String(params.limit))
+  if (params.from) qs.set('from', params.from)
+  if (params.to) qs.set('to', params.to)
+  if (params.platform) qs.set('platform', params.platform)
+  if (params.security_clearance !== undefined) {
+    qs.set('security_clearance', String(params.security_clearance))
+  }
+
+  return useQuery<TaxonomyAnalyticsResponse>({
+    queryKey: ['analytics', 'taxonomy', params],
+    queryFn: () => api.get<TaxonomyAnalyticsResponse>(`/analytics/taxonomy?${qs.toString()}`),
+    staleTime: 60 * 60 * 1000,
   })
 }
 

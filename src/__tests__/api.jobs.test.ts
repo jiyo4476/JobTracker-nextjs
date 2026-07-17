@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
+import { PgDialect } from 'drizzle-orm/pg-core'
+import type { SQL } from 'drizzle-orm'
 
 vi.mock('@/lib/auth', () => ({
   requireApiKey: vi.fn(),
@@ -12,14 +14,12 @@ vi.mock('@/db', () => ({
   },
 }))
 
-vi.mock('@/db/schema', () => ({
-  jobs: {},
-  companies: {},
-  jobSkills: {},
-}))
-
 import { requireApiKey } from '@/lib/auth'
 import { db } from '@/db'
+
+function sqlText(query: unknown): string {
+  return new PgDialect().sqlToQuery(query as SQL).sql.replace(/\s+/g, ' ')
+}
 
 const mockJobRows = [
   { id: 1, jobTitle: 'Software Engineer', companyName: 'Acme', isRemote: true, interviewStage: 'not_applied' },
@@ -187,6 +187,78 @@ describe('GET /api/jobs', () => {
     const res = await GET(new NextRequest('http://localhost/api/jobs?experience_level=not_a_level'))
     expect(res.status).toBe(200)
   })
+
+  it.each([
+    ['skill_ids', 'job_skills', 'skill_id'],
+    ['software_ids', 'job_software', 'software_id'],
+    ['certification_ids', 'job_certifications', 'certification_id'],
+    ['keyword_ids', 'job_keywords', 'keyword_id'],
+  ])('filters %s through only its category junction', async (param, table, column) => {
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    let countWhereArg: unknown
+    let callCount = 0
+    mockDb.select.mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        const countChain: Record<string, unknown> = {}
+        const countResult = Promise.resolve([{ total: 0 }])
+        Object.assign(countChain, {
+          from: vi.fn(() => countChain),
+          leftJoin: vi.fn(() => countChain),
+          where: vi.fn((arg: unknown) => { countWhereArg = arg; return countResult }),
+        })
+        return countChain
+      }
+      return makeSelectChain([])
+    })
+
+    const { GET } = await import('@/app/api/jobs/route')
+    const res = await GET(new NextRequest(`http://localhost/api/jobs?${param}=1,2`))
+    expect(res.status).toBe(200)
+    const rendered = sqlText(countWhereArg)
+    expect(rendered).toContain(`"${table}"`)
+    expect(rendered).toContain(`"${column}"`)
+    expect(rendered).toContain('ANY(ARRAY[')
+  })
+
+  it('combines populated taxonomy categories with independent EXISTS clauses', async () => {
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    let countWhereArg: unknown
+    let callCount = 0
+    mockDb.select.mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        const countChain: Record<string, unknown> = {}
+        const countResult = Promise.resolve([{ total: 0 }])
+        Object.assign(countChain, {
+          from: vi.fn(() => countChain),
+          leftJoin: vi.fn(() => countChain),
+          where: vi.fn((arg: unknown) => { countWhereArg = arg; return countResult }),
+        })
+        return countChain
+      }
+      return makeSelectChain([])
+    })
+
+    const { GET } = await import('@/app/api/jobs/route')
+    await GET(new NextRequest('http://localhost/api/jobs?skill_ids=1&software_ids=2'))
+    const rendered = sqlText(countWhereArg)
+    expect(rendered.match(/EXISTS/g)).toHaveLength(2)
+    expect(rendered).toContain('"job_skills"')
+    expect(rendered).toContain('"job_software"')
+  })
+
+  it.each(['skill_ids', 'software_ids', 'certification_ids', 'keyword_ids'])(
+    'rejects malformed %s instead of silently dropping values',
+    async (param) => {
+      const { GET } = await import('@/app/api/jobs/route')
+      const res = await GET(new NextRequest(`http://localhost/api/jobs?${param}=1,nope`))
+      expect(res.status).toBe(400)
+      expect(await res.json()).toEqual({
+        error: `Invalid ${param}: expected comma-separated positive integers`,
+      })
+    },
+  )
 })
 
 describe('POST /api/jobs', () => {

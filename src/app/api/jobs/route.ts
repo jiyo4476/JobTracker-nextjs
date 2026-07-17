@@ -4,8 +4,16 @@ import { requireApiKey } from '@/lib/auth'
 import { manualJobSchema } from '@/lib/schemas'
 import { logger, serializeError } from '@/lib/logger'
 import { escapeLikePattern } from '@/lib/db-utils'
-import { jobs, companies, jobSkills } from '@/db/schema'
+import {
+  jobs,
+  companies,
+  jobSkills,
+  jobSoftware,
+  jobCertifications,
+  jobKeywords,
+} from '@/db/schema'
 import { eq, and, ilike, or, gte, lte, count, desc, sql } from 'drizzle-orm'
+import { parsePositiveIdFilter, taxonomyFilterParams } from '@/lib/taxonomy'
 import {
   sourcePlatformEnum, jobTypeEnum, experienceLevelEnum, interviewStageEnum,
 } from '@/lib/schemas'
@@ -67,19 +75,27 @@ async function listJobs(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (!isNaN(priorityMinVal)) filters.push(gte(jobs.priority, priorityMinVal as any))
 
-  const skillIdsRaw = searchParams.get('skill_ids')
-  if (skillIdsRaw) {
-    const skillIds = skillIdsRaw.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n))
-    if (skillIds.length > 0) {
-      // Use EXISTS so the planner can use the jobSkills index rather than building a full subquery set
-      filters.push(
-        sql`EXISTS (
-          SELECT 1 FROM ${jobSkills}
-          WHERE ${jobSkills.jobId} = ${jobs.id}
-            AND ${jobSkills.skillId} = ANY(ARRAY[${sql.join(skillIds.map(id => sql`${id}`), sql`, `)}]::int[])
-        )`
-      )
+  const taxonomyFilters = [
+    { param: taxonomyFilterParams.skills, junction: jobSkills, relationId: jobSkills.skillId },
+    { param: taxonomyFilterParams.software, junction: jobSoftware, relationId: jobSoftware.softwareId },
+    { param: taxonomyFilterParams.certifications, junction: jobCertifications, relationId: jobCertifications.certificationId },
+    { param: taxonomyFilterParams.keywords, junction: jobKeywords, relationId: jobKeywords.keywordId },
+  ] as const
+
+  for (const taxonomyFilter of taxonomyFilters) {
+    const parsed = parsePositiveIdFilter(searchParams, taxonomyFilter.param)
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 })
     }
+    if (parsed.ids.length === 0) continue
+
+    // One EXISTS per populated category gives OR-within-category semantics through
+    // ANY(...), while the outer AND keeps different categories independent.
+    filters.push(sql`EXISTS (
+      SELECT 1 FROM ${taxonomyFilter.junction}
+      WHERE ${taxonomyFilter.junction.jobId} = ${jobs.id}
+        AND ${taxonomyFilter.relationId} = ANY(ARRAY[${sql.join(parsed.ids.map(id => sql`${id}`), sql`, `)}]::int[])
+    )`)
   }
 
   const q = searchParams.get('q')?.slice(0, 200)

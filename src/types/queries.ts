@@ -165,6 +165,9 @@ export interface JobsParams {
   is_remote?: string
   is_active?: string
   skill_ids?: string
+  software_ids?: string
+  certification_ids?: string
+  keyword_ids?: string
   salary_min?: number
   salary_max?: number
   priority_min?: number
@@ -187,6 +190,32 @@ export interface AnalyticsParams {
   to?: string
   platform?: string
   security_clearance?: boolean
+}
+
+export type TaxonomyCategory = 'skills' | 'software' | 'certifications' | 'keywords'
+
+export interface TaxonomyAnalyticsParams {
+  category: TaxonomyCategory
+  compare?: 'clearance'
+  limit?: number
+  from?: string
+  to?: string
+  platform?: string
+  security_clearance?: boolean
+}
+
+export interface TaxonomyAnalyticsRow {
+  name: string
+  count: number
+  percentage: number
+}
+
+export interface TaxonomyAnalyticsResponse {
+  category: TaxonomyCategory
+  percentage_denominator: string
+  values?: TaxonomyAnalyticsRow[]
+  clearance_required?: TaxonomyAnalyticsRow[]
+  clearance_not_required?: TaxonomyAnalyticsRow[]
 }
 
 export interface SkillDemandRow {
