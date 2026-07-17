@@ -118,6 +118,14 @@ export const SKILL_CATALOG: readonly CatalogEntry[] = [
   { canonical: 'Computer Vision' },
   { canonical: 'Feature Engineering' },
   { canonical: 'Model Evaluation' },
+  { canonical: 'Generative AI', aliases: ['GenAI'] },
+  { canonical: 'Large Language Models', aliases: ['LLMs', 'Large Language Model'] },
+  { canonical: 'Prompt Engineering' },
+  { canonical: 'Retrieval-Augmented Generation', aliases: ['RAG'] },
+  { canonical: 'MLOps' },
+  { canonical: 'Statistical Analysis' },
+  { canonical: 'Data Visualization' },
+  { canonical: 'Data Governance' },
   { canonical: 'Data Warehousing' },
   { canonical: 'ETL Pipelines', aliases: ['ETL'] },
   { canonical: 'Vector Databases' },
@@ -146,6 +154,12 @@ export const SKILL_CATALOG: readonly CatalogEntry[] = [
   { canonical: 'SOC 2 Compliance', aliases: ['SOC 2'] },
   { canonical: 'OWASP Top 10', aliases: ['OWASP'] },
   { canonical: 'Encryption' },
+  { canonical: 'Incident Response' },
+  { canonical: 'Threat Modeling' },
+  { canonical: 'Vulnerability Management' },
+  { canonical: 'Identity and Access Management', aliases: ['IAM'] },
+  { canonical: 'Security Information and Event Management', aliases: ['SIEM'] },
+  { canonical: 'Governance, Risk, and Compliance', aliases: ['GRC'] },
   // Security clearances are requirements, not certifications — kept under
   // skills alongside the jobs.security_clearance_req column
   { canonical: 'Security Clearance — TS/SCI', aliases: ['TS/SCI'] },
@@ -160,6 +174,9 @@ export const SKILL_CATALOG: readonly CatalogEntry[] = [
   { canonical: 'Embedded Systems' },
   { canonical: 'Protocol Buffers', aliases: ['Protobuf'] },
   { canonical: 'Message Queues' },
+  { canonical: 'DNS' },
+  { canonical: 'HTTP' },
+  { canonical: 'Network Security' },
   { canonical: 'Compiler Design' },
   { canonical: 'FPGA' },
 
@@ -176,6 +193,9 @@ export const SKILL_CATALOG: readonly CatalogEntry[] = [
   { canonical: 'Microservices' },
   { canonical: 'System Design' },
   { canonical: 'API Gateway' },
+  { canonical: 'Object-Oriented Programming', aliases: ['OOP'] },
+  { canonical: 'Functional Programming' },
+  { canonical: 'SOLID Principles', aliases: ['SOLID'] },
 
   // Version control & collaboration practices (Git/GitHub/GitLab are SOFTWARE)
   { canonical: 'Semantic Versioning', aliases: ['SemVer'] },
@@ -186,6 +206,13 @@ export const SKILL_CATALOG: readonly CatalogEntry[] = [
   { canonical: 'Cross-Functional Collaboration' },
   { canonical: 'Stakeholder Communication' },
   { canonical: 'Agile / Scrum', aliases: ['Scrum', 'Agile'] },
+  { canonical: 'Project Management' },
+  { canonical: 'Product Management' },
+  { canonical: 'Program Management' },
+  { canonical: 'Change Management' },
+  { canonical: 'Requirements Gathering' },
+  { canonical: 'Business Analysis' },
+  { canonical: 'Data Analysis' },
   { canonical: 'Technical Writing' },
   { canonical: 'Problem Solving' },
   { canonical: 'Kanban' },
@@ -204,6 +231,13 @@ export const SOFTWARE_CATALOG: readonly CatalogEntry[] = [
   { canonical: 'IntelliJ' },
   { canonical: 'Figma' },
   { canonical: 'Notion' },
+  { canonical: 'Microsoft Teams', aliases: ['MS Teams'] },
+  { canonical: 'Microsoft 365', aliases: ['Office 365'] },
+  { canonical: 'ServiceNow' },
+  { canonical: 'Salesforce' },
+  { canonical: 'Asana' },
+  { canonical: 'Trello' },
+  { canonical: 'Miro' },
   { canonical: 'Splunk' },
   { canonical: 'Tableau' },
   { canonical: 'Git' },
@@ -236,6 +270,9 @@ export const SOFTWARE_CATALOG: readonly CatalogEntry[] = [
   { canonical: 'Rollup' },
   { canonical: 'Vite' },
   { canonical: 'esbuild' },
+  { canonical: 'Storybook' },
+  { canonical: 'Material UI', aliases: ['MUI'] },
+  { canonical: 'Bootstrap' },
 
   // Backend frameworks & runtimes
   { canonical: 'Node.js' },
@@ -250,12 +287,17 @@ export const SOFTWARE_CATALOG: readonly CatalogEntry[] = [
   { canonical: 'Spring Boot', aliases: ['Spring'] },
   { canonical: 'ASP.NET Core', aliases: ['ASP.NET'] },
   { canonical: 'tRPC' },
+  { canonical: 'Go Fiber' },
+  { canonical: 'Gin Framework' },
+  { canonical: 'Phoenix Framework' },
 
   // ORMs & database tooling
   { canonical: 'Prisma' },
   { canonical: 'Drizzle ORM' },
   { canonical: 'SQLAlchemy' },
   { canonical: 'Hibernate' },
+  { canonical: 'Entity Framework' },
+  { canonical: 'Sequelize' },
 
   // Databases
   { canonical: 'PostgreSQL', aliases: ['Postgres'] },
@@ -270,6 +312,12 @@ export const SOFTWARE_CATALOG: readonly CatalogEntry[] = [
   { canonical: 'CockroachDB' },
   { canonical: 'Supabase' },
   { canonical: 'PlanetScale' },
+  { canonical: 'Oracle Database', aliases: ['Oracle DB'] },
+  { canonical: 'Microsoft SQL Server', aliases: ['SQL Server'] },
+  { canonical: 'MariaDB' },
+  { canonical: 'Amazon Redshift', aliases: ['Redshift'] },
+  { canonical: 'Pinecone' },
+  { canonical: 'Weaviate' },
 
   // Cloud platforms & hosting
   { canonical: 'AWS', aliases: ['Amazon Web Services'] },
@@ -280,6 +328,9 @@ export const SOFTWARE_CATALOG: readonly CatalogEntry[] = [
   { canonical: 'Netlify' },
   { canonical: 'Heroku' },
   { canonical: 'Railway' },
+  { canonical: 'DigitalOcean' },
+  { canonical: 'OpenShift' },
+  { canonical: 'VMware' },
 
   // DevOps, CI/CD & infrastructure products
   { canonical: 'Docker' },
@@ -295,12 +346,20 @@ export const SOFTWARE_CATALOG: readonly CatalogEntry[] = [
   { canonical: 'Nginx' },
   { canonical: 'Apache' },
   { canonical: 'Linux' },
+  { canonical: 'Argo CD', aliases: ['ArgoCD'] },
+  { canonical: 'Tekton' },
+  { canonical: 'HashiCorp Packer' },
+  { canonical: 'HashiCorp Vault' },
 
   // Monitoring & observability products
   { canonical: 'Prometheus' },
   { canonical: 'Grafana' },
   { canonical: 'Datadog' },
   { canonical: 'OpenTelemetry' },
+  { canonical: 'New Relic' },
+  { canonical: 'Sentry' },
+  { canonical: 'PagerDuty' },
+  { canonical: 'Dynatrace' },
 
   // Data & ML tools
   { canonical: 'PyTorch' },
@@ -322,6 +381,11 @@ export const SOFTWARE_CATALOG: readonly CatalogEntry[] = [
   { canonical: 'dbt' },
   { canonical: 'Snowflake' },
   { canonical: 'BigQuery' },
+  { canonical: 'Databricks' },
+  { canonical: 'Flink' },
+  { canonical: 'Hadoop' },
+  { canonical: 'Looker' },
+  { canonical: 'Power BI' },
 
   // Mobile frameworks & toolkits
   { canonical: 'Flutter' },
@@ -337,6 +401,9 @@ export const SOFTWARE_CATALOG: readonly CatalogEntry[] = [
   { canonical: 'Jest' },
   { canonical: 'PyTest' },
   { canonical: 'JUnit' },
+  { canonical: 'Postman' },
+  { canonical: 'k6' },
+  { canonical: 'Gatling' },
 ]
 
 // Certifications: named credentials and licenses only. Security clearances are
@@ -352,6 +419,8 @@ export const CERTIFICATION_CATALOG: readonly CatalogEntry[] = [
   { canonical: 'AWS Certified DevOps Engineer' },
   { canonical: 'AWS Certified Cloud Practitioner' },
   { canonical: 'AWS Certified Security' },
+  { canonical: 'AWS Certified Machine Learning Engineer' },
+  { canonical: 'AWS Certified Data Engineer' },
   { canonical: 'AWS Certified' },
 
   // Azure
@@ -359,25 +428,42 @@ export const CERTIFICATION_CATALOG: readonly CatalogEntry[] = [
   { canonical: 'Microsoft Certified: Azure Administrator', aliases: ['Azure Administrator', 'AZ-104'] },
   { canonical: 'Microsoft Certified: Azure Solutions Architect', aliases: ['Azure Solutions Architect', 'AZ-305'] },
   { canonical: 'Microsoft Certified: Azure DevOps Engineer', aliases: ['Azure DevOps Engineer', 'AZ-400'] },
+  { canonical: 'Microsoft Certified: Azure Security Engineer', aliases: ['Azure Security Engineer', 'AZ-500'] },
+  { canonical: 'Microsoft Certified: Azure Data Engineer', aliases: ['Azure Data Engineer', 'DP-203'] },
+  { canonical: 'Microsoft Certified: Azure AI Engineer', aliases: ['Azure AI Engineer', 'AI-102'] },
   { canonical: 'Azure Certified' },
 
   // Google Cloud
   { canonical: 'Google Cloud Professional Cloud Architect', aliases: ['Professional Cloud Architect'] },
   { canonical: 'Google Cloud Associate Cloud Engineer', aliases: ['Associate Cloud Engineer'] },
   { canonical: 'Google Cloud Professional Data Engineer', aliases: ['Professional Data Engineer'] },
+  { canonical: 'Google Cloud Professional Cloud Developer', aliases: ['Professional Cloud Developer'] },
+  { canonical: 'Google Cloud Professional Cloud Security Engineer', aliases: ['Professional Cloud Security Engineer'] },
   { canonical: 'GCP Certified', aliases: ['Google Cloud Certified'] },
 
   // CompTIA — bare 'A+' omitted: false-positives on letter grades / ratings
   { canonical: 'CompTIA Security+', aliases: ['Security+'] },
   { canonical: 'CompTIA Network+', aliases: ['Network+'] },
+  { canonical: 'CompTIA Cloud+', aliases: ['Cloud+'] },
+  { canonical: 'CompTIA Linux+', aliases: ['Linux+'] },
+  { canonical: 'CompTIA CySA+', aliases: ['CySA+'] },
   { canonical: 'CompTIA A+' },
   { canonical: 'CompTIA' },
 
   // Security & management
   { canonical: 'CISSP' },
   { canonical: 'CISM' },
+  { canonical: 'CCSP', aliases: ['Certified Cloud Security Professional'] },
+  { canonical: 'OSCP', aliases: ['Offensive Security Certified Professional'] },
+  { canonical: 'GIAC Security Essentials', aliases: ['GSEC'] },
   { canonical: 'CEH', aliases: ['Certified Ethical Hacker'] },
   { canonical: 'PMP', aliases: ['Project Management Professional'] },
+  // Bare CSM/PSM are omitted because they also name common job roles.
+  { canonical: 'Certified ScrumMaster' },
+  { canonical: 'Professional Scrum Master' },
+  { canonical: 'ITIL Foundation', aliases: ['ITIL'] },
+  { canonical: 'Six Sigma Green Belt' },
+  { canonical: 'Six Sigma Black Belt' },
   { canonical: 'CPA' },
 
   // Kubernetes & HashiCorp
@@ -390,18 +476,59 @@ export const CERTIFICATION_CATALOG: readonly CatalogEntry[] = [
     aliases: ['CKAD', 'Certified Kubernetes Application Developer'],
   },
   { canonical: 'HashiCorp Terraform Associate', aliases: ['Terraform Associate'] },
+  { canonical: 'Cisco Certified Network Associate', aliases: ['CCNA'] },
+  { canonical: 'Cisco Certified Network Professional', aliases: ['CCNP'] },
+  { canonical: 'Red Hat Certified System Administrator', aliases: ['RHCSA'] },
+  { canonical: 'Red Hat Certified Engineer', aliases: ['RHCE'] },
 ]
 
 // Contextual labels — not a structured taxonomy, so overlap with skills is fine.
-const KEYWORDS = [
-  'remote', 'hybrid', 'on-site', 'full-stack', 'full stack',
-  'backend', 'front-end', 'frontend',
-  'machine learning', 'data engineering',
-  'DevOps', 'platform engineering',
-  'distributed systems', 'microservices',
-  'startup', 'series A', 'series B', 'series C',
-  'executive', 'senior', 'lead', 'staff', 'principal',
-  'entry level', 'junior', 'mid-level',
+export const KEYWORD_CATALOG: readonly CatalogEntry[] = [
+  { canonical: 'remote' },
+  { canonical: 'hybrid' },
+  { canonical: 'on-site', aliases: ['onsite'] },
+  { canonical: 'full-stack', aliases: ['full stack'] },
+  { canonical: 'backend' },
+  { canonical: 'frontend', aliases: ['front-end'] },
+  { canonical: 'mobile' },
+  { canonical: 'machine learning' },
+  { canonical: 'data engineering' },
+  { canonical: 'data science' },
+  { canonical: 'artificial intelligence' },
+  { canonical: 'generative AI' },
+  { canonical: 'DevOps' },
+  { canonical: 'platform engineering' },
+  { canonical: 'distributed systems' },
+  { canonical: 'microservices' },
+  { canonical: 'cloud-native', aliases: ['cloud native'] },
+  { canonical: 'cybersecurity' },
+  { canonical: 'fintech' },
+  { canonical: 'healthtech' },
+  { canonical: 'e-commerce', aliases: ['ecommerce'] },
+  { canonical: 'B2B' },
+  { canonical: 'B2C' },
+  { canonical: 'SaaS' },
+  { canonical: 'startup' },
+  { canonical: 'series A' },
+  { canonical: 'series B' },
+  { canonical: 'series C' },
+  { canonical: 'executive' },
+  { canonical: 'senior' },
+  { canonical: 'lead' },
+  { canonical: 'staff' },
+  { canonical: 'principal' },
+  { canonical: 'entry level', aliases: ['entry-level'] },
+  { canonical: 'junior' },
+  { canonical: 'mid-level', aliases: ['mid level'] },
+  { canonical: 'contract' },
+  { canonical: 'contract-to-hire', aliases: ['contract to hire'] },
+  { canonical: 'part-time', aliases: ['part time'] },
+  { canonical: 'full-time', aliases: ['full time'] },
+  { canonical: 'visa sponsorship' },
+  { canonical: 'no sponsorship' },
+  { canonical: 'equity' },
+  { canonical: 'bonus' },
+  { canonical: 'clearance required' },
 ]
 
 // Every canonical term and alias must live in exactly one structured catalog.
@@ -453,7 +580,7 @@ function compileCatalog(entries: readonly CatalogEntry[]): CompiledEntry[] {
 const SKILL_MATCHERS = compileCatalog(SKILL_CATALOG)
 const SOFTWARE_MATCHERS = compileCatalog(SOFTWARE_CATALOG)
 const CERTIFICATION_MATCHERS = compileCatalog(CERTIFICATION_CATALOG)
-const KEYWORD_PATTERNS = KEYWORDS.map(term => ({ term, pattern: compilePattern(term) }))
+const KEYWORD_MATCHERS = compileCatalog(KEYWORD_CATALOG)
 
 // Returns canonical names; matching any alias yields the entry's canonical
 // form, so alias/canonical co-mentions dedupe to a single entry by construction.
@@ -476,7 +603,7 @@ export function extractTags(description: string): ExtractedTags {
   return {
     skills: matchCatalog(description, SKILL_MATCHERS),
     software: matchCatalog(description, SOFTWARE_MATCHERS),
-    keywords: KEYWORD_PATTERNS.filter(({ pattern }) => pattern.test(description)).map(({ term }) => term),
+    keywords: matchCatalog(description, KEYWORD_MATCHERS),
     certifications: suppressGenericCertifications(matchCatalog(description, CERTIFICATION_MATCHERS)),
   }
 }

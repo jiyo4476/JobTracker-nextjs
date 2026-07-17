@@ -5,6 +5,7 @@ import {
   SKILL_CATALOG,
   SOFTWARE_CATALOG,
   CERTIFICATION_CATALOG,
+  KEYWORD_CATALOG,
 } from '@/lib/nlp-extract'
 
 describe('extractTags', () => {
@@ -231,6 +232,67 @@ describe('extractTags', () => {
     expect(result.software).toContain('Snowflake')
     expect(result.skills).toContain('ETL Pipelines')
   })
+
+  it('detects expanded AI, security, and delivery capabilities', () => {
+    const result = extractTags(
+      'Build RAG systems with LLMs, prompt engineering, MLOps, threat modeling, IAM, and program management.',
+    )
+    expect(result.skills).toEqual(expect.arrayContaining([
+      'Large Language Models',
+      'Prompt Engineering',
+      'Retrieval-Augmented Generation',
+      'MLOps',
+      'Threat Modeling',
+      'Identity and Access Management',
+      'Program Management',
+    ]))
+  })
+
+  it('detects expanded enterprise, infrastructure, data, and testing software', () => {
+    const result = extractTags(
+      'Our stack includes ServiceNow, Salesforce, ArgoCD, HashiCorp Vault, Databricks, Power BI, Postman, and k6.',
+    )
+    expect(result.software).toEqual(expect.arrayContaining([
+      'ServiceNow',
+      'Salesforce',
+      'Argo CD',
+      'HashiCorp Vault',
+      'Databricks',
+      'Power BI',
+      'Postman',
+      'k6',
+    ]))
+  })
+
+  it('detects expanded cloud, security, agile, and infrastructure certifications', () => {
+    const result = extractTags(
+      'AZ-500, CCSP, OSCP, Certified ScrumMaster, CCNA, and RHCE certifications are preferred.',
+    )
+    expect(result.certifications).toEqual(expect.arrayContaining([
+      'Microsoft Certified: Azure Security Engineer',
+      'CCSP',
+      'OSCP',
+      'Certified ScrumMaster',
+      'Cisco Certified Network Associate',
+      'Red Hat Certified Engineer',
+    ]))
+  })
+
+  it('canonicalizes expanded contextual keyword aliases', () => {
+    const result = extractTags(
+      'Onsite full stack role at a cloud native ecommerce SaaS company; contract to hire with visa sponsorship.',
+    )
+    expect(result.keywords).toEqual(expect.arrayContaining([
+      'on-site',
+      'full-stack',
+      'cloud-native',
+      'e-commerce',
+      'SaaS',
+      'contract',
+      'contract-to-hire',
+      'visa sponsorship',
+    ]))
+  })
 })
 
 describe('taxonomy catalog integrity', () => {
@@ -251,6 +313,17 @@ describe('taxonomy catalog integrity', () => {
           ).toBe(false)
           owner.set(key, taxonomy)
         }
+      }
+    }
+  })
+
+  it('does not duplicate keyword canonical terms or aliases', () => {
+    const terms = new Set<string>()
+    for (const entry of KEYWORD_CATALOG) {
+      for (const term of [entry.canonical, ...(entry.aliases ?? [])]) {
+        const normalized = term.toLowerCase()
+        expect(terms.has(normalized), `Duplicate keyword term: ${term}`).toBe(false)
+        terms.add(normalized)
       }
     }
   })
