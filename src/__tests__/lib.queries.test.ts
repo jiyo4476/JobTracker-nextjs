@@ -94,6 +94,7 @@ describe('query hooks', () => {
   it('serializes every supported jobs filter into the API query string', async () => {
     const query = asQueryConfig(useJobs({
       page: 2,
+      company_id: 42,
       q: 'react engineer',
       stage: 'applied',
       platform: 'linkedin',
@@ -118,6 +119,7 @@ describe('query hooks', () => {
 
     expect(path.split('?')[0]).toBe('/jobs')
     expect(params.get('page')).toBe('2')
+    expect(params.get('company_id')).toBe('42')
     expect(params.get('q')).toBe('react engineer')
     expect(params.get('stage')).toBe('applied')
     expect(params.get('platform')).toBe('linkedin')

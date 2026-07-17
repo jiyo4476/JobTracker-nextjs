@@ -157,6 +157,45 @@ describe('GET /api/jobs', () => {
     expect(res.status).toBe(200)
   })
 
+  it('filters by an exact positive company_id', async () => {
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    let countWhereArg: unknown
+    let callCount = 0
+    mockDb.select.mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        const countChain: Record<string, unknown> = {}
+        const countResult = Promise.resolve([{ total: 0 }])
+        Object.assign(countChain, {
+          from: vi.fn(() => countChain),
+          leftJoin: vi.fn(() => countChain),
+          where: vi.fn((arg: unknown) => { countWhereArg = arg; return countResult }),
+        })
+        return countChain
+      }
+      return makeSelectChain([])
+    })
+
+    const { GET } = await import('@/app/api/jobs/route')
+    const res = await GET(new NextRequest('http://localhost/api/jobs?company_id=42&skill_ids=7'))
+
+    expect(res.status).toBe(200)
+    const rendered = sqlText(countWhereArg)
+    expect(rendered).toContain('"jobs"."company_id" = $1')
+    expect(rendered).toContain('"job_skills"')
+  })
+
+  it.each(['0', '-1', '1.5', 'abc', '9007199254740992'])(
+    'rejects invalid company_id=%s',
+    async (companyId) => {
+      const { GET } = await import('@/app/api/jobs/route')
+      const res = await GET(new NextRequest(`http://localhost/api/jobs?company_id=${companyId}`))
+
+      expect(res.status).toBe(400)
+      expect(await res.json()).toEqual({ error: 'Invalid company_id: expected a positive integer' })
+    },
+  )
+
   it('clamps page to minimum of 1', async () => {
     const { GET } = await import('@/app/api/jobs/route')
     const res = await GET(new NextRequest('http://localhost/api/jobs?page=-5'))

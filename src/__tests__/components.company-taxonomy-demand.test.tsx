@@ -23,7 +23,7 @@ const demand: Demand = {
 
 describe('CompanyTaxonomyDemand', () => {
   it('keeps all four categories separate with accessible category-specific job links', () => {
-    render(<CompanyTaxonomyDemand demand={demand} />)
+    render(<CompanyTaxonomyDemand companyId={7} demand={demand} />)
 
     for (const heading of ['Skills', 'Software', 'Certifications', 'Keywords']) {
       expect(screen.getByRole('heading', { name: heading })).toBeTruthy()
@@ -31,10 +31,10 @@ describe('CompanyTaxonomyDemand', () => {
     expect(screen.getByText('Limited sample: based on 2 active jobs.')).toBeTruthy()
 
     const links = [
-      ['Skills', 'TypeScript', '/jobs?skill_ids=1'],
-      ['Software', 'Docker', '/jobs?software_ids=2'],
-      ['Certifications', 'CISSP', '/jobs?certification_ids=3'],
-      ['Keywords', 'Remote', '/jobs?keyword_ids=4'],
+      ['Skills', 'TypeScript', '/jobs?company_id=7&skill_ids=1'],
+      ['Software', 'Docker', '/jobs?company_id=7&software_ids=2'],
+      ['Certifications', 'CISSP', '/jobs?company_id=7&certification_ids=3'],
+      ['Keywords', 'Remote', '/jobs?company_id=7&keyword_ids=4'],
     ] as const
     for (const [group, value, href] of links) {
       const section = screen.getByRole('heading', { name: group }).closest('section') as HTMLElement
@@ -44,7 +44,7 @@ describe('CompanyTaxonomyDemand', () => {
   })
 
   it('describes empty active-job and untagged low-sample states without claiming a trend', () => {
-    const view = render(<CompanyTaxonomyDemand demand={{
+    const view = render(<CompanyTaxonomyDemand companyId={7} demand={{
       activeJobCount: 0,
       skills: [],
       software: [],
@@ -54,7 +54,7 @@ describe('CompanyTaxonomyDemand', () => {
     expect(screen.getByText('No active jobs are available to summarize.')).toBeTruthy()
     expect(screen.queryByText(/Based on/)).toBeNull()
 
-    view.rerender(<CompanyTaxonomyDemand demand={{
+    view.rerender(<CompanyTaxonomyDemand companyId={7} demand={{
       activeJobCount: 1,
       skills: [],
       software: [],

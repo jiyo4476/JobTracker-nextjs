@@ -258,6 +258,7 @@ export function useDeleteContact() {
 export function useJobs(params: JobsParams = {}) {
   const qs = new URLSearchParams()
   if (params.page) qs.set('page', String(params.page))
+  if (params.company_id) qs.set('company_id', String(params.company_id))
   if (params.q) qs.set('q', params.q)
   if (params.stage) qs.set('stage', params.stage)
   if (params.platform) qs.set('platform', params.platform)

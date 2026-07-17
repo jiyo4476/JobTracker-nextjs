@@ -14,7 +14,13 @@ function jobsLabel(count: number) {
   return `${count} active ${count === 1 ? 'job' : 'jobs'}`
 }
 
-export function CompanyTaxonomyDemand({ demand }: { demand: CompanyTaxonomyDemandData }) {
+export function CompanyTaxonomyDemand({
+  companyId,
+  demand,
+}: {
+  companyId: number
+  demand: CompanyTaxonomyDemandData
+}) {
   const hasDemand = groups.some(({ category }) => demand[category].length > 0)
 
   return (
@@ -52,9 +58,12 @@ export function CompanyTaxonomyDemand({ demand }: { demand: CompanyTaxonomyDeman
                     {items.map(item => (
                       <li key={item.id}>
                         <Link
-                          href={`/jobs?${taxonomyFilterParams[category]}=${item.id}`}
+                          href={`/jobs?${new URLSearchParams({
+                            company_id: String(companyId),
+                            [taxonomyFilterParams[category]]: String(item.id),
+                          }).toString()}`}
                           className="flex min-h-8 items-center justify-between gap-3 rounded px-2 py-1 text-sm text-blue-700 hover:bg-blue-50 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-                          aria-label={`${item.name}: ${jobsLabel(item.jobCount)}. View matching jobs filtered by ${label.toLowerCase()}.`}
+                          aria-label={`${item.name}: ${jobsLabel(item.jobCount)}. View this company's matching jobs filtered by ${label.toLowerCase()}.`}
                         >
                           <span>{item.name}</span>
                           <span className="shrink-0 text-xs font-medium text-slate-600">{item.jobCount}</span>

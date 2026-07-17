@@ -156,7 +156,7 @@ export default function CompanyDetailPage() {
         </div>
 
         <div className="space-y-6 lg:col-span-2">
-          <CompanyTaxonomyDemand demand={company.taxonomyDemand} />
+          <CompanyTaxonomyDemand companyId={company.id} demand={company.taxonomyDemand} />
           <Card>
             <CardHeader><CardTitle className="text-sm">Jobs at this Company</CardTitle></CardHeader>
             <CardContent className="space-y-2">

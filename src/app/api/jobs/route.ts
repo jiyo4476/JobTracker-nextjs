@@ -35,6 +35,18 @@ async function listJobs(req: NextRequest) {
 
   const filters = []
 
+  const companyIdRaw = searchParams.get('company_id')
+  if (companyIdRaw !== null) {
+    const companyId = Number(companyIdRaw)
+    if (!/^\d+$/.test(companyIdRaw) || !Number.isSafeInteger(companyId) || companyId <= 0) {
+      return NextResponse.json(
+        { error: 'Invalid company_id: expected a positive integer' },
+        { status: 400 },
+      )
+    }
+    filters.push(eq(jobs.companyId, companyId))
+  }
+
   const stage = searchParams.get('stage')
   const stageParsed = interviewStageEnum.safeParse(stage)
   if (stage && stageParsed.success) filters.push(eq(jobs.interviewStage, stageParsed.data))
@@ -117,7 +129,7 @@ async function listJobs(req: NextRequest) {
   const where = filters.length > 0 ? and(...filters) : undefined
 
   logger.debug('GET /api/jobs', {
-    page, limit, stage, platform, jobType, expLevel, clearance, isRemote,
+    page, limit, companyId: companyIdRaw, stage, platform, jobType, expLevel, clearance, isRemote,
     hasQuery: q != null && q.length > 0,
     queryLength: q != null ? q.length : undefined,
   })

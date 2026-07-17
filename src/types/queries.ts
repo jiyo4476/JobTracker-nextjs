@@ -279,6 +279,7 @@ export interface JobsResponse {
 
 export interface JobsParams {
   page?: number
+  company_id?: number
   q?: string
   stage?: string
   platform?: string
