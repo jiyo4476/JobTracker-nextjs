@@ -50,6 +50,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ...(d.name !== undefined && { name: d.name }),
       ...(d.website !== undefined && { website: d.website }),
       ...(d.industry !== undefined && { industry: d.industry }),
+      ...(d.size_range !== undefined && { sizeRange: d.size_range }),
       ...(d.hq_location !== undefined && { hqLocation: d.hq_location }),
       ...(d.glassdoor_url !== undefined && { glassdoorUrl: d.glassdoor_url }),
       ...(d.linkedin_url !== undefined && { linkedinUrl: d.linkedin_url }),

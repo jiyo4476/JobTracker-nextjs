@@ -2,7 +2,7 @@
 
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ExternalLink } from 'lucide-react'
+import { ExternalLink, Pencil } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
@@ -84,6 +84,14 @@ export default function CompanyDetailPage() {
       <PageHeader
         title={company.name}
         description={[company.industry, company.hqLocation].filter(Boolean).join(' · ')}
+        action={
+          <Link
+            href={`/companies/${company.id}/edit`}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
+          >
+            <Pencil className="h-4 w-4" /> Edit Company
+          </Link>
+        }
       />
       <div className="grid grid-cols-3 gap-6 mt-6">
         <div className="space-y-4">
