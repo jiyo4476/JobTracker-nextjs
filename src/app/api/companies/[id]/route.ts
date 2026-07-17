@@ -4,7 +4,42 @@ import { requireApiKey } from '@/lib/auth'
 import { companyPatchSchema } from '@/lib/schemas'
 import { logger, serializeError } from '@/lib/logger'
 import { companies, jobs } from '@/db/schema'
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, isNull, sql } from 'drizzle-orm'
+import {
+  buildCompanyDemandQuery,
+  COMPANY_DEMAND_LIMIT,
+  type CompanyDemandCategory,
+} from '@/lib/company-taxonomy-demand'
+
+type DemandRow = {
+  id: number
+  name: string
+  jobCount: number
+}
+
+function resultRows<T>(result: unknown): T[] {
+  if (Array.isArray(result)) return result as T[]
+  if (result && typeof result === 'object' && 'rows' in result) {
+    const rows = (result as { rows?: unknown }).rows
+    if (Array.isArray(rows)) return rows as T[]
+  }
+  return []
+}
+
+function companyDemandQuery(
+  category: CompanyDemandCategory,
+  companyId: number,
+) {
+  return db.execute(buildCompanyDemandQuery(category, companyId))
+}
+
+function summarizeDemand(result: unknown) {
+  const rows = resultRows<DemandRow>(result)
+  return {
+    items: rows.slice(0, COMPANY_DEMAND_LIMIT),
+    truncated: rows.length > COMPANY_DEMAND_LIMIT,
+  }
+}
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -14,21 +49,57 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const [company] = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1)
   if (!company) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const companyJobs = await db
-    .select({
-      id: jobs.id,
-      jobTitle: jobs.jobTitle,
-      interviewStage: jobs.interviewStage,
-      salaryMin: jobs.salaryMin,
-      salaryMax: jobs.salaryMax,
-      dateFound: jobs.dateFound,
-    })
-    .from(jobs)
-    .where(and(eq(jobs.companyId, companyId), eq(jobs.isActive, true)))
-    .orderBy(desc(jobs.dateFound))
-    .limit(50)
+  const [companyJobs, activeJobCountRows, skillsDemand, softwareDemand, certificationsDemand, keywordsDemand] = await Promise.all([
+    db
+      .select({
+        id: jobs.id,
+        jobTitle: jobs.jobTitle,
+        interviewStage: jobs.interviewStage,
+        salaryMin: jobs.salaryMin,
+        salaryMax: jobs.salaryMax,
+        dateFound: jobs.dateFound,
+      })
+      .from(jobs)
+      .where(and(eq(jobs.companyId, companyId), eq(jobs.isActive, true), isNull(jobs.deletedAt)))
+      .orderBy(desc(jobs.dateFound))
+      .limit(50),
+    db.execute(sql`
+      SELECT CAST(COUNT(DISTINCT ${jobs.id}) AS int) AS count
+      FROM ${jobs}
+      WHERE ${jobs.companyId} = ${companyId}
+        AND ${jobs.isActive} IS TRUE
+        AND ${jobs.deletedAt} IS NULL
+    `),
+    companyDemandQuery('skills', companyId),
+    companyDemandQuery('software', companyId),
+    companyDemandQuery('certifications', companyId),
+    companyDemandQuery('keywords', companyId),
+  ])
 
-  return NextResponse.json({ ...company, jobs: companyJobs })
+  const demand = {
+    skills: summarizeDemand(skillsDemand),
+    software: summarizeDemand(softwareDemand),
+    certifications: summarizeDemand(certificationsDemand),
+    keywords: summarizeDemand(keywordsDemand),
+  }
+
+  return NextResponse.json({
+    ...company,
+    jobs: companyJobs,
+    taxonomyDemand: {
+      activeJobCount: Number(resultRows<{ count: number }>(activeJobCountRows)[0]?.count ?? 0),
+      skills: demand.skills.items,
+      software: demand.software.items,
+      certifications: demand.certifications.items,
+      keywords: demand.keywords.items,
+      truncated: {
+        skills: demand.skills.truncated,
+        software: demand.software.truncated,
+        certifications: demand.certifications.truncated,
+        keywords: demand.keywords.truncated,
+      },
+    },
+  })
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

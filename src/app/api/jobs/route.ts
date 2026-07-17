@@ -12,7 +12,7 @@ import {
   jobCertifications,
   jobKeywords,
 } from '@/db/schema'
-import { eq, and, ilike, or, gte, lte, count, desc, sql } from 'drizzle-orm'
+import { eq, and, ilike, or, gte, lte, count, desc, isNull, sql } from 'drizzle-orm'
 import { parsePositiveIdFilter, taxonomyFilterParams } from '@/lib/taxonomy'
 import {
   sourcePlatformEnum, jobTypeEnum, experienceLevelEnum, interviewStageEnum,
@@ -34,6 +34,18 @@ async function listJobs(req: NextRequest) {
   const offset = (page - 1) * limit
 
   const filters = []
+
+  const companyIdRaw = searchParams.get('company_id')
+  if (companyIdRaw !== null) {
+    const companyId = Number(companyIdRaw)
+    if (!/^\d+$/.test(companyIdRaw) || !Number.isSafeInteger(companyId) || companyId <= 0) {
+      return NextResponse.json(
+        { error: 'Invalid company_id: expected a positive integer' },
+        { status: 400 },
+      )
+    }
+    filters.push(eq(jobs.companyId, companyId))
+  }
 
   const stage = searchParams.get('stage')
   const stageParsed = interviewStageEnum.safeParse(stage)
@@ -59,7 +71,9 @@ async function listJobs(req: NextRequest) {
 
   // Default to active-only; pass ?is_active=false to include soft-deleted jobs
   const isActive = searchParams.get('is_active')
-  filters.push(eq(jobs.isActive, isActive === null ? true : isActive === 'true'))
+  const activeOnly = isActive === null ? true : isActive === 'true'
+  filters.push(eq(jobs.isActive, activeOnly))
+  if (activeOnly) filters.push(isNull(jobs.deletedAt))
 
   const salaryMinRaw = searchParams.get('salary_min')
   const salaryMinVal = salaryMinRaw ? parseInt(salaryMinRaw) : NaN
@@ -117,7 +131,7 @@ async function listJobs(req: NextRequest) {
   const where = filters.length > 0 ? and(...filters) : undefined
 
   logger.debug('GET /api/jobs', {
-    page, limit, stage, platform, jobType, expLevel, clearance, isRemote,
+    page, limit, companyId: companyIdRaw, stage, platform, jobType, expLevel, clearance, isRemote,
     hasQuery: q != null && q.length > 0,
     queryLength: q != null ? q.length : undefined,
   })

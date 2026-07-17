@@ -1,17 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
+import { PgDialect } from 'drizzle-orm/pg-core'
 
 vi.mock('@/lib/auth', () => ({
   requireApiKey: vi.fn(),
 }))
 
 vi.mock('@/db', () => ({
-  db: { select: vi.fn(), update: vi.fn() },
-}))
-
-vi.mock('@/db/schema', () => ({
-  companies: {},
-  jobs: {},
+  db: { select: vi.fn(), update: vi.fn(), execute: vi.fn() },
 }))
 
 import { requireApiKey } from '@/lib/auth'
@@ -64,6 +60,8 @@ describe('GET /api/companies', () => {
 describe('GET /api/companies/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    mockDb.execute.mockResolvedValue([])
   })
 
   it('returns 400 for non-numeric id', async () => {
@@ -96,6 +94,12 @@ describe('GET /api/companies/[id]', () => {
       if (callCount === 1) return makeChain([mockCompany])
       return makeChain([{ id: 10, jobTitle: 'Engineer' }])
     })
+    mockDb.execute
+      .mockResolvedValueOnce([{ count: 2 }])
+      .mockResolvedValueOnce([{ id: 1, name: 'TypeScript', jobCount: 2 }])
+      .mockResolvedValueOnce([{ id: 2, name: 'Docker', jobCount: 1 }])
+      .mockResolvedValueOnce([{ id: 3, name: 'AWS Certified', jobCount: 1 }])
+      .mockResolvedValueOnce([{ id: 4, name: 'Remote', jobCount: 2 }])
 
     const { GET } = await import('@/app/api/companies/[id]/route')
     const req = new NextRequest('http://localhost/api/companies/1')
@@ -106,6 +110,14 @@ describe('GET /api/companies/[id]', () => {
     expect(json).toHaveProperty('sizeRange', '51-200')
     expect(json).toHaveProperty('jobs')
     expect(Array.isArray(json.jobs)).toBe(true)
+    expect(json.taxonomyDemand).toEqual({
+      activeJobCount: 2,
+      skills: [{ id: 1, name: 'TypeScript', jobCount: 2 }],
+      software: [{ id: 2, name: 'Docker', jobCount: 1 }],
+      certifications: [{ id: 3, name: 'AWS Certified', jobCount: 1 }],
+      keywords: [{ id: 4, name: 'Remote', jobCount: 2 }],
+      truncated: { skills: false, software: false, certifications: false, keywords: false },
+    })
   })
 
   it('applies a limit of 50 to the linked jobs query', async () => {
@@ -117,6 +129,7 @@ describe('GET /api/companies/[id]', () => {
       if (callCount === 1) return makeChain([mockCompany])
       return jobsChain
     })
+    mockDb.execute.mockResolvedValue([])
 
     const { GET } = await import('@/app/api/companies/[id]/route')
     const req = new NextRequest('http://localhost/api/companies/1')
@@ -124,6 +137,53 @@ describe('GET /api/companies/[id]', () => {
 
     const limitSpy = jobsChain.limit as ReturnType<typeof vi.fn>
     expect(limitSpy).toHaveBeenCalledWith(50)
+  })
+
+  it('compiles a bounded PostgreSQL query that excludes inactive, deleted, and duplicate assignments', async () => {
+    const { buildCompanyDemandQuery } = await import('@/lib/company-taxonomy-demand')
+    const compiled = new PgDialect().sqlToQuery(buildCompanyDemandQuery('skills', 7))
+
+    expect(compiled.sql).toContain('COUNT(DISTINCT "job_skills"."job_id")')
+    expect(compiled.sql).toContain('"jobs"."is_active" IS TRUE')
+    expect(compiled.sql).toContain('"jobs"."deleted_at" IS NULL')
+    expect(compiled.sql).toContain('LIMIT $2')
+    expect(compiled.params).toEqual([7, 11])
+  })
+
+  it('returns only the ten most common values and marks an overflowing category as truncated', async () => {
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    let callCount = 0
+    mockDb.select.mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return makeChain([mockCompany])
+      return makeChain([])
+    })
+    const skillRows = Array.from({ length: 11 }, (_, index) => ({
+      id: index + 1,
+      name: `Skill ${index + 1}`,
+      jobCount: 11 - index,
+    }))
+    mockDb.execute
+      .mockResolvedValueOnce([{ count: 12 }])
+      .mockResolvedValueOnce(skillRows)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+
+    const { GET } = await import('@/app/api/companies/[id]/route')
+    const res = await GET(new NextRequest('http://localhost/api/companies/1'), {
+      params: Promise.resolve({ id: '1' }),
+    })
+    const json = await res.json()
+
+    expect(json.taxonomyDemand.skills).toHaveLength(10)
+    expect(json.taxonomyDemand.skills.at(-1)).toEqual({ id: 10, name: 'Skill 10', jobCount: 2 })
+    expect(json.taxonomyDemand.truncated).toEqual({
+      skills: true,
+      software: false,
+      certifications: false,
+      keywords: false,
+    })
   })
 })
 

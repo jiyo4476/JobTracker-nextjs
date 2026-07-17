@@ -165,6 +165,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     ...(d.heard_back !== undefined && { heardBack: d.heard_back }),
     ...(d.interview_stage !== undefined && { interviewStage: d.interview_stage }),
     ...(d.is_active !== undefined && { isActive: d.is_active }),
+    ...(d.is_active === true && { deletedAt: null }),
     ...(d.priority !== undefined && { priority: d.priority }),
     ...(d.notes !== undefined && { notes: d.notes }),
     ...(d.resume_version !== undefined && { resumeVersion: d.resume_version }),

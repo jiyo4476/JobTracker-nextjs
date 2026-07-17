@@ -21,6 +21,22 @@ export type CompanyDetail = CompanyRow & {
     salaryMax: number | null
     dateFound: string
   }>
+  taxonomyDemand: CompanyTaxonomyDemand
+}
+
+export type CompanyTaxonomyDemandItem = {
+  id: number
+  name: string
+  jobCount: number
+}
+
+export type CompanyTaxonomyDemand = {
+  activeJobCount: number
+  skills: CompanyTaxonomyDemandItem[]
+  software: CompanyTaxonomyDemandItem[]
+  certifications: CompanyTaxonomyDemandItem[]
+  keywords: CompanyTaxonomyDemandItem[]
+  truncated: Record<'skills' | 'software' | 'certifications' | 'keywords', boolean>
 }
 
 export type Contact = {
@@ -264,6 +280,7 @@ export interface JobsResponse {
 
 export interface JobsParams {
   page?: number
+  company_id?: number
   q?: string
   stage?: string
   platform?: string

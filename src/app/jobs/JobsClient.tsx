@@ -40,6 +40,7 @@ const JOB_TYPES = ['', 'full_time', 'part_time', 'contract', 'internship', 'temp
 const EXPERIENCE_LEVELS = ['', 'entry', 'mid', 'senior', 'lead', 'executive']
 const EXTRA_FILTER_PARAMS = [
   'salary_min', 'salary_max', 'priority_min',
+  'company_id',
   'skill_ids', 'software_ids', 'certification_ids', 'keyword_ids',
 ] as const
 
@@ -59,6 +60,11 @@ export default function JobsClient() {
   const securityClearance = searchParams.get('security_clearance') ?? ''
   const isRemote = searchParams.get('is_remote') ?? ''
   const urlQ = searchParams.get('q') ?? ''
+  const companyIdRaw = searchParams.get('company_id')
+  const parsedCompanyId = companyIdRaw && /^\d+$/.test(companyIdRaw) ? Number(companyIdRaw) : NaN
+  const companyId = Number.isSafeInteger(parsedCompanyId) && parsedCompanyId > 0
+    ? parsedCompanyId
+    : undefined
 
   // Local state for the search input (debounced sync to URL)
   const [inputQ, setInputQ] = useState(urlQ)
@@ -113,6 +119,7 @@ export default function JobsClient() {
 
   const { data, isLoading } = useJobs({
     page,
+    company_id: companyId,
     q: urlQ,
     stage,
     platform,
