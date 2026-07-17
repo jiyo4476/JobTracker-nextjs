@@ -19,6 +19,7 @@ const demand: Demand = {
   software: [{ id: 2, name: 'Docker', jobCount: 1 }],
   certifications: [{ id: 3, name: 'CISSP', jobCount: 1 }],
   keywords: [{ id: 4, name: 'Remote', jobCount: 2 }],
+  truncated: { skills: false, software: false, certifications: false, keywords: false },
 }
 
 describe('CompanyTaxonomyDemand', () => {
@@ -50,6 +51,7 @@ describe('CompanyTaxonomyDemand', () => {
       software: [],
       certifications: [],
       keywords: [],
+      truncated: { skills: false, software: false, certifications: false, keywords: false },
     }} />)
     expect(screen.getByText('No active jobs are available to summarize.')).toBeTruthy()
     expect(screen.queryByText(/Based on/)).toBeNull()
@@ -60,9 +62,20 @@ describe('CompanyTaxonomyDemand', () => {
       software: [],
       certifications: [],
       keywords: [],
+      truncated: { skills: false, software: false, certifications: false, keywords: false },
     }} />)
     expect(screen.getByText('Limited sample: based on 1 active job.')).toBeTruthy()
     expect(screen.getByText('No Skills, Software, Certifications, or Keywords are linked to these active jobs yet.')).toBeTruthy()
     expect(screen.getByText('No skills found.')).toBeTruthy()
+  })
+
+  it('announces when a category is limited to its most common values', () => {
+    render(<CompanyTaxonomyDemand companyId={7} demand={{
+      ...demand,
+      truncated: { ...demand.truncated, skills: true },
+    }} />)
+
+    expect(screen.getByText('Showing the 10 most common skills.')).toBeTruthy()
+    expect(screen.queryByText('Showing the 10 most common software.')).toBeNull()
   })
 })

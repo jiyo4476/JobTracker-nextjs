@@ -3,70 +3,42 @@ import { db } from '@/db'
 import { requireApiKey } from '@/lib/auth'
 import { companyPatchSchema } from '@/lib/schemas'
 import { logger, serializeError } from '@/lib/logger'
-import {
-  certifications,
-  companies,
-  jobCertifications,
-  jobKeywords,
-  jobSkills,
-  jobSoftware,
-  jobs,
-  keywords,
-  skills,
-  software,
-} from '@/db/schema'
+import { companies, jobs } from '@/db/schema'
 import { and, desc, eq, isNull, sql } from 'drizzle-orm'
+import {
+  buildCompanyDemandQuery,
+  COMPANY_DEMAND_LIMIT,
+  type CompanyDemandCategory,
+} from '@/lib/company-taxonomy-demand'
 
-const demandConfigs = {
-  skills: {
-    junction: jobSkills,
-    relationId: jobSkills.skillId,
-    catalog: skills,
-    catalogId: skills.id,
-    name: skills.name,
-    jobId: jobSkills.jobId,
-  },
-  software: {
-    junction: jobSoftware,
-    relationId: jobSoftware.softwareId,
-    catalog: software,
-    catalogId: software.id,
-    name: software.name,
-    jobId: jobSoftware.jobId,
-  },
-  certifications: {
-    junction: jobCertifications,
-    relationId: jobCertifications.certificationId,
-    catalog: certifications,
-    catalogId: certifications.id,
-    name: certifications.name,
-    jobId: jobCertifications.jobId,
-  },
-  keywords: {
-    junction: jobKeywords,
-    relationId: jobKeywords.keywordId,
-    catalog: keywords,
-    catalogId: keywords.id,
-    name: keywords.name,
-    jobId: jobKeywords.jobId,
-  },
-} as const
+type DemandRow = {
+  id: number
+  name: string
+  jobCount: number
+}
 
-function companyDemandQuery(category: keyof typeof demandConfigs, companyId: number) {
-  const config = demandConfigs[category]
-  return db.execute(sql`
-    SELECT ${config.catalogId} AS id,
-           ${config.name} AS name,
-           CAST(COUNT(DISTINCT ${config.jobId}) AS int) AS "jobCount"
-    FROM ${config.junction}
-    JOIN ${config.catalog} ON ${config.relationId} = ${config.catalogId}
-    JOIN ${jobs} ON ${config.jobId} = ${jobs.id}
-    WHERE ${jobs.companyId} = ${companyId}
-      AND ${jobs.isActive} IS TRUE
-      AND ${jobs.deletedAt} IS NULL
-    GROUP BY ${config.catalogId}, ${config.name}
-    ORDER BY "jobCount" DESC, ${config.name} ASC
-  `)
+function resultRows<T>(result: unknown): T[] {
+  if (Array.isArray(result)) return result as T[]
+  if (result && typeof result === 'object' && 'rows' in result) {
+    const rows = (result as { rows?: unknown }).rows
+    if (Array.isArray(rows)) return rows as T[]
+  }
+  return []
+}
+
+function companyDemandQuery(
+  category: CompanyDemandCategory,
+  companyId: number,
+) {
+  return db.execute(buildCompanyDemandQuery(category, companyId))
+}
+
+function summarizeDemand(result: unknown) {
+  const rows = resultRows<DemandRow>(result)
+  return {
+    items: rows.slice(0, COMPANY_DEMAND_LIMIT),
+    truncated: rows.length > COMPANY_DEMAND_LIMIT,
+  }
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -104,15 +76,28 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     companyDemandQuery('keywords', companyId),
   ])
 
+  const demand = {
+    skills: summarizeDemand(skillsDemand),
+    software: summarizeDemand(softwareDemand),
+    certifications: summarizeDemand(certificationsDemand),
+    keywords: summarizeDemand(keywordsDemand),
+  }
+
   return NextResponse.json({
     ...company,
     jobs: companyJobs,
     taxonomyDemand: {
-      activeJobCount: Number(activeJobCountRows[0]?.count ?? 0),
-      skills: skillsDemand,
-      software: softwareDemand,
-      certifications: certificationsDemand,
-      keywords: keywordsDemand,
+      activeJobCount: Number(resultRows<{ count: number }>(activeJobCountRows)[0]?.count ?? 0),
+      skills: demand.skills.items,
+      software: demand.software.items,
+      certifications: demand.certifications.items,
+      keywords: demand.keywords.items,
+      truncated: {
+        skills: demand.skills.truncated,
+        software: demand.software.truncated,
+        certifications: demand.certifications.truncated,
+        keywords: demand.keywords.truncated,
+      },
     },
   })
 }

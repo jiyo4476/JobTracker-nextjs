@@ -183,6 +183,7 @@ describe('GET /api/jobs', () => {
     const rendered = sqlText(countWhereArg)
     expect(rendered).toContain('"jobs"."company_id" = $1')
     expect(rendered).toContain('"job_skills"')
+    expect(rendered).toContain('"jobs"."deleted_at" is null')
   })
 
   it.each(['0', '-1', '1.5', 'abc', '9007199254740992'])(

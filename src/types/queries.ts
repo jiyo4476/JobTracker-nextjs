@@ -36,6 +36,7 @@ export type CompanyTaxonomyDemand = {
   software: CompanyTaxonomyDemandItem[]
   certifications: CompanyTaxonomyDemandItem[]
   keywords: CompanyTaxonomyDemandItem[]
+  truncated: Record<'skills' | 'software' | 'certifications' | 'keywords', boolean>
 }
 
 export type Contact = {

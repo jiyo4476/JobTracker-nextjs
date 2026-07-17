@@ -156,6 +156,21 @@ describe('PATCH /api/jobs/[id]', () => {
     )
   })
 
+  it('clears the deletion marker when a job is restored', async () => {
+    vi.mocked(requireApiKey).mockResolvedValue(true)
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    const updateChain = makeChain(undefined)
+    mockDb.update.mockReturnValue(updateChain)
+
+    const { PATCH } = await import('@/app/api/jobs/[id]/route')
+    const res = await PATCH(makeReq('1', { is_active: true }), makeParams('1'))
+
+    expect(res.status).toBe(200)
+    expect(updateChain.set).toHaveBeenCalledWith(
+      expect.objectContaining({ isActive: true, deletedAt: null }),
+    )
+  })
+
   it('clears optional classification fields when null is provided', async () => {
     vi.mocked(requireApiKey).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>

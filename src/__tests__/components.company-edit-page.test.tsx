@@ -53,6 +53,7 @@ const company: CompanyDetail = {
     software: [],
     certifications: [],
     keywords: [],
+    truncated: { skills: false, software: false, certifications: false, keywords: false },
   },
 }
 

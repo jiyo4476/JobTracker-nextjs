@@ -12,7 +12,7 @@ import {
   jobCertifications,
   jobKeywords,
 } from '@/db/schema'
-import { eq, and, ilike, or, gte, lte, count, desc, sql } from 'drizzle-orm'
+import { eq, and, ilike, or, gte, lte, count, desc, isNull, sql } from 'drizzle-orm'
 import { parsePositiveIdFilter, taxonomyFilterParams } from '@/lib/taxonomy'
 import {
   sourcePlatformEnum, jobTypeEnum, experienceLevelEnum, interviewStageEnum,
@@ -71,7 +71,9 @@ async function listJobs(req: NextRequest) {
 
   // Default to active-only; pass ?is_active=false to include soft-deleted jobs
   const isActive = searchParams.get('is_active')
-  filters.push(eq(jobs.isActive, isActive === null ? true : isActive === 'true'))
+  const activeOnly = isActive === null ? true : isActive === 'true'
+  filters.push(eq(jobs.isActive, activeOnly))
+  if (activeOnly) filters.push(isNull(jobs.deletedAt))
 
   const salaryMinRaw = searchParams.get('salary_min')
   const salaryMinVal = salaryMinRaw ? parseInt(salaryMinRaw) : NaN
