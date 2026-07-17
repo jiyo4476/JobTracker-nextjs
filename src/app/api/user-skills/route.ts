@@ -6,7 +6,9 @@ import { logger } from '@/lib/logger'
 import { userSkills, skills } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  if (!(await requireApiKey(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const rows = await db
     .select({
       skillId: userSkills.skillId,
