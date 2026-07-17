@@ -6,12 +6,20 @@ vi.mock('@/lib/auth', () => ({
 }))
 
 vi.mock('@/db', () => ({
-  db: { select: vi.fn(), update: vi.fn() },
+  db: { select: vi.fn(), update: vi.fn(), execute: vi.fn() },
 }))
 
 vi.mock('@/db/schema', () => ({
   companies: {},
-  jobs: {},
+  jobs: { id: {}, companyId: {}, isActive: {}, deletedAt: {}, dateFound: {} },
+  skills: { id: {}, name: {} },
+  software: { id: {}, name: {} },
+  certifications: { id: {}, name: {} },
+  keywords: { id: {}, name: {} },
+  jobSkills: { jobId: {}, skillId: {} },
+  jobSoftware: { jobId: {}, softwareId: {} },
+  jobCertifications: { jobId: {}, certificationId: {} },
+  jobKeywords: { jobId: {}, keywordId: {} },
 }))
 
 import { requireApiKey } from '@/lib/auth'
@@ -64,6 +72,8 @@ describe('GET /api/companies', () => {
 describe('GET /api/companies/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    mockDb.execute.mockResolvedValue([])
   })
 
   it('returns 400 for non-numeric id', async () => {
@@ -96,6 +106,12 @@ describe('GET /api/companies/[id]', () => {
       if (callCount === 1) return makeChain([mockCompany])
       return makeChain([{ id: 10, jobTitle: 'Engineer' }])
     })
+    mockDb.execute
+      .mockResolvedValueOnce([{ count: 2 }])
+      .mockResolvedValueOnce([{ id: 1, name: 'TypeScript', jobCount: 2 }])
+      .mockResolvedValueOnce([{ id: 2, name: 'Docker', jobCount: 1 }])
+      .mockResolvedValueOnce([{ id: 3, name: 'AWS Certified', jobCount: 1 }])
+      .mockResolvedValueOnce([{ id: 4, name: 'Remote', jobCount: 2 }])
 
     const { GET } = await import('@/app/api/companies/[id]/route')
     const req = new NextRequest('http://localhost/api/companies/1')
@@ -106,6 +122,13 @@ describe('GET /api/companies/[id]', () => {
     expect(json).toHaveProperty('sizeRange', '51-200')
     expect(json).toHaveProperty('jobs')
     expect(Array.isArray(json.jobs)).toBe(true)
+    expect(json.taxonomyDemand).toEqual({
+      activeJobCount: 2,
+      skills: [{ id: 1, name: 'TypeScript', jobCount: 2 }],
+      software: [{ id: 2, name: 'Docker', jobCount: 1 }],
+      certifications: [{ id: 3, name: 'AWS Certified', jobCount: 1 }],
+      keywords: [{ id: 4, name: 'Remote', jobCount: 2 }],
+    })
   })
 
   it('applies a limit of 50 to the linked jobs query', async () => {
@@ -117,6 +140,7 @@ describe('GET /api/companies/[id]', () => {
       if (callCount === 1) return makeChain([mockCompany])
       return jobsChain
     })
+    mockDb.execute.mockResolvedValue([])
 
     const { GET } = await import('@/app/api/companies/[id]/route')
     const req = new NextRequest('http://localhost/api/companies/1')
@@ -124,6 +148,18 @@ describe('GET /api/companies/[id]', () => {
 
     const limitSpy = jobsChain.limit as ReturnType<typeof vi.fn>
     expect(limitSpy).toHaveBeenCalledWith(50)
+  })
+
+  it('computes each category on the server and excludes inactive, deleted, and duplicate job assignments', async () => {
+    const source = await import('node:fs/promises').then(fs =>
+      fs.readFile(new URL('../app/api/companies/[id]/route.ts', import.meta.url), 'utf8'))
+
+    expect(source).toContain('COUNT(DISTINCT ${config.jobId})')
+    expect(source).toContain('AND ${jobs.isActive} IS TRUE')
+    expect(source).toContain('AND ${jobs.deletedAt} IS NULL')
+    for (const category of ['skills', 'software', 'certifications', 'keywords']) {
+      expect(source).toContain(`companyDemandQuery('${category}', companyId)`)
+    }
   })
 })
 

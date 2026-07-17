@@ -18,7 +18,7 @@ import type {
 // Re-export all types so consumers can import from '@/lib/queries' unchanged
 export type {
   ActivityItem,
-  CompanyRow, CompanyDetail,
+  CompanyRow, CompanyDetail, CompanyTaxonomyDemand, CompanyTaxonomyDemandItem,
   Contact,
   JobDetail, JobListItem, JobsResponse, JobsParams,
   LookupItem, StatsResponse, ResumeVersion, UserSkill,

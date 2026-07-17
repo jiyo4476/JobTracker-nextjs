@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { CompanyTaxonomyDemand } from '@/components/companies/CompanyTaxonomyDemand'
 import { useCompany, usePatchCompany } from '@/lib/queries'
 
 function formatSalary(min: number | null, max: number | null) {
@@ -93,7 +94,7 @@ export default function CompanyDetailPage() {
           </Link>
         }
       />
-      <div className="grid grid-cols-3 gap-6 mt-6">
+      <div className="grid gap-6 mt-6 lg:grid-cols-3">
         <div className="space-y-4">
           <Card>
             <CardHeader><CardTitle className="text-sm">Company Info</CardTitle></CardHeader>
@@ -154,7 +155,8 @@ export default function CompanyDetailPage() {
           </Card>
         </div>
 
-        <div className="col-span-2">
+        <div className="space-y-6 lg:col-span-2">
+          <CompanyTaxonomyDemand demand={company.taxonomyDemand} />
           <Card>
             <CardHeader><CardTitle className="text-sm">Jobs at this Company</CardTitle></CardHeader>
             <CardContent className="space-y-2">

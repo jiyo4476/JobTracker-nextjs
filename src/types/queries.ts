@@ -21,6 +21,21 @@ export type CompanyDetail = CompanyRow & {
     salaryMax: number | null
     dateFound: string
   }>
+  taxonomyDemand: CompanyTaxonomyDemand
+}
+
+export type CompanyTaxonomyDemandItem = {
+  id: number
+  name: string
+  jobCount: number
+}
+
+export type CompanyTaxonomyDemand = {
+  activeJobCount: number
+  skills: CompanyTaxonomyDemandItem[]
+  software: CompanyTaxonomyDemandItem[]
+  certifications: CompanyTaxonomyDemandItem[]
+  keywords: CompanyTaxonomyDemandItem[]
 }
 
 export type Contact = {
