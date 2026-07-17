@@ -55,6 +55,114 @@ export type UserSkill = {
   hasSkill: boolean | null
 }
 
+export type UserTaxonomyCategory = 'skills' | 'software' | 'certifications' | 'keywords'
+
+export type UserSkillTaxonomyItem = {
+  taxonomyId: number
+  name: string
+  hasSkill: boolean | null
+}
+
+export type UserSoftwareTaxonomyItem = {
+  taxonomyId: number
+  name: string
+  familiarity: 'learning' | 'familiar' | 'proficient' | 'expert' | null
+}
+
+export type UserCertificationTaxonomyItem = {
+  taxonomyId: number
+  name: string
+  issuer: string | null
+  earnedDate: string | null
+  expiresAt: string | null
+  credentialUrl: string | null
+}
+
+export type UserKeywordTaxonomyItem = {
+  taxonomyId: number
+  name: string
+  preference: 'interest' | 'exclusion'
+}
+
+export type UserTaxonomyItem =
+  | UserSkillTaxonomyItem
+  | UserSoftwareTaxonomyItem
+  | UserCertificationTaxonomyItem
+  | UserKeywordTaxonomyItem
+
+export type UserTaxonomyResponse =
+  | { category: 'skills'; items: UserSkillTaxonomyItem[] }
+  | { category: 'software'; items: UserSoftwareTaxonomyItem[] }
+  | { category: 'certifications'; items: UserCertificationTaxonomyItem[] }
+  | { category: 'keywords'; items: UserKeywordTaxonomyItem[] }
+
+export type UserTaxonomyCreateBody = {
+  taxonomy_id: number
+  name?: never
+} | {
+  name: string
+  taxonomy_id?: never
+}
+
+type UserTaxonomyCreateMetadata = {
+  skills: { has_skill?: boolean }
+  software: { familiarity?: 'learning' | 'familiar' | 'proficient' | 'expert' | null }
+  certifications: {
+    issuer?: string | null
+    earned_date?: string | null
+    expires_at?: string | null
+    credential_url?: string | null
+  }
+  keywords: { preference?: 'interest' | 'exclusion' }
+}
+
+type UserTaxonomyPatchMetadata = {
+  skills: { has_skill: boolean }
+  software: { familiarity: 'learning' | 'familiar' | 'proficient' | 'expert' | null }
+  certifications: UserTaxonomyCreateMetadata['certifications']
+  keywords: { preference: 'interest' | 'exclusion' }
+}
+
+export type UserTaxonomyCreatePayload<C extends UserTaxonomyCategory = UserTaxonomyCategory> =
+  UserTaxonomyCreateBody & UserTaxonomyCreateMetadata[C]
+
+export type UserTaxonomyPatchPayload<C extends UserTaxonomyCategory = UserTaxonomyCategory> =
+  UserTaxonomyPatchMetadata[C]
+
+export type UserTaxonomyCreateVariables = {
+  [C in UserTaxonomyCategory]: { category: C; body: UserTaxonomyCreatePayload<C> }
+}[UserTaxonomyCategory]
+
+export type UserTaxonomyPatchVariables = {
+  [C in UserTaxonomyCategory]: {
+    category: C
+    taxonomyId: number
+    body: UserTaxonomyPatchPayload<C>
+  }
+}[UserTaxonomyCategory]
+
+export type UserTaxonomyGapItem = {
+  taxonomyId: number
+  name: string
+  jobCount: number
+  profileStatus: string | null
+  matchState: 'matched' | 'excluded' | 'gap'
+}
+
+export type UserTaxonomyGapResponse = {
+  category: UserTaxonomyCategory
+  counts: {
+    profile: number
+    demanded: number
+    matched: number
+    excluded: number
+    gaps: number
+  }
+  items: UserTaxonomyGapItem[]
+  page: number
+  totalPages: number
+}
+
 export type JobDetail = {
   id: number
   jobTitle: string

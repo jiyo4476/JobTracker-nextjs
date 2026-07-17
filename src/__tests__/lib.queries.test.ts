@@ -55,6 +55,11 @@ import {
   useTagLookupByIds,
   useTaxonomyAnalytics,
   useUserSkills,
+  useUserTaxonomies,
+  useUserTaxonomyGap,
+  useCreateUserTaxonomy,
+  usePatchUserTaxonomy,
+  useDeleteUserTaxonomy,
 } from '@/lib/queries'
 
 // The mocked useQuery/useMutation return the hook's config object verbatim,
@@ -139,6 +144,8 @@ describe('query hooks', () => {
     ['useResumeVersions', () => useResumeVersions(), '/resume-versions'],
     ['useSkills', () => useSkills(), '/skills'],
     ['useUserSkills', () => useUserSkills(), '/user-skills'],
+    ['useUserTaxonomies', () => useUserTaxonomies('certifications'), '/user-taxonomies/certifications'],
+    ['useUserTaxonomyGap', () => useUserTaxonomyGap('keywords'), '/user-taxonomies/keywords/gap?limit=100'],
     ['useSoftware', () => useSoftware(), '/software'],
     ['useCertifications', () => useCertifications(), '/certifications'],
   ])('%s calls the expected read endpoint', async (_name, makeQuery, endpoint) => {
@@ -190,6 +197,38 @@ describe('query hooks', () => {
 
     expect(query.queryKey).toEqual(['tags', 'skills', 'ids', '4,99'])
     expect(api.get).toHaveBeenCalledWith('/tags?type=skills&ids=4%2C99')
+  })
+
+  it('writes profile metadata through category-owned routes and refreshes profile and gap data', async () => {
+    const create = asMutationConfig<{
+      category: 'software'
+      body: { name: string; familiarity: 'learning' }
+    }>(useCreateUserTaxonomy())
+    await create.mutationFn({ category: 'software', body: { name: 'Kubernetes', familiarity: 'learning' } })
+    create.onSuccess(undefined, { category: 'software', body: { name: 'Kubernetes', familiarity: 'learning' } })
+    expect(api.post).toHaveBeenCalledWith('/user-taxonomies/software', {
+      name: 'Kubernetes',
+      familiarity: 'learning',
+    })
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['user-taxonomies', 'software'] })
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['user-taxonomies', 'software', 'gap'] })
+
+    const patch = asMutationConfig<{
+      category: 'keywords'
+      taxonomyId: number
+      body: { preference: 'exclusion' }
+    }>(usePatchUserTaxonomy())
+    await patch.mutationFn({ category: 'keywords', taxonomyId: 4, body: { preference: 'exclusion' } })
+    patch.onSuccess(undefined, { category: 'keywords', taxonomyId: 4, body: { preference: 'exclusion' } })
+    expect(api.patch).toHaveBeenCalledWith('/user-taxonomies/keywords/4', { preference: 'exclusion' })
+
+    const remove = asMutationConfig<{ category: 'certifications'; taxonomyId: number }>(useDeleteUserTaxonomy())
+    await remove.mutationFn({ category: 'certifications', taxonomyId: 7 })
+    remove.onSuccess(undefined, { category: 'certifications', taxonomyId: 7 })
+    expect(api.delete).toHaveBeenCalledWith('/user-taxonomies/certifications/7')
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['user-taxonomies', 'certifications', 'gap'],
+    })
   })
 
   it('serializes the category-safe taxonomy analytics contract', async () => {
