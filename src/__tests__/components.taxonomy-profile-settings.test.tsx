@@ -183,6 +183,23 @@ describe('TaxonomyProfileSettings', () => {
     expect(mocks.remove).toHaveBeenCalledWith({ category: 'software', taxonomyId: 2 })
   })
 
+  it('starts a new edit from refetched metadata instead of a stale closed draft', async () => {
+    let keywordPreference: 'interest' | 'exclusion' = 'interest'
+    mocks.useUserTaxonomies.mockImplementation((category: UserTaxonomyCategory) =>
+      queryResult(category === 'keywords'
+        ? { category: 'keywords', items: [{ taxonomyId: 4, name: 'Remote', preference: keywordPreference }] }
+        : profiles[category]))
+    const user = userEvent.setup()
+    const view = render(<TaxonomyProfileSettings />)
+
+    keywordPreference = 'exclusion'
+    view.rerender(<TaxonomyProfileSettings />)
+    await user.click(screen.getByRole('button', { name: 'Edit Remote' }))
+
+    const editForm = screen.getByText('Edit Remote').closest('form') as HTMLFormElement
+    expect((within(editForm).getByLabelText('Preference') as HTMLSelectElement).value).toBe('exclusion')
+  })
+
   it('exposes independent loading, error/retry, empty, and partial states', async () => {
     mocks.useUserTaxonomies.mockImplementation((category: UserTaxonomyCategory) => {
       if (category === 'skills') return queryResult(profiles.skills, { isLoading: true })

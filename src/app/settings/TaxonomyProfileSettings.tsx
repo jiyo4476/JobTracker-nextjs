@@ -293,6 +293,13 @@ function ProfileItem({
     setEditing(false)
   }
 
+  function startEditing() {
+    // Refresh from the latest query result when editing begins, while leaving an
+    // already-open draft untouched if a background refetch arrives.
+    setMetadata(itemMetadata(item))
+    setEditing(true)
+  }
+
   return (
     <li className="rounded-md border border-slate-200 p-3 text-sm">
       {editing ? (
@@ -332,7 +339,7 @@ function ProfileItem({
             )}
           </div>
           <div className="flex shrink-0 gap-1">
-            <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => setEditing(true)}>
+            <Button type="button" size="sm" variant="outline" disabled={pending} onClick={startEditing}>
               Edit <span className="sr-only">{item.name}</span>
             </Button>
             <Button
