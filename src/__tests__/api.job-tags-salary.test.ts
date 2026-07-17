@@ -414,6 +414,38 @@ describe('GET /api/tags', () => {
     expect(chain.limit).toHaveBeenCalledWith(20)
   })
 
+  it('resolves selected names by IDs beyond the first lookup page', async () => {
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    const chain = makeChain([{ id: 99, name: 'Zymurgy' }])
+    mockDb.select.mockReturnValue(chain)
+
+    const { GET } = await import('@/app/api/tags/route')
+    const res = await GET(new NextRequest('http://localhost/api/tags?type=skills&ids=99,4,99'))
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual([{ id: 99, name: 'Zymurgy' }])
+    expect(chain.limit).toHaveBeenCalledWith(2)
+  })
+
+  it.each(['abc', '0', '-1'])('rejects invalid selected ID input %j', async ids => {
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    const { GET } = await import('@/app/api/tags/route')
+    const res = await GET(new NextRequest(`http://localhost/api/tags?type=skills&ids=${ids}`))
+
+    expect(res.status).toBe(400)
+    expect(mockDb.select).not.toHaveBeenCalled()
+  })
+
+  it('rejects more than 100 selected IDs before querying', async () => {
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    const ids = Array.from({ length: 101 }, (_, index) => index + 1).join(',')
+    const { GET } = await import('@/app/api/tags/route')
+    const res = await GET(new NextRequest(`http://localhost/api/tags?type=skills&ids=${ids}`))
+
+    expect(res.status).toBe(400)
+    expect(mockDb.select).not.toHaveBeenCalled()
+  })
+
   it('does not throw on query strings containing ilike wildcard characters', async () => {
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.select.mockReturnValue(makeChain([]))

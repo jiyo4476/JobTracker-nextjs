@@ -3,7 +3,7 @@ import { db } from '@/db'
 import { certifications, keywords, skills, software } from '@/db/schema'
 import { escapeLikePattern } from '@/lib/db-utils'
 import { logger, serializeError } from '@/lib/logger'
-import { asc, ilike } from 'drizzle-orm'
+import { asc, ilike, inArray } from 'drizzle-orm'
 
 const tagTables = {
   skills,
@@ -22,6 +22,24 @@ function normalizeTagType(value: string | null): TagType | null {
   return null
 }
 
+function parseTagIds(value: string | null) {
+  if (value === null) return { success: true as const, ids: [] }
+  const tokens = value.split(',').map(token => token.trim())
+  if (
+    tokens.some(token => !/^\d+$/.test(token)) ||
+    tokens.some(token => {
+      const id = Number(token)
+      return !Number.isSafeInteger(id) || id <= 0
+    })
+  ) {
+    return { success: false as const, error: 'Invalid ids: expected comma-separated positive integers' }
+  }
+
+  const ids = [...new Set(tokens.map(Number))]
+  if (ids.length > 100) return { success: false as const, error: 'Invalid ids: at most 100 IDs are allowed' }
+  return { success: true as const, ids }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
@@ -31,13 +49,22 @@ export async function GET(req: NextRequest) {
     }
 
     const q = searchParams.get('q')?.trim().slice(0, 100)
+    const parsedIds = parseTagIds(searchParams.get('ids'))
+    if (!parsedIds.success) {
+      return NextResponse.json({ error: parsedIds.error }, { status: 400 })
+    }
     const table = tagTables[type]
+    const where = parsedIds.ids.length > 0
+      ? inArray(table.id, parsedIds.ids)
+      : q
+        ? ilike(table.name, `%${escapeLikePattern(q)}%`)
+        : undefined
     const rows = await db
       .select({ id: table.id, name: table.name })
       .from(table)
-      .where(q ? ilike(table.name, `%${escapeLikePattern(q)}%`) : undefined)
+      .where(where)
       .orderBy(asc(table.name))
-      .limit(20)
+      .limit(parsedIds.ids.length > 0 ? parsedIds.ids.length : 20)
 
     return NextResponse.json(rows)
   } catch (err) {

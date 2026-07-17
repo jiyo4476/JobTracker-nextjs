@@ -398,6 +398,12 @@ export default function JobsClient() {
         <TaxonomyFilters
           searchParams={new URLSearchParams(searchParams.toString())}
           onChange={(param, value) => updateParams({ [param]: value })}
+          onClearAll={() => updateParams({
+            skill_ids: '',
+            software_ids: '',
+            certification_ids: '',
+            keyword_ids: '',
+          })}
         />
       </div>
 

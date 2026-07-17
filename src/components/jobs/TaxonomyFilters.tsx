@@ -5,7 +5,7 @@ import type { UseQueryResult } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
-import { useTagLookup, type LookupItem } from '@/lib/queries'
+import { useTagLookup, useTagLookupByIds, type LookupItem } from '@/lib/queries'
 import {
   jobsTaxonomyFilters,
   selectedTaxonomyIds,
@@ -17,10 +17,12 @@ import {
 type Props = {
   searchParams: URLSearchParams
   onChange: (param: string, value: string) => void
+  onClearAll: () => void
 }
 
 type FilterState = TaxonomyFilterConfig & {
   query: UseQueryResult<LookupItem[]>
+  selectedQuery: UseQueryResult<LookupItem[]>
   search: string
   setSearch: (value: string) => void
   selectedIds: number[]
@@ -100,24 +102,45 @@ function TaxonomyFilterGroup({ filter, onChange }: {
   )
 }
 
-export function TaxonomyFilters({ searchParams, onChange }: Props) {
+export function TaxonomyFilters({ searchParams, onChange, onClearAll }: Props) {
   const skills = useSearchableTagLookup('skills')
   const software = useSearchableTagLookup('software')
   const certifications = useSearchableTagLookup('certifications')
   const keywords = useSearchableTagLookup('keywords')
   const queries = { skills, software, certifications, keywords }
 
+  const skillIds = selectedTaxonomyIds(searchParams, 'skill_ids')
+  const softwareIds = selectedTaxonomyIds(searchParams, 'software_ids')
+  const certificationIds = selectedTaxonomyIds(searchParams, 'certification_ids')
+  const keywordIds = selectedTaxonomyIds(searchParams, 'keyword_ids')
+  const selectedIdsByCategory = {
+    skills: skillIds,
+    software: softwareIds,
+    certifications: certificationIds,
+    keywords: keywordIds,
+  }
+  const selectedQueries = {
+    skills: useTagLookupByIds('skills', skillIds),
+    software: useTagLookupByIds('software', softwareIds),
+    certifications: useTagLookupByIds('certifications', certificationIds),
+    keywords: useTagLookupByIds('keywords', keywordIds),
+  }
+
   const filters: FilterState[] = jobsTaxonomyFilters.map(filter => ({
     ...filter,
     ...queries[filter.category],
-    selectedIds: selectedTaxonomyIds(searchParams, filter.param),
+    selectedQuery: selectedQueries[filter.category],
+    selectedIds: selectedIdsByCategory[filter.category],
   }))
 
   const activeFilters = filters.flatMap(filter => filter.selectedIds.map(id => ({
     category: filter.category,
     categoryLabel: filter.label,
     id,
-    name: taxonomyValueName(filter.query.data ?? [], id),
+    name: taxonomyValueName([
+      ...(filter.selectedQuery.data ?? []),
+      ...(filter.query.data ?? []),
+    ], id),
     param: filter.param,
     selectedIds: filter.selectedIds,
   })))
@@ -148,6 +171,15 @@ export function TaxonomyFilters({ searchParams, onChange }: Props) {
               {filter.categoryLabel}: {filter.name} ×
             </button>
           ))}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label={`Clear all ${activeFilters.length} taxonomy filters`}
+            onClick={onClearAll}
+          >
+            Clear all
+          </Button>
         </div>
       )}
     </div>
