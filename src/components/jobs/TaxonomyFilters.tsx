@@ -1,8 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import type { UseQueryResult } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
 import { useTagLookup, type LookupItem } from '@/lib/queries'
 import {
   jobsTaxonomyFilters,
@@ -19,15 +21,24 @@ type Props = {
 
 type FilterState = TaxonomyFilterConfig & {
   query: UseQueryResult<LookupItem[]>
+  search: string
+  setSearch: (value: string) => void
   selectedIds: number[]
+}
+
+function useSearchableTagLookup(category: TaxonomyFilterConfig['category']) {
+  const [search, setSearch] = useState('')
+  const query = useTagLookup(category, search)
+  return { query, search, setSearch }
 }
 
 function TaxonomyFilterGroup({ filter, onChange }: {
   filter: FilterState
   onChange: Props['onChange']
 }) {
-  const { label, param, query, selectedIds } = filter
+  const { label, param, query, search, setSearch, selectedIds } = filter
   const options = query.data ?? []
+  const searchId = `jobs-filter-${filter.category}-search`
 
   return (
     <details className="relative min-w-44 rounded-md border border-slate-200 bg-white">
@@ -37,8 +48,19 @@ function TaxonomyFilterGroup({ filter, onChange }: {
       >
         {label}{selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}
       </summary>
-      <div className="absolute z-20 mt-1 max-h-72 min-w-full overflow-y-auto rounded-md border border-slate-200 bg-white p-3 shadow-lg">
+      <div className="absolute z-20 mt-1 max-h-80 w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-md border border-slate-200 bg-white p-3 shadow-lg sm:min-w-64">
         <p className="mb-2 text-xs font-medium text-slate-600">Select {label.toLowerCase()}</p>
+        <label htmlFor={searchId} className="sr-only">Search {label.toLowerCase()}</label>
+        <Input
+          id={searchId}
+          type="search"
+          value={search}
+          autoComplete="off"
+          placeholder={`Search ${label.toLowerCase()}…`}
+          aria-label={`Search ${label.toLowerCase()}`}
+          className="mb-3"
+          onChange={event => setSearch(event.target.value)}
+        />
         {query.isLoading && <p role="status" className="text-xs text-slate-500">Loading {label.toLowerCase()}…</p>}
         {query.isError && (
           <div role="alert" className="space-y-2 text-xs text-red-700">
@@ -47,7 +69,11 @@ function TaxonomyFilterGroup({ filter, onChange }: {
           </div>
         )}
         {!query.isLoading && !query.isError && options.length === 0 && (
-          <p className="text-xs text-slate-500">No {label.toLowerCase()} available.</p>
+          <p className="text-xs text-slate-500">
+            {search.trim()
+              ? `No ${label.toLowerCase()} match “${search.trim()}”.`
+              : `No ${label.toLowerCase()} available.`}
+          </p>
         )}
         <div className="space-y-2">
           {options.map(option => {
@@ -75,15 +101,15 @@ function TaxonomyFilterGroup({ filter, onChange }: {
 }
 
 export function TaxonomyFilters({ searchParams, onChange }: Props) {
-  const skills = useTagLookup('skills', '')
-  const software = useTagLookup('software', '')
-  const certifications = useTagLookup('certifications', '')
-  const keywords = useTagLookup('keywords', '')
+  const skills = useSearchableTagLookup('skills')
+  const software = useSearchableTagLookup('software')
+  const certifications = useSearchableTagLookup('certifications')
+  const keywords = useSearchableTagLookup('keywords')
   const queries = { skills, software, certifications, keywords }
 
   const filters: FilterState[] = jobsTaxonomyFilters.map(filter => ({
     ...filter,
-    query: queries[filter.category],
+    ...queries[filter.category],
     selectedIds: selectedTaxonomyIds(searchParams, filter.param),
   }))
 

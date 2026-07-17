@@ -38,4 +38,21 @@ describe('jobs taxonomy filter state', () => {
     expect(toggleTaxonomyId([9, 3, 9], 5, true)).toBe('3,5,9')
     expect(toggleTaxonomyId([9, 3], 9, false)).toBe('3')
   })
+
+  it('forwards only canonical valid taxonomy IDs to the jobs API', () => {
+    const overLimit = Array.from({ length: 101 }, (_, index) => index + 1).join(',')
+    const params = new URLSearchParams()
+    params.set('skill_ids', 'abc')
+    params.set('software_ids', '3, 2,3')
+    params.set('certification_ids', overLimit)
+    params.append('keyword_ids', '8')
+    params.append('keyword_ids', '7,8')
+
+    expect(taxonomyJobsParams(params)).toEqual({
+      skill_ids: undefined,
+      software_ids: '3,2',
+      certification_ids: undefined,
+      keyword_ids: '8,7',
+    })
+  })
 })

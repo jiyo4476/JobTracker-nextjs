@@ -35,11 +35,16 @@ export function taxonomyJobsParams(searchParams: URLSearchParams): Pick<
   JobsParams,
   'skill_ids' | 'software_ids' | 'certification_ids' | 'keyword_ids'
 > {
+  const canonicalValue = (param: TaxonomyFilterParam) => {
+    const parsed = parsePositiveIdFilter(searchParams, param)
+    return parsed.success && parsed.ids.length > 0 ? parsed.ids.join(',') : undefined
+  }
+
   return {
-    skill_ids: searchParams.get(taxonomyFilterParams.skills) || undefined,
-    software_ids: searchParams.get(taxonomyFilterParams.software) || undefined,
-    certification_ids: searchParams.get(taxonomyFilterParams.certifications) || undefined,
-    keyword_ids: searchParams.get(taxonomyFilterParams.keywords) || undefined,
+    skill_ids: canonicalValue(taxonomyFilterParams.skills),
+    software_ids: canonicalValue(taxonomyFilterParams.software),
+    certification_ids: canonicalValue(taxonomyFilterParams.certifications),
+    keyword_ids: canonicalValue(taxonomyFilterParams.keywords),
   }
 }
 

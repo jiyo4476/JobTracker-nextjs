@@ -50,6 +50,7 @@ import {
   useSkills,
   useSoftware,
   useStats,
+  useTagLookup,
   useTaxonomyAnalytics,
   useUserSkills,
 } from '@/lib/queries'
@@ -152,6 +153,15 @@ describe('query hooks', () => {
     await query.queryFn()
 
     expect(api.get).toHaveBeenCalledWith('/analytics?from=2026-01-01&to=2026-02-01&security_clearance=false')
+  })
+
+  it('sends a category-specific search query to reach tags beyond the initial 20 results', async () => {
+    const query = asQueryConfig(useTagLookup('skills', '  Zymurgy  '))
+
+    await query.queryFn()
+
+    expect(query.queryKey).toEqual(['tags', 'skills', 'Zymurgy'])
+    expect(api.get).toHaveBeenCalledWith('/tags?type=skills&q=Zymurgy')
   })
 
   it('serializes the category-safe taxonomy analytics contract', async () => {
