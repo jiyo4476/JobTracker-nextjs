@@ -1,8 +1,7 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 
 import React, { useState } from 'react'
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import '@testing-library/jest-dom/vitest'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LookupItem } from '@/types/queries'
@@ -81,27 +80,27 @@ describe('TaxonomyFilters', () => {
     const user = userEvent.setup()
     render(<Harness />)
 
-    expect(screen.queryByText('Zymurgy')).not.toBeInTheDocument()
+    expect(screen.queryByText('Zymurgy')).toBeNull()
     const search = screen.getByRole('searchbox', { name: 'Search skills' })
     await user.type(search, 'Zymurgy')
     expect(mocks.useTagLookup).toHaveBeenCalledWith('skills', 'Zymurgy')
-    expect(screen.getByText('Zymurgy')).toBeInTheDocument()
+    expect(screen.getByText('Zymurgy')).toBeTruthy()
 
     await user.click(screen.getByText('Zymurgy'))
-    expect(screen.getByRole('button', { name: 'Remove Skills filter Zymurgy' })).toBeInTheDocument()
-    expect(screen.getByTestId('params')).toHaveTextContent('skill_ids=99')
+    expect(screen.getByRole('button', { name: 'Remove Skills filter Zymurgy' })).toBeTruthy()
+    expect(screen.getByTestId('params').textContent).toContain('skill_ids=99')
 
     await user.clear(search)
-    expect(screen.queryByText(/^Zymurgy$/)).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Remove Skills filter Zymurgy' })).toHaveTextContent('Skills: Zymurgy')
+    expect(screen.queryByText(/^Zymurgy$/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Remove Skills filter Zymurgy' }).textContent).toContain('Skills: Zymurgy')
   })
 
   it('resolves a URL-restored selection outside the initial result page', () => {
     render(<Harness initial="skill_ids=99" />)
 
     expect(mocks.useTagLookupByIds).toHaveBeenCalledWith('skills', [99])
-    expect(screen.getByRole('button', { name: 'Remove Skills filter Zymurgy' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Skills filter, 1 selected')).toHaveTextContent('Skills (1)')
+    expect(screen.getByRole('button', { name: 'Remove Skills filter Zymurgy' })).toBeTruthy()
+    expect(screen.getByLabelText('Skills filter, 1 selected').textContent).toContain('Skills (1)')
   })
 
   it('isolates same-name values by category, removes one chip, and clears all remaining filters', async () => {
@@ -109,17 +108,17 @@ describe('TaxonomyFilters', () => {
     render(<Harness initial="q=engineer&skill_ids=1&software_ids=2&certification_ids=30" />)
 
     const active = screen.getByLabelText('Active taxonomy filters')
-    expect(within(active).getByRole('button', { name: 'Remove Skills filter Shared' })).toBeInTheDocument()
-    expect(within(active).getByRole('button', { name: 'Remove Software filter Shared' })).toBeInTheDocument()
+    expect(within(active).getByRole('button', { name: 'Remove Skills filter Shared' })).toBeTruthy()
+    expect(within(active).getByRole('button', { name: 'Remove Software filter Shared' })).toBeTruthy()
 
     await user.click(within(active).getByRole('button', { name: 'Remove Skills filter Shared' }))
-    expect(screen.getByTestId('params')).not.toHaveTextContent('skill_ids')
-    expect(screen.getByTestId('params')).toHaveTextContent('software_ids=2')
+    expect(screen.getByTestId('params').textContent).not.toContain('skill_ids')
+    expect(screen.getByTestId('params').textContent).toContain('software_ids=2')
 
     await user.click(screen.getByRole('button', { name: 'Clear all 2 taxonomy filters' }))
-    expect(screen.getByTestId('params')).toHaveTextContent('q=engineer')
-    expect(screen.getByTestId('params')).not.toHaveTextContent('_ids')
-    expect(screen.queryByLabelText('Active taxonomy filters')).not.toBeInTheDocument()
+    expect(screen.getByTestId('params').textContent).toContain('q=engineer')
+    expect(screen.getByTestId('params').textContent).not.toContain('_ids')
+    expect(screen.queryByLabelText('Active taxonomy filters')).toBeNull()
   })
 
   it('exposes loading, empty, error/retry, search, and selected-count states accessibly', async () => {
@@ -132,15 +131,15 @@ describe('TaxonomyFilters', () => {
     const user = userEvent.setup()
     render(<Harness initial="keyword_ids=40" />)
 
-    expect(screen.getByText(/Loading skills/)).toBeInTheDocument()
-    expect(screen.getByRole('alert')).toHaveTextContent('Could not load software')
+    expect(screen.getByText(/Loading skills/)).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toContain('Could not load software')
     await user.click(within(screen.getByRole('alert')).getByRole('button', { name: 'Retry' }))
     expect(mocks.refetch).toHaveBeenCalledTimes(1)
-    expect(screen.getByText('No certifications available.')).toBeInTheDocument()
-    expect(screen.getByLabelText('Keywords filter, 1 selected')).toBeInTheDocument()
+    expect(screen.getByText('No certifications available.')).toBeTruthy()
+    expect(screen.getByLabelText('Keywords filter, 1 selected')).toBeTruthy()
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search keywords' }), { target: { value: 'missing' } })
-    expect(screen.getByText('No keywords match “missing”.')).toBeInTheDocument()
-    expect(screen.getByLabelText('Job qualifications and keywords filters')).toBeInTheDocument()
+    expect(screen.getByText('No keywords match “missing”.')).toBeTruthy()
+    expect(screen.getByLabelText('Job qualifications and keywords filters')).toBeTruthy()
   })
 })
