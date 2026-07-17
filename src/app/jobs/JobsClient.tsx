@@ -20,7 +20,9 @@ import {
 } from '@/components/ui/alert-dialog'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { StageBadge } from '@/components/jobs/StageBadge'
+import { TaxonomyFilters } from '@/components/jobs/TaxonomyFilters'
 import { useJobs, useDeleteJob, usePatchJob, type JobListItem } from '@/lib/queries'
+import { taxonomyJobsParams } from '@/lib/jobs-taxonomy-filters'
 import { formatSalary } from '@/lib/salary-format'
 import { sourcePlatformOptions } from '@/lib/source-platforms'
 import { useQueryClient } from '@tanstack/react-query'
@@ -36,7 +38,10 @@ function formatDate(d: string | null): string {
 const STAGES = ['', 'not_applied', 'applied', 'phone_screen', 'technical_screen', 'onsite', 'offer_received', 'rejected', 'withdrawn']
 const JOB_TYPES = ['', 'full_time', 'part_time', 'contract', 'internship', 'temp', 'freelance']
 const EXPERIENCE_LEVELS = ['', 'entry', 'mid', 'senior', 'lead', 'executive']
-const EXTRA_FILTER_PARAMS = ['salary_min', 'salary_max', 'priority_min', 'skill_ids'] as const
+const EXTRA_FILTER_PARAMS = [
+  'salary_min', 'salary_max', 'priority_min',
+  'skill_ids', 'software_ids', 'certification_ids', 'keyword_ids',
+] as const
 
 export default function JobsClient() {
   "use no memo"
@@ -115,6 +120,7 @@ export default function JobsClient() {
     experience_level: experienceLevel,
     security_clearance: (securityClearance || undefined) as 'true' | 'false' | undefined,
     is_remote: isRemote,
+    ...taxonomyJobsParams(new URLSearchParams(searchParams.toString())),
   })
   const deleteJob = useDeleteJob()
   const patchJob = usePatchJob()
@@ -389,6 +395,16 @@ export default function JobsClient() {
             Clear filters
           </Button>
         )}
+        <TaxonomyFilters
+          searchParams={new URLSearchParams(searchParams.toString())}
+          onChange={(param, value) => updateParams({ [param]: value })}
+          onClearAll={() => updateParams({
+            skill_ids: '',
+            software_ids: '',
+            certification_ids: '',
+            keyword_ids: '',
+          })}
+        />
       </div>
 
       {/* Bulk action toolbar */}

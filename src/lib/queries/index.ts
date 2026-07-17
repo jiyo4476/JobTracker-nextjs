@@ -103,6 +103,18 @@ export function useTagLookup(type: TagLookupType, q: string) {
   })
 }
 
+export function useTagLookupByIds(type: TagLookupType, ids: readonly number[]) {
+  const canonicalIds = [...new Set(ids)].sort((a, b) => a - b)
+  return useQuery<LookupItem[]>({
+    queryKey: ['tags', type, 'ids', canonicalIds.join(',')],
+    queryFn: () => api.get<LookupItem[]>(`/tags?${new URLSearchParams({
+      type,
+      ids: canonicalIds.join(','),
+    }).toString()}`),
+    enabled: canonicalIds.length > 0,
+  })
+}
+
 export function usePatchJobTags() {
   const qc = useQueryClient()
   return useMutation({

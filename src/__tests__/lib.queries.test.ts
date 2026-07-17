@@ -26,6 +26,7 @@ vi.mock('@/lib/api', () => ({
 }))
 
 import { api } from '@/lib/api'
+import { taxonomyJobsParams } from '@/lib/jobs-taxonomy-filters'
 import {
   useActivity,
   useAnalytics,
@@ -50,6 +51,8 @@ import {
   useSkills,
   useSoftware,
   useStats,
+  useTagLookup,
+  useTagLookupByIds,
   useTaxonomyAnalytics,
   useUserSkills,
 } from '@/lib/queries'
@@ -152,6 +155,41 @@ describe('query hooks', () => {
     await query.queryFn()
 
     expect(api.get).toHaveBeenCalledWith('/analytics?from=2026-01-01&to=2026-02-01&security_clearance=false')
+  })
+
+  it('sends a category-specific search query to reach tags beyond the initial 20 results', async () => {
+    const query = asQueryConfig(useTagLookup('skills', '  Zymurgy  '))
+
+    await query.queryFn()
+
+    expect(query.queryKey).toEqual(['tags', 'skills', 'Zymurgy'])
+    expect(api.get).toHaveBeenCalledWith('/tags?type=skills&q=Zymurgy')
+  })
+
+  it('omits malformed and over-limit taxonomy URL state from the jobs API call', async () => {
+    const params = new URLSearchParams({
+      skill_ids: 'abc',
+      certification_ids: Array.from({ length: 101 }, (_, index) => index + 1).join(','),
+      software_ids: '7, 4,7',
+    })
+    const query = asQueryConfig(useJobs(taxonomyJobsParams(params)))
+
+    await query.queryFn()
+
+    const path = vi.mocked(api.get).mock.calls[0][0] as string
+    const calledParams = new URLSearchParams(path.split('?')[1])
+    expect(calledParams.has('skill_ids')).toBe(false)
+    expect(calledParams.has('certification_ids')).toBe(false)
+    expect(calledParams.get('software_ids')).toBe('7,4')
+  })
+
+  it('loads selected taxonomy names by canonical IDs for URL restoration', async () => {
+    const query = asQueryConfig(useTagLookupByIds('skills', [99, 4, 99]))
+
+    await query.queryFn()
+
+    expect(query.queryKey).toEqual(['tags', 'skills', 'ids', '4,99'])
+    expect(api.get).toHaveBeenCalledWith('/tags?type=skills&ids=4%2C99')
   })
 
   it('serializes the category-safe taxonomy analytics contract', async () => {
