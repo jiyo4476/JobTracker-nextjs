@@ -45,7 +45,7 @@ async function listJobs(req: NextRequest) {
     priority: jobs.priority,
     clearance: jobs.securityClearanceReq,
   } as const
-  if (!(sortBy in sortColumns) || !['asc', 'desc'].includes(sortOrder)) {
+  if (!Object.hasOwn(sortColumns, sortBy) || !['asc', 'desc'].includes(sortOrder)) {
     return NextResponse.json({ error: 'Invalid sort parameters' }, { status: 400 })
   }
   const sortColumn = sortColumns[sortBy as keyof typeof sortColumns]
