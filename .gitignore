@@ -53,3 +53,6 @@ __pycache__/
 .claude/worktrees/
 .claude/settings.local.json
 
+# Jenkins stores the pipeline definition outside this repository
+/Jenkinsfile
+
