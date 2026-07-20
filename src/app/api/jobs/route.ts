@@ -193,7 +193,7 @@ async function listJobs(req: NextRequest) {
     .from(jobs)
     .leftJoin(companies, eq(jobs.companyId, companies.id))
     .where(where)
-    .orderBy(sortDirection(sortColumn), desc(jobs.id))
+    .orderBy(sql`${sortDirection(sortColumn)} nulls last`, desc(jobs.id))
     .limit(limit)
     .offset(offset)
 

@@ -121,8 +121,22 @@ describe('GET /api/jobs', () => {
     ))
 
     expect(res.status).toBe(200)
-    expect(sqlText(orderBy[0])).toContain('"jobs"."job_title" asc')
+    expect(sqlText(orderBy[0])).toContain('"jobs"."job_title" asc nulls last')
     expect(sqlText(orderBy[1])).toContain('"jobs"."id" desc')
+  })
+
+  it('keeps null values last when sorting descending', async () => {
+    let orderBy: unknown[] = []
+    vi.clearAllMocks()
+    setupSelectMocks(2, mockJobRows, (values) => { orderBy = values })
+
+    const { GET } = await import('@/app/api/jobs/route')
+    const res = await GET(new NextRequest(
+      'http://localhost/api/jobs?sort_by=salary&sort_order=desc',
+    ))
+
+    expect(res.status).toBe(200)
+    expect(sqlText(orderBy[0])).toContain('"jobs"."annual_equivalent_min" desc nulls last')
   })
 
   it.each([
