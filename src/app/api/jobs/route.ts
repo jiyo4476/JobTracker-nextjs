@@ -12,7 +12,7 @@ import {
   jobCertifications,
   jobKeywords,
 } from '@/db/schema'
-import { eq, and, ilike, or, gte, lte, count, desc, isNull, sql } from 'drizzle-orm'
+import { eq, and, ilike, or, gte, lte, count, asc, desc, isNull, sql } from 'drizzle-orm'
 import { parsePositiveIdFilter, taxonomyFilterParams } from '@/lib/taxonomy'
 import {
   sourcePlatformEnum, jobTypeEnum, experienceLevelEnum, interviewStageEnum,
@@ -32,6 +32,24 @@ async function listJobs(req: NextRequest) {
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1'))
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '25')))
   const offset = (page - 1) * limit
+
+  const sortBy = searchParams.get('sort_by') ?? 'found'
+  const sortOrder = searchParams.get('sort_order') ?? 'desc'
+  const sortColumns = {
+    company: companies.name,
+    role: jobs.jobTitle,
+    stage: jobs.interviewStage,
+    location: jobs.jobLocation,
+    salary: jobs.annualEquivalentMin,
+    found: jobs.dateFound,
+    priority: jobs.priority,
+    clearance: jobs.securityClearanceReq,
+  } as const
+  if (!(sortBy in sortColumns) || !['asc', 'desc'].includes(sortOrder)) {
+    return NextResponse.json({ error: 'Invalid sort parameters' }, { status: 400 })
+  }
+  const sortColumn = sortColumns[sortBy as keyof typeof sortColumns]
+  const sortDirection = sortOrder === 'asc' ? asc : desc
 
   const filters = []
 
@@ -154,6 +172,9 @@ async function listJobs(req: NextRequest) {
       experienceLevel: jobs.experienceLevel,
       salaryMin: jobs.salaryMin,
       salaryMax: jobs.salaryMax,
+      salaryType: jobs.salaryType,
+      hourlyRateMin: jobs.hourlyRateMin,
+      hourlyRateMax: jobs.hourlyRateMax,
       annualEquivalentMin: jobs.annualEquivalentMin,
       annualEquivalentMax: jobs.annualEquivalentMax,
       salaryText: jobs.salaryText,
@@ -172,7 +193,7 @@ async function listJobs(req: NextRequest) {
     .from(jobs)
     .leftJoin(companies, eq(jobs.companyId, companies.id))
     .where(where)
-    .orderBy(desc(jobs.dateFound))
+    .orderBy(sortDirection(sortColumn), desc(jobs.id))
     .limit(limit)
     .offset(offset)
 

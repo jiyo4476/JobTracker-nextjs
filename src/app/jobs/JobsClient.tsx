@@ -24,6 +24,7 @@ import { TaxonomyFilters } from '@/components/jobs/TaxonomyFilters'
 import { useJobs, useDeleteJob, usePatchJob, type JobListItem } from '@/lib/queries'
 import { taxonomyJobsParams } from '@/lib/jobs-taxonomy-filters'
 import { formatSalary } from '@/lib/salary-format'
+import { formatJobLocation } from '@/lib/job-location-format'
 import { sourcePlatformOptions } from '@/lib/source-platforms'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -59,6 +60,8 @@ export default function JobsClient() {
   const experienceLevel = searchParams.get('experience_level') ?? ''
   const securityClearance = searchParams.get('security_clearance') ?? ''
   const isRemote = searchParams.get('is_remote') ?? ''
+  const sortBy = (searchParams.get('sort_by') ?? 'found') as NonNullable<import('@/types/queries').JobsParams['sort_by']>
+  const sortOrder = (searchParams.get('sort_order') ?? 'desc') as 'asc' | 'desc'
   const urlQ = searchParams.get('q') ?? ''
   const companyIdRaw = searchParams.get('company_id')
   const parsedCompanyId = companyIdRaw && /^\d+$/.test(companyIdRaw) ? Number(companyIdRaw) : NaN
@@ -127,6 +130,8 @@ export default function JobsClient() {
     experience_level: experienceLevel,
     security_clearance: (securityClearance || undefined) as 'true' | 'false' | undefined,
     is_remote: isRemote,
+    sort_by: sortBy,
+    sort_order: sortOrder,
     ...taxonomyJobsParams(new URLSearchParams(searchParams.toString())),
   })
   const deleteJob = useDeleteJob()
@@ -227,10 +232,12 @@ export default function JobsClient() {
       ),
     }),
     col.accessor('companyName', {
+      id: 'company',
       header: 'Company',
       cell: (info) => <span className="font-medium">{info.getValue() ?? '—'}</span>,
     }),
     col.accessor('jobTitle', {
+      id: 'role',
       header: 'Role',
       cell: (info) => (
         <Link href={`/jobs/${info.row.original.id}`} className="text-blue-600 hover:underline">
@@ -239,33 +246,27 @@ export default function JobsClient() {
       ),
     }),
     col.accessor('interviewStage', {
+      id: 'stage',
       header: 'Stage',
       cell: (info) => <StageBadge stage={info.getValue()} />,
     }),
     col.accessor('jobLocation', {
+      id: 'location',
       header: 'Location',
-      cell: (info) => (
-        <span>
-          {info.getValue() ?? '—'}
-          {info.row.original.isRemote && (
-            <span className="ml-1 text-xs text-slate-600">(remote)</span>
-          )}
-        </span>
-      ),
+      cell: (info) => formatJobLocation(info.getValue() ?? null, info.row.original.isRemote),
     }),
     col.accessor('annualEquivalentMin', {
+      id: 'salary',
       header: 'Salary',
-      cell: (info) => formatSalary(
-        info.getValue() ?? null,
-        info.row.original.annualEquivalentMax ?? null,
-        info.row.original.salaryText ?? null,
-      ),
+      cell: (info) => formatSalary(info.row.original),
     }),
     col.accessor('dateFound', {
+      id: 'found',
       header: 'Found',
       cell: (info) => formatDate(info.getValue() ?? null),
     }),
     col.accessor('priority', {
+      id: 'priority',
       header: 'Priority',
       cell: (info) => {
         const p = info.getValue()
@@ -275,6 +276,7 @@ export default function JobsClient() {
       },
     }),
     col.accessor('securityClearanceReq', {
+      id: 'clearance',
       header: 'Clearance',
       cell: (info) => info.getValue()
         ? <span className="inline-block rounded px-1.5 py-0.5 text-xs font-medium bg-orange-100 text-orange-700">Required</span>
@@ -472,7 +474,20 @@ export default function JobsClient() {
                 {table.getHeaderGroups().map((hg) =>
                   hg.headers.map((header) => (
                     <th key={header.id} className="px-4 py-3 font-medium whitespace-nowrap">
-                      {flexRender(header.column.columnDef.header, header.getContext())}
+                      {header.column.columnDef.id && !['select', 'actions'].includes(header.column.columnDef.id) ? (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 hover:text-slate-900"
+                          onClick={() => updateParams({
+                            sort_by: header.column.columnDef.id!,
+                            sort_order: sortBy === header.column.columnDef.id && sortOrder === 'asc' ? 'desc' : 'asc',
+                          })}
+                          aria-label={`Sort by ${String(header.column.columnDef.header)}`}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          <span aria-hidden="true">{sortBy === header.column.columnDef.id ? (sortOrder === 'asc' ? '↑' : '↓') : '↕'}</span>
+                        </button>
+                      ) : flexRender(header.column.columnDef.header, header.getContext())}
                     </th>
                   ))
                 )}

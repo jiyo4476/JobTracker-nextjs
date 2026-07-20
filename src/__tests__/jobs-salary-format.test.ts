@@ -2,34 +2,28 @@ import { describe, expect, it } from 'vitest'
 import { formatSalary } from '@/lib/salary-format'
 
 describe('formatSalary', () => {
-  it('shows an em dash when salary values are missing', () => {
-    expect(formatSalary(null, null, null)).toBe('—')
+  it('formats an annual cents range with exactly two decimals', () => {
+    expect(formatSalary({
+      salaryType: 'annual', salaryMin: 8_000_000, salaryMax: 12_050_000,
+      hourlyRateMin: null, hourlyRateMax: null,
+    })).toBe('$80,000.00 - $120,500.00 per year')
   })
 
-  it('shows an em dash when placeholder values would render as zero thousands', () => {
-    expect(formatSalary(1, 1, null)).toBe('—')
-    expect(formatSalary(80, 120, null)).toBe('—')
-    expect(formatSalary(0, 0, null)).toBe('—')
+  it('formats an hourly dollar range with exactly two decimals', () => {
+    expect(formatSalary({
+      salaryType: 'hourly', salaryMin: null, salaryMax: null,
+      hourlyRateMin: '45.5', hourlyRateMax: '62.25',
+    })).toBe('$45.50 - $62.25 per hour')
   })
 
-  it('uses the raw salary text when legacy numeric values are underscaled', () => {
-    expect(formatSalary(10_500, 16_100, '$105,050 to $161,800')).toBe('$105,050 to $161,800')
-  })
-
-  it('formats valid annual-equivalent cents as a compact range', () => {
-    expect(formatSalary(8_000_000, 12_000_000, '$80,000 to $120,000')).toBe('$80k–$120k')
-  })
-
-  it('formats a valid minimum without a maximum', () => {
-    expect(formatSalary(8_000_000, null, null)).toBe('$80k+')
-  })
-
-  it('formats a valid maximum without a minimum', () => {
-    expect(formatSalary(null, 12_000_000, null)).toBe('up to $120k')
-  })
-
-  it('uses the valid side when the other side is underscaled', () => {
-    expect(formatSalary(8_000_000, 120, '$80,000 to $120,000')).toBe('$80k+')
-    expect(formatSalary(80, 12_000_000, '$80,000 to $120,000')).toBe('up to $120k')
+  it('does not show raw, single-sided, zero, or invalid salaries', () => {
+    expect(formatSalary({
+      salaryType: 'annual', salaryMin: 8_000_000, salaryMax: null,
+      hourlyRateMin: null, hourlyRateMax: null,
+    })).toBe('—')
+    expect(formatSalary({
+      salaryType: 'hourly', salaryMin: null, salaryMax: null,
+      hourlyRateMin: '0', hourlyRateMax: 'not-a-number',
+    })).toBe('—')
   })
 })

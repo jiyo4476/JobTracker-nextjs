@@ -96,6 +96,24 @@ describe('GET /api/jobs', () => {
     expect(json.page).toBe(2)
   })
 
+  it.each([
+    'company', 'role', 'stage', 'location', 'salary', 'found', 'priority', 'clearance',
+  ])('accepts sort_by=%s', async (sortBy) => {
+    const { GET } = await import('@/app/api/jobs/route')
+    const res = await GET(new NextRequest(`http://localhost/api/jobs?sort_by=${sortBy}&sort_order=asc`))
+    expect(res.status).toBe(200)
+  })
+
+  it.each([
+    'sort_by=created_at',
+    'sort_by=role&sort_order=sideways',
+  ])('rejects unsupported sort parameters: %s', async (query) => {
+    const { GET } = await import('@/app/api/jobs/route')
+    const res = await GET(new NextRequest(`http://localhost/api/jobs?${query}`))
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: 'Invalid sort parameters' })
+  })
+
   it('defaults to is_active=true (excludes soft-deleted jobs)', async () => {
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     let countWhereArg: unknown
