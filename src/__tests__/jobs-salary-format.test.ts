@@ -39,6 +39,14 @@ describe('formatSalary', () => {
     })).toBe('$100,000.00 - $120,000.00 per year')
   })
 
+  it('recovers the affected yearly range from legacy salary text', () => {
+    expect(formatSalary({
+      salaryType: 'annual', salaryMin: 9800, salaryMax: 17500,
+      hourlyRateMin: null, hourlyRateMax: null,
+      salaryText: 'Base pay range\n$98,900.00/yr - $175,300.00/yr',
+    })).toBe('$98,900.00 - $175,300.00 per year')
+  })
+
   it('does not show raw, single-sided, zero, or invalid salaries', () => {
     expect(formatSalary({
       salaryType: 'annual', salaryMin: 8_000_000, salaryMax: null,
