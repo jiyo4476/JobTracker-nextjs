@@ -1,17 +1,38 @@
-function toPositiveThousands(value: number | null): number | null {
-  if (value == null || !Number.isFinite(value)) return null
-
-  const thousands = Math.round(value / 100_000)
-  return thousands > 0 ? thousands : null
+type SalaryDisplay = {
+  salaryType: 'annual' | 'hourly' | null
+  salaryMin: number | null
+  salaryMax: number | null
+  hourlyRateMin: string | null
+  hourlyRateMax: string | null
 }
 
-export function formatSalary(min: number | null, max: number | null, text: string | null): string {
-  const minThousands = toPositiveThousands(min)
-  const maxThousands = toPositiveThousands(max)
+const dollars = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
 
-  if (minThousands != null) {
-    return maxThousands != null ? `$${minThousands}k–$${maxThousands}k` : `$${minThousands}k+`
+function positiveNumber(value: number | string | null): number | null {
+  if (value == null || value === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+export function formatSalary(salary: SalaryDisplay): string {
+  if (salary.salaryType === 'annual') {
+    const min = positiveNumber(salary.salaryMin)
+    const max = positiveNumber(salary.salaryMax)
+    if (min == null || max == null) return '—'
+    return `${dollars.format(min / 100)} - ${dollars.format(max / 100)} per year`
   }
-  if (maxThousands != null) return `up to $${maxThousands}k`
-  return text?.trim() || '—'
+
+  if (salary.salaryType === 'hourly') {
+    const min = positiveNumber(salary.hourlyRateMin)
+    const max = positiveNumber(salary.hourlyRateMax)
+    if (min == null || max == null) return '—'
+    return `${dollars.format(min)} - ${dollars.format(max)} per hour`
+  }
+
+  return '—'
 }

@@ -190,7 +190,7 @@ export type JobDetail = {
   jobType: string | null
   experienceLevel: string | null
   jobDescription: string | null
-  salaryType: string | null
+  salaryType: 'annual' | 'hourly' | null
   salaryMin: number | null
   salaryMax: number | null
   hourlyRateMin: string | null
@@ -237,6 +237,9 @@ export interface JobListItem {
   experienceLevel: string | null
   salaryMin: number | null
   salaryMax: number | null
+  salaryType: 'annual' | 'hourly' | null
+  hourlyRateMin: string | null
+  hourlyRateMax: string | null
   annualEquivalentMin: number | null
   annualEquivalentMax: number | null
   salaryText: string | null
@@ -296,6 +299,8 @@ export interface JobsParams {
   salary_min?: number
   salary_max?: number
   priority_min?: number
+  sort_by?: 'company' | 'role' | 'stage' | 'location' | 'salary' | 'found' | 'priority' | 'clearance'
+  sort_order?: 'asc' | 'desc'
 }
 
 export interface StatsResponse {

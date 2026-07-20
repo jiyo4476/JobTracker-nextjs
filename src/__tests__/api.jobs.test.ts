@@ -26,14 +26,17 @@ const mockJobRows = [
   { id: 2, jobTitle: 'Product Manager', companyName: 'Beta Corp', isRemote: false, interviewStage: 'applied' },
 ]
 
-function makeSelectChain(result: unknown) {
+function makeSelectChain(result: unknown, onOrderBy?: (values: unknown[]) => void) {
   const chain: Record<string, unknown> = {}
   const terminal = Promise.resolve(result)
   Object.assign(terminal, {
     from: vi.fn(() => chain),
     leftJoin: vi.fn(() => chain),
     where: vi.fn(() => chain),
-    orderBy: vi.fn(() => chain),
+    orderBy: vi.fn((...values: unknown[]) => {
+      onOrderBy?.(values)
+      return chain
+    }),
     limit: vi.fn(() => chain),
     offset: vi.fn(() => terminal),
   })
@@ -41,7 +44,10 @@ function makeSelectChain(result: unknown) {
     from: vi.fn(() => chain),
     leftJoin: vi.fn(() => chain),
     where: vi.fn(() => chain),
-    orderBy: vi.fn(() => chain),
+    orderBy: vi.fn((...values: unknown[]) => {
+      onOrderBy?.(values)
+      return chain
+    }),
     limit: vi.fn(() => chain),
     offset: vi.fn(() => terminal),
     then: terminal.then.bind(terminal),
@@ -51,7 +57,7 @@ function makeSelectChain(result: unknown) {
   return chain
 }
 
-function setupSelectMocks(total = 2, rows = mockJobRows) {
+function setupSelectMocks(total = 2, rows = mockJobRows, onOrderBy?: (values: unknown[]) => void) {
   const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
   let callCount = 0
   mockDb.select.mockImplementation(() => {
@@ -67,7 +73,7 @@ function setupSelectMocks(total = 2, rows = mockJobRows) {
       })
       return countChain
     }
-    return makeSelectChain(rows)
+    return makeSelectChain(rows, onOrderBy)
   })
 }
 
@@ -94,6 +100,54 @@ describe('GET /api/jobs', () => {
     const res = await GET(new NextRequest('http://localhost/api/jobs?page=2&limit=10'))
     const json = await res.json()
     expect(json.page).toBe(2)
+  })
+
+  it.each([
+    'company', 'role', 'stage', 'location', 'salary', 'found', 'priority', 'clearance',
+  ])('accepts sort_by=%s', async (sortBy) => {
+    const { GET } = await import('@/app/api/jobs/route')
+    const res = await GET(new NextRequest(`http://localhost/api/jobs?sort_by=${sortBy}&sort_order=asc`))
+    expect(res.status).toBe(200)
+  })
+
+  it('sorts the full result set before pagination with a stable ID tie-breaker', async () => {
+    let orderBy: unknown[] = []
+    vi.clearAllMocks()
+    setupSelectMocks(50, mockJobRows, (values) => { orderBy = values })
+
+    const { GET } = await import('@/app/api/jobs/route')
+    const res = await GET(new NextRequest(
+      'http://localhost/api/jobs?page=2&limit=10&sort_by=role&sort_order=asc',
+    ))
+
+    expect(res.status).toBe(200)
+    expect(sqlText(orderBy[0])).toContain('"jobs"."job_title" asc nulls last')
+    expect(sqlText(orderBy[1])).toContain('"jobs"."id" desc')
+  })
+
+  it('keeps null values last when sorting descending', async () => {
+    let orderBy: unknown[] = []
+    vi.clearAllMocks()
+    setupSelectMocks(2, mockJobRows, (values) => { orderBy = values })
+
+    const { GET } = await import('@/app/api/jobs/route')
+    const res = await GET(new NextRequest(
+      'http://localhost/api/jobs?sort_by=salary&sort_order=desc',
+    ))
+
+    expect(res.status).toBe(200)
+    expect(sqlText(orderBy[0])).toContain('"jobs"."annual_equivalent_min" desc nulls last')
+  })
+
+  it.each([
+    'sort_by=created_at',
+    'sort_by=toString',
+    'sort_by=role&sort_order=sideways',
+  ])('rejects unsupported sort parameters: %s', async (query) => {
+    const { GET } = await import('@/app/api/jobs/route')
+    const res = await GET(new NextRequest(`http://localhost/api/jobs?${query}`))
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: 'Invalid sort parameters' })
   })
 
   it('defaults to is_active=true (excludes soft-deleted jobs)', async () => {

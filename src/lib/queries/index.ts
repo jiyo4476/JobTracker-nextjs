@@ -276,6 +276,8 @@ export function useJobs(params: JobsParams = {}) {
   if (params.salary_min !== undefined) qs.set('salary_min', String(params.salary_min))
   if (params.salary_max !== undefined) qs.set('salary_max', String(params.salary_max))
   if (params.priority_min !== undefined) qs.set('priority_min', String(params.priority_min))
+  if (params.sort_by) qs.set('sort_by', params.sort_by)
+  if (params.sort_order) qs.set('sort_order', params.sort_order)
 
   return useQuery<JobsResponse>({
     queryKey: ['jobs', params],
