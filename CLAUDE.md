@@ -7,6 +7,12 @@ For the Python scraper, see [`scraper/.claude/CLAUDE.md`](../scraper/.claude/CLA
 
 ---
 
+## Obsidian Vault Location
+
+The shared project vault is the parent workspace at `C:\Users\Jimmy\Documents\Projects\job_tracker`. Project notes, task boards, provider documentation, and handoffs are stored under `C:\Users\Jimmy\Documents\Projects\job_tracker\.obsidian` (from this repository: `../.obsidian/`). Read and update that shared vault rather than creating a repository-local vault.
+
+---
+
 ## Project Status
 
 **Pre-implementation.** The full PRD is in `.claude/Job_Search_Tracker_PRD.md`. The Dockerfile is ready; application code does not exist yet.
