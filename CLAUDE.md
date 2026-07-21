@@ -7,6 +7,12 @@ For the Python scraper, see [`scraper/.claude/CLAUDE.md`](../scraper/.claude/CLA
 
 ---
 
+## Obsidian Vault Location
+
+This repository is one of three sibling projects inside the shared `job_tracker` workspace. The Obsidian vault is the workspace root—the directory containing `.obsidian/`, `chrome-ext-scrapper/`, `job-tracker-nextjs/`, and `job_scraper_python/`. From this repository, project notes, task boards, provider documentation, and handoffs are at `../.obsidian/`. Because the workspace's absolute path varies by contributor and operating system, locate it by resolving this repository's parent directory. Read and update that shared vault rather than creating a repository-local vault.
+
+---
+
 ## Project Status
 
 **Pre-implementation.** The full PRD is in `.claude/Job_Search_Tracker_PRD.md`. The Dockerfile is ready; application code does not exist yet.
