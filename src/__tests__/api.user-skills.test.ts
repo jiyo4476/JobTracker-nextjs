@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 vi.mock('@/lib/auth', () => ({
-  requireApiKey: vi.fn(),
+  requireAuthentication: vi.fn(),
 }))
 
 vi.mock('@/db', () => ({
@@ -14,7 +14,7 @@ vi.mock('@/db/schema', () => ({
   skills: {},
 }))
 
-import { requireApiKey } from '@/lib/auth'
+import { requireAuthentication } from '@/lib/auth'
 import { db } from '@/db'
 
 function makeChain(result: unknown) {
@@ -35,7 +35,7 @@ describe('GET /api/user-skills', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 401 without auth', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(false)
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
     const { GET } = await import('@/app/api/user-skills/route')
     const req = new NextRequest('http://localhost/api/user-skills')
     const res = await GET(req)
@@ -43,7 +43,7 @@ describe('GET /api/user-skills', () => {
   })
 
   it('returns list of user skills joined with skill names', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockRows = [
       { skillId: 1, name: 'TypeScript', hasSkill: true },
       { skillId: 2, name: 'Python', hasSkill: false },
@@ -66,7 +66,7 @@ describe('POST /api/user-skills', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 401 without auth', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(false)
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
     const { POST } = await import('@/app/api/user-skills/route')
     const req = new NextRequest('http://localhost/api/user-skills', {
       method: 'POST',
@@ -78,7 +78,7 @@ describe('POST /api/user-skills', () => {
   })
 
   it('creates by skill_id', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.insert.mockReturnValue(makeChain(undefined))
 
@@ -96,7 +96,7 @@ describe('POST /api/user-skills', () => {
   })
 
   it('creates by name (upserts into skills first)', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     // First insert (upsert into skills) returns id
     const upsertChain = makeChain([{ id: 7 }])
@@ -122,7 +122,7 @@ describe('POST /api/user-skills', () => {
   })
 
   it('returns 400 for invalid body', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { POST } = await import('@/app/api/user-skills/route')
     const req = new NextRequest('http://localhost/api/user-skills', {
       method: 'POST',
@@ -138,7 +138,7 @@ describe('DELETE /api/user-skills/[id]', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 401 without auth', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(false)
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
     const { DELETE } = await import('@/app/api/user-skills/[id]/route')
     const req = new NextRequest('http://localhost/api/user-skills/1', { method: 'DELETE' })
     const res = await DELETE(req, makeParams('1'))
@@ -146,7 +146,7 @@ describe('DELETE /api/user-skills/[id]', () => {
   })
 
   it('returns 400 for non-numeric id', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { DELETE } = await import('@/app/api/user-skills/[id]/route')
     const req = new NextRequest('http://localhost/api/user-skills/abc', {
       method: 'DELETE',
@@ -157,7 +157,7 @@ describe('DELETE /api/user-skills/[id]', () => {
   })
 
   it('returns 404 when skill not in user_skills', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.delete.mockReturnValue(makeChain([]))
 
@@ -171,7 +171,7 @@ describe('DELETE /api/user-skills/[id]', () => {
   })
 
   it('returns 200 on successful delete', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.delete.mockReturnValue(makeChain([{ skillId: 1, hasSkill: true }]))
 

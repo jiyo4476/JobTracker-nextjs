@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
-vi.mock('@/lib/auth', () => ({ requireApiKey: vi.fn() }))
+vi.mock('@/lib/auth', () => ({ requireAuthentication: vi.fn() }))
 vi.mock('@/db', () => ({
   db: {
     execute: vi.fn(),
@@ -14,7 +14,7 @@ vi.mock('@/db', () => ({
 }))
 
 import { db } from '@/db'
-import { requireApiKey } from '@/lib/auth'
+import { requireAuthentication } from '@/lib/auth'
 import { profileCreateSchemas, profilePatchSchemas } from '@/lib/user-taxonomy-profile'
 
 type MockDb = Record<
@@ -80,12 +80,12 @@ describe('user taxonomy profile schemas', () => {
 describe('GET and POST /api/user-taxonomies/[category]', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     mockDb.transaction.mockImplementation((callback) => callback(mockDb))
   })
 
   it('authenticates profile reads', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(false)
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
     const { GET } = await import('@/app/api/user-taxonomies/[category]/route')
     const response = await GET(request('/api/user-taxonomies/skills'), context('skills'))
     expect(response.status).toBe(401)
@@ -102,7 +102,7 @@ describe('GET and POST /api/user-taxonomies/[category]', () => {
   })
 
   it('authenticates profile writes', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(false)
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
     const { POST } = await import('@/app/api/user-taxonomies/[category]/route')
     const response = await POST(
       request('/api/user-taxonomies/skills', 'POST', { taxonomy_id: 1 }),
@@ -209,7 +209,7 @@ describe('GET and POST /api/user-taxonomies/[category]', () => {
 describe('PATCH and DELETE /api/user-taxonomies/[category]/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
   })
 
   it('rejects malformed IDs', async () => {
@@ -223,7 +223,7 @@ describe('PATCH and DELETE /api/user-taxonomies/[category]/[id]', () => {
   })
 
   it('authenticates updates and removals', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(false)
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
     const { PATCH, DELETE } = await import('@/app/api/user-taxonomies/[category]/[id]/route')
     expect((await PATCH(
       request('/api/user-taxonomies/skills/1', 'PATCH', { has_skill: true }),
@@ -346,7 +346,7 @@ describe('PATCH and DELETE /api/user-taxonomies/[category]/[id]', () => {
 describe('GET /api/user-taxonomies/[category]/gap', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
   })
 
   it('returns taxonomy-scoped counts and preference-aware match states', async () => {
@@ -382,9 +382,9 @@ describe('GET /api/user-taxonomies/[category]/gap', () => {
 
   it('authenticates gap reads and validates pagination before querying', async () => {
     const { GET } = await import('@/app/api/user-taxonomies/[category]/gap/route')
-    vi.mocked(requireApiKey).mockResolvedValue(false)
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
     expect((await GET(request('/api/user-taxonomies/skills/gap'), context('skills'))).status).toBe(401)
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     expect((await GET(
       request('/api/user-taxonomies/skills/gap?limit=101'),
       context('skills'),

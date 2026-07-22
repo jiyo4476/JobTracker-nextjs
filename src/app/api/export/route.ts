@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireApiKey } from '@/lib/auth'
+import { requireAuthentication } from '@/lib/auth'
 import { logger, serializeError } from '@/lib/logger'
 import { jobs, companies } from '@/db/schema'
 import { desc, eq } from 'drizzle-orm'
@@ -8,7 +8,7 @@ import { desc, eq } from 'drizzle-orm'
 const EXPORT_LIMIT = 10_000
 
 export async function GET(req: NextRequest) {
-  if (!(await requireApiKey(req))) {
+  if (!(await requireAuthentication(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const { searchParams } = new URL(req.url)

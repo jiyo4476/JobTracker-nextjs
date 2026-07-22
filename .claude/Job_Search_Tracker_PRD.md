@@ -329,14 +329,14 @@ List of all companies with job counts and salary aggregates. Company detail page
 
 - **Resume Versions:** labels-only table — name, date, and notes. No file upload. The `resume_version` field on a job stores the label string as a reference. Managed via a `resume_versions` table (`id`, `label`, `date`, `notes`).
 - **Skill Gap Tracker:** displays every skill and technology extracted from saved job listings. Each row shows the skill name, how many jobs require it, and a toggle for "I have this skill." The user's skill list is stored in a `user_skills` table (static, user-managed). A match percentage is computed per job: `(required skills user has) / (total required skills) × 100`.
-- **Scraper Webhook Config:** display `POST /api/scrape` URL and API key
+- **Scraper Webhook Config:** display the `POST /api/scrape` URL and Authentik OAuth2 machine-client requirements
 - **Export:** full dataset download as CSV or JSON
 
 ---
 
 ## 6. API Specification
 
-All routes live under `/api/` as Next.js Route Handlers. JSON request and response bodies. `POST`, `PATCH`, and `DELETE` routes require an `Authorization: Bearer <API_KEY>` header.
+All routes live under `/api/` as Next.js Route Handlers. JSON request and response bodies. External mutating callers require an Authentik-issued OAuth2 bearer access token; trusted same-origin and forward-auth behavior is described in the implementation documentation.
 
 | Method | Route | Description |
 |--------|-------|-------------|
@@ -431,7 +431,7 @@ src/
 
 ### 7.2 Data Flow — Scraper to UI
 
-1. Scraper (external Python script) POSTs job payload to `POST /api/scrape` with API key
+1. Scraper (external Python script) obtains an OAuth2 client-credentials token and POSTs the job payload to `POST /api/scrape`
 2. Route handler validates payload with Zod, runs upsert logic, writes to PostgreSQL via Drizzle
 3. Next.js pages fetch data via TanStack Query calling `GET /api/*` route handlers
 4. Route handlers query PostgreSQL and return typed JSON responses
@@ -548,7 +548,12 @@ Dedup happens at two layers:
 ```yaml
 api:
   base_url: http://localhost:3000
-  key: changeme             # Must match API_KEY env var in Next.js app
+
+oauth:
+  token_url: https://auth.yjimmy.dev/application/o/token/
+  client_id: job-tracker-scraper
+  client_secret: ${SCRAPER_CLIENT_SECRET}
+  scope: openid profile email
 
 proxy:
   enabled: false
