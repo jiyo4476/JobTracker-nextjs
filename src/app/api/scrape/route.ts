@@ -13,6 +13,48 @@ import { eq, and, ilike, sql } from 'drizzle-orm'
 
 // Postgres unique_violation error code, surfaced as `.code` by the `postgres` driver.
 const PG_UNIQUE_VIOLATION = '23505'
+const DEFAULT_CHROME_EXTENSION_ORIGIN = 'chrome-extension://nddejaeggmibdiimpjcdechfnckgcmnf'
+
+function allowedExtensionOrigins() {
+  const configured = (process.env.CHROME_EXTENSION_ORIGINS ?? '')
+    .split(/[\s,]+/)
+    .map(origin => origin.trim())
+    .filter(Boolean)
+
+  return new Set(configured.length > 0 ? configured : [DEFAULT_CHROME_EXTENSION_ORIGIN])
+}
+
+function corsOrigin(req: NextRequest) {
+  const origin = req.headers.get('origin')
+  return origin && allowedExtensionOrigins().has(origin) ? origin : null
+}
+
+function withCors(req: NextRequest, response: NextResponse) {
+  const origin = corsOrigin(req)
+  if (!origin) return response
+
+  response.headers.set('Access-Control-Allow-Origin', origin)
+  response.headers.set('Vary', 'Origin')
+  return response
+}
+
+export function OPTIONS(req: NextRequest) {
+  const origin = corsOrigin(req)
+  if (!origin) {
+    return new NextResponse(null, { status: 403 })
+  }
+
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+      'Access-Control-Max-Age': '86400',
+      Vary: 'Origin',
+    },
+  })
+}
 
 type Taxonomies = {
   skills: string[]
@@ -49,7 +91,7 @@ async function attachTags(jobId: number, tags: Taxonomies) {
   ])
 }
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   // External-only endpoint (Python scraper via OAuth2 bearer token) — the browser
   // UI never calls this directly, so the same-origin bypass must not apply here.
   if (!(await requireAuthentication(req, { allowSameOrigin: false }))) {
@@ -230,4 +272,8 @@ export async function POST(req: NextRequest) {
     logger.error('scrape webhook failed', serializeError(err))
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
+}
+
+export async function POST(req: NextRequest) {
+  return withCors(req, await handlePost(req))
 }
