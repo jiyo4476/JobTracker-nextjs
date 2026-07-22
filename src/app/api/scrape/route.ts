@@ -14,14 +14,24 @@ import { eq, and, ilike, sql } from 'drizzle-orm'
 // Postgres unique_violation error code, surfaced as `.code` by the `postgres` driver.
 const PG_UNIQUE_VIOLATION = '23505'
 const DEFAULT_CHROME_EXTENSION_ORIGIN = 'chrome-extension://nddejaeggmibdiimpjcdechfnckgcmnf'
+const ALLOWED_CORS_REQUEST_HEADERS = new Set(['authorization', 'content-type'])
+let cachedOriginsConfig: string | undefined
+let cachedAllowedOrigins: ReadonlySet<string> | undefined
 
 function allowedExtensionOrigins() {
-  const configured = (process.env.CHROME_EXTENSION_ORIGINS ?? '')
+  const config = process.env.CHROME_EXTENSION_ORIGINS ?? ''
+  if (cachedAllowedOrigins && cachedOriginsConfig === config) return cachedAllowedOrigins
+
+  const configured = config
     .split(/[\s,]+/)
     .map(origin => origin.trim())
     .filter(Boolean)
 
-  return new Set(configured.length > 0 ? configured : [DEFAULT_CHROME_EXTENSION_ORIGIN])
+  cachedOriginsConfig = config
+  cachedAllowedOrigins = new Set(
+    configured.length > 0 ? configured : [DEFAULT_CHROME_EXTENSION_ORIGIN],
+  )
+  return cachedAllowedOrigins
 }
 
 function corsOrigin(req: NextRequest) {
@@ -38,9 +48,22 @@ function withCors(req: NextRequest, response: NextResponse) {
   return response
 }
 
+function isAllowedPreflight(req: NextRequest) {
+  if (req.headers.get('access-control-request-method')?.toUpperCase() !== 'POST') {
+    return false
+  }
+
+  const requestedHeaders = (req.headers.get('access-control-request-headers') ?? '')
+    .split(',')
+    .map(header => header.trim().toLowerCase())
+    .filter(Boolean)
+
+  return requestedHeaders.every(header => ALLOWED_CORS_REQUEST_HEADERS.has(header))
+}
+
 export function OPTIONS(req: NextRequest) {
   const origin = corsOrigin(req)
-  if (!origin) {
+  if (!origin || !isAllowedPreflight(req)) {
     return new NextResponse(null, { status: 403 })
   }
 
