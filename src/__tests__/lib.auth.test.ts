@@ -1,10 +1,27 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 import { requireAuthentication } from '@/lib/auth'
 
 describe('requireAuthentication', () => {
+  const originalEnv = { ...process.env }
+
   beforeEach(() => {
-    process.env.API_KEY = 'test-key'
+    process.env = { ...originalEnv, API_KEY: 'test-key' }
+    for (const key of Object.keys(process.env)) {
+      if (key.startsWith('AUTHENTIK_') || key.startsWith('OAUTH_')) {
+        delete process.env[key]
+      }
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 401 })),
+    )
+  })
+
+  afterEach(() => {
+    process.env = { ...originalEnv }
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
   })
 
   it('rejects a legacy API key even when a stale API_KEY environment variable exists', async () => {
