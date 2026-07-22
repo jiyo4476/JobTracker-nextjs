@@ -13,6 +13,71 @@ import { eq, and, ilike, sql } from 'drizzle-orm'
 
 // Postgres unique_violation error code, surfaced as `.code` by the `postgres` driver.
 const PG_UNIQUE_VIOLATION = '23505'
+const DEFAULT_CHROME_EXTENSION_ORIGIN = 'chrome-extension://nddejaeggmibdiimpjcdechfnckgcmnf'
+const ALLOWED_CORS_REQUEST_HEADERS = new Set(['authorization', 'content-type'])
+let cachedOriginsConfig: string | undefined
+let cachedAllowedOrigins: ReadonlySet<string> | undefined
+
+function allowedExtensionOrigins() {
+  const config = process.env.CHROME_EXTENSION_ORIGINS ?? ''
+  if (cachedAllowedOrigins && cachedOriginsConfig === config) return cachedAllowedOrigins
+
+  const configured = config
+    .split(/[\s,]+/)
+    .map(origin => origin.trim())
+    .filter(Boolean)
+
+  cachedOriginsConfig = config
+  cachedAllowedOrigins = new Set(
+    configured.length > 0 ? configured : [DEFAULT_CHROME_EXTENSION_ORIGIN],
+  )
+  return cachedAllowedOrigins
+}
+
+function corsOrigin(req: NextRequest) {
+  const origin = req.headers.get('origin')
+  return origin && allowedExtensionOrigins().has(origin) ? origin : null
+}
+
+function withCors(req: NextRequest, response: NextResponse) {
+  const origin = corsOrigin(req)
+  if (!origin) return response
+
+  response.headers.set('Access-Control-Allow-Origin', origin)
+  response.headers.set('Vary', 'Origin')
+  return response
+}
+
+function isAllowedPreflight(req: NextRequest) {
+  if (req.headers.get('access-control-request-method')?.toUpperCase() !== 'POST') {
+    return false
+  }
+
+  const requestedHeaders = (req.headers.get('access-control-request-headers') ?? '')
+    .split(',')
+    .map(header => header.trim().toLowerCase())
+    .filter(Boolean)
+
+  return requestedHeaders.every(header => ALLOWED_CORS_REQUEST_HEADERS.has(header))
+}
+
+export function OPTIONS(req: NextRequest) {
+  const origin = corsOrigin(req)
+  if (!origin || !isAllowedPreflight(req)) {
+    return new NextResponse(null, { status: 403 })
+  }
+
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+      'Access-Control-Max-Age': '86400',
+      Vary: 'Origin',
+    },
+  })
+}
 
 type Taxonomies = {
   skills: string[]
@@ -49,7 +114,7 @@ async function attachTags(jobId: number, tags: Taxonomies) {
   ])
 }
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   // External-only endpoint (Python scraper via OAuth2 bearer token) — the browser
   // UI never calls this directly, so the same-origin bypass must not apply here.
   if (!(await requireAuthentication(req, { allowSameOrigin: false }))) {
@@ -230,4 +295,8 @@ export async function POST(req: NextRequest) {
     logger.error('scrape webhook failed', serializeError(err))
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
+}
+
+export async function POST(req: NextRequest) {
+  return withCors(req, await handlePost(req))
 }

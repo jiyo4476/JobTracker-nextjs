@@ -203,7 +203,117 @@ function setupFuzzyCapture(fuzzyResult: unknown[]) {
 
 describe('POST /api/scrape', () => {
   beforeEach(() => {
+    delete process.env.CHROME_EXTENSION_ORIGINS
     vi.clearAllMocks()
+  })
+
+  it('allows the packaged Chrome extension preflight', async () => {
+    const { OPTIONS } = await import('@/app/api/scrape/route')
+    const req = new NextRequest('http://jobtracker.local/api/scrape', {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'chrome-extension://nddejaeggmibdiimpjcdechfnckgcmnf',
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'authorization,content-type',
+      },
+    })
+
+    const res = OPTIONS(req)
+
+    expect(res.status).toBe(204)
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(
+      'chrome-extension://nddejaeggmibdiimpjcdechfnckgcmnf',
+    )
+    expect(res.headers.get('Access-Control-Allow-Methods')).toContain('POST')
+    expect(res.headers.get('Access-Control-Allow-Headers')).toBe('Authorization, Content-Type')
+  })
+
+  it('rejects preflight requests from origins outside the extension allowlist', async () => {
+    const { OPTIONS } = await import('@/app/api/scrape/route')
+    const req = new NextRequest('http://jobtracker.local/api/scrape', {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'https://evil.example',
+        'access-control-request-method': 'POST',
+      },
+    })
+
+    const res = OPTIONS(req)
+
+    expect(res.status).toBe(403)
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull()
+  })
+
+  it.each([
+    ['an unexpected method', { 'access-control-request-method': 'DELETE' }],
+    [
+      'an unexpected request header',
+      {
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'authorization,x-admin-token',
+      },
+    ],
+  ])('rejects extension preflights requesting %s', async (_case, preflightHeaders) => {
+    const { OPTIONS } = await import('@/app/api/scrape/route')
+    const req = new NextRequest('http://jobtracker.local/api/scrape', {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'chrome-extension://nddejaeggmibdiimpjcdechfnckgcmnf',
+        ...preflightHeaders,
+      },
+    })
+
+    const res = OPTIONS(req)
+
+    expect(res.status).toBe(403)
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull()
+  })
+
+  it('adds the extension CORS origin to authenticated POST responses', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    setupDbMocks('created')
+    const { POST } = await import('@/app/api/scrape/route')
+    const req = makeRequest(validBody)
+    req.headers.set('origin', 'chrome-extension://nddejaeggmibdiimpjcdechfnckgcmnf')
+
+    const res = await POST(req)
+
+    expect(res.status).toBe(201)
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(
+      'chrome-extension://nddejaeggmibdiimpjcdechfnckgcmnf',
+    )
+  })
+
+  it('does not add CORS headers to authenticated POST responses from unlisted origins', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    setupDbMocks('created')
+    const { POST } = await import('@/app/api/scrape/route')
+    const req = makeRequest(validBody)
+    req.headers.set('origin', 'https://evil.example')
+
+    const res = await POST(req)
+
+    expect(res.status).toBe(201)
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull()
+  })
+
+  it('supports an environment-configured extension origin', async () => {
+    process.env.CHROME_EXTENSION_ORIGINS = 'chrome-extension://customextensionid'
+    const { OPTIONS } = await import('@/app/api/scrape/route')
+    const req = new NextRequest('http://jobtracker.local/api/scrape', {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'chrome-extension://customextensionid',
+        'access-control-request-method': 'POST',
+      },
+    })
+
+    const res = OPTIONS(req)
+
+    expect(res.status).toBe(204)
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(
+      'chrome-extension://customextensionid',
+    )
   })
 
   it('returns 401 when requireAuthentication returns false', async () => {
