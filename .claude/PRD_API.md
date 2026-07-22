@@ -20,7 +20,7 @@
 
 ## 1. Overview
 
-All API routes live under `src/app/api/` as Next.js Route Handlers. All request and response bodies are JSON. `POST`, `PATCH`, and `DELETE` routes require `Authorization: Bearer <API_KEY>`.
+All API routes live under `src/app/api/` as Next.js Route Handlers. All request and response bodies are JSON. External mutating callers require a verified OAuth2 bearer token issued by an explicitly trusted Authentik provider.
 
 The API is the single write path for all data. The Python scraper writes exclusively through `POST /api/scrape`; the Next.js UI writes through the other mutating routes. The database is never accessed directly from the scraper or from client components.
 
@@ -319,10 +319,10 @@ HTTP status: `200` for all outcomes including `duplicate_skipped` (not an error)
 `POST`, `PATCH`, and `DELETE` routes require:
 
 ```
-Authorization: Bearer <API_KEY>
+Authorization: Bearer <OAuth2 access token>
 ```
 
-`API_KEY` is set as an environment variable in the Next.js runtime. The scraper reads it from `config.yml`. Requests without a valid key return `401`.
+The bearer value is an OAuth2 access token. The backend enforces trusted issuer, audience, signature, and scope checks through its Authentik JWT or introspection adapters. Requests without a valid trusted token return `401`; static shared bearer secrets are not accepted.
 
 `GET` routes are unauthenticated — this is a single-user personal app.
 
