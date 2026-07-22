@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireApiKey } from '@/lib/auth'
+import { requireAuthentication } from '@/lib/auth'
 import { extractTags } from '@/lib/nlp-extract'
 import { logger, serializeError } from '@/lib/logger'
 import {
@@ -56,7 +56,7 @@ async function resolveLookupIds(
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await requireApiKey(req))) {
+  if (!(await requireAuthentication(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

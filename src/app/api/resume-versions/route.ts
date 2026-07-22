@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireApiKey } from '@/lib/auth'
+import { requireAuthentication } from '@/lib/auth'
 import { resumeVersionCreateSchema } from '@/lib/schemas'
 import { logger, serializeError } from '@/lib/logger'
 import { resumeVersions } from '@/db/schema'
@@ -12,7 +12,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await requireApiKey(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await requireAuthentication(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let body: unknown
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }

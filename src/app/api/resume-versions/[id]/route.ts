@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireApiKey } from '@/lib/auth'
+import { requireAuthentication } from '@/lib/auth'
 import { resumeVersionPatchSchema } from '@/lib/schemas'
 import { logger } from '@/lib/logger'
 import { resumeVersions } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await requireApiKey(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await requireAuthentication(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
   const resumeVersionId = parseInt(id)
@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await requireApiKey(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await requireAuthentication(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
   const resumeVersionId = parseInt(id)

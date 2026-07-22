@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 vi.mock('@/lib/auth', () => ({
-  requireApiKey: vi.fn(),
+  requireAuthentication: vi.fn(),
 }))
 
 vi.mock('@/db', () => ({
@@ -15,7 +15,7 @@ vi.mock('@/db', () => ({
   },
 }))
 
-import { requireApiKey } from '@/lib/auth'
+import { requireAuthentication } from '@/lib/auth'
 import { db } from '@/db'
 
 function makeChain(result: unknown) {
@@ -47,14 +47,14 @@ describe('PATCH /api/jobs/[id]/salary', () => {
   })
 
   it('returns 401 without auth', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(false)
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
     const { PATCH } = await import('@/app/api/jobs/[id]/salary/route')
     const res = await PATCH(makeReq('/api/jobs/1/salary', {}), makeParams('1'))
     expect(res.status).toBe(401)
   })
 
   it('rejects invalid min/max ranges', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/jobs/[id]/salary/route')
     const res = await PATCH(
       makeReq('/api/jobs/1/salary', { salary_type: 'annual', salary_min: 120000, salary_max: 80000 }),
@@ -64,7 +64,7 @@ describe('PATCH /api/jobs/[id]/salary', () => {
   })
 
   it('rejects hourly rates with more than two decimal places', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/jobs/[id]/salary/route')
     const res = await PATCH(
       makeReq('/api/jobs/1/salary', { hourly_rate_min: 50.999, hourly_rate_max: 60 }),
@@ -74,7 +74,7 @@ describe('PATCH /api/jobs/[id]/salary', () => {
   })
 
   it('rejects hourly rates high enough to overflow the annual-equivalent cents column', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/jobs/[id]/salary/route')
     const res = await PATCH(
       makeReq('/api/jobs/1/salary', { hourly_rate_min: 15000, hourly_rate_max: 20000 }),
@@ -84,7 +84,7 @@ describe('PATCH /api/jobs/[id]/salary', () => {
   })
 
   it('rejects changing salary type without the matching range', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/jobs/[id]/salary/route')
     const res = await PATCH(
       makeReq('/api/jobs/1/salary', { salary_type: 'hourly' }),
@@ -94,7 +94,7 @@ describe('PATCH /api/jobs/[id]/salary', () => {
   })
 
   it('rejects switching to annual when salary_max is explicitly nulled instead of set', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/jobs/[id]/salary/route')
     const res = await PATCH(
       makeReq('/api/jobs/1/salary', { salary_type: 'annual', salary_min: 8000000, salary_max: null }),
@@ -104,7 +104,7 @@ describe('PATCH /api/jobs/[id]/salary', () => {
   })
 
   it('rejects a half-open range (salary_min set, salary_max null) even without an explicit salary_type', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/jobs/[id]/salary/route')
     const res = await PATCH(
       makeReq('/api/jobs/1/salary', { salary_min: 8000000, salary_max: null }),
@@ -114,7 +114,7 @@ describe('PATCH /api/jobs/[id]/salary', () => {
   })
 
   it('rejects salary_currency codes that are not 3 uppercase letters', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/jobs/[id]/salary/route')
     for (const salary_currency of ['us', 'USD1', 'usd']) {
       const res = await PATCH(
@@ -126,7 +126,7 @@ describe('PATCH /api/jobs/[id]/salary', () => {
   })
 
   it('rejects a partial annual range with only salary_min provided', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/jobs/[id]/salary/route')
     const res = await PATCH(
       makeReq('/api/jobs/1/salary', { salary_min: 8000000 }),
@@ -136,7 +136,7 @@ describe('PATCH /api/jobs/[id]/salary', () => {
   })
 
   it('rejects dual annual + hourly ranges when salary_type is omitted', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/jobs/[id]/salary/route')
     const res = await PATCH(
       makeReq('/api/jobs/1/salary', {
@@ -151,7 +151,7 @@ describe('PATCH /api/jobs/[id]/salary', () => {
   })
 
   it('persists annual salary values as cents directly, matching PATCH /api/jobs/[id]', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     const updateChain = makeChain([{ id: 1, salaryMin: 8000000, salaryMax: 12000000 }])
     mockDb.update.mockReturnValue(updateChain)
@@ -182,7 +182,7 @@ describe('PATCH /api/jobs/[id]/salary', () => {
   })
 
   it('infers annual salary type from an annual range', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     const updateChain = makeChain([{ id: 1, salaryMin: 9000000, salaryMax: 12000000 }])
     mockDb.update.mockReturnValue(updateChain)
@@ -212,7 +212,7 @@ describe('PATCH /api/jobs/[id]/salary', () => {
   })
 
   it('infers hourly salary type and clears annual values from an hourly range', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     const updateChain = makeChain([{ id: 1, salaryType: 'hourly' }])
     mockDb.update.mockReturnValue(updateChain)
@@ -238,7 +238,7 @@ describe('PATCH /api/jobs/[id]/salary', () => {
   })
 
   it('allows clearing salary values', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     const updateChain = makeChain([{ id: 1, salaryMin: null, salaryMax: null }])
     mockDb.update.mockReturnValue(updateChain)
@@ -275,7 +275,7 @@ describe('PATCH /api/jobs/[id]/tags', () => {
   })
 
   it('creates unknown tag names before linking them to the job', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.insert.mockReturnValue(makeChain([]))
     mockDb.select
@@ -307,14 +307,14 @@ describe('PATCH /api/jobs/[id]/tags', () => {
   })
 
   it('rejects a payload with no tag arrays', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/jobs/[id]/tags/route')
     const res = await PATCH(makeReq('/api/jobs/1/tags', {}), makeParams('1'))
     expect(res.status).toBe(400)
   })
 
   it('rejects empty or whitespace-only tag names', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/jobs/[id]/tags/route')
     const res = await PATCH(
       makeReq('/api/jobs/1/tags', { skills: ['   '] }),
@@ -324,7 +324,7 @@ describe('PATCH /api/jobs/[id]/tags', () => {
   })
 
   it('de-duplicates repeated tag names before validating and persisting', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.insert.mockReturnValue(makeChain([]))
     mockDb.select
@@ -350,7 +350,7 @@ describe('PATCH /api/jobs/[id]/tags', () => {
   })
 
   it('replaces provided tag groups and returns counts', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.insert.mockReturnValue(makeChain([]))
     mockDb.select

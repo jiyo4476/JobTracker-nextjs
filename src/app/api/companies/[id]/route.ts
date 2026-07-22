@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireApiKey } from '@/lib/auth'
+import { requireAuthentication } from '@/lib/auth'
 import { companyPatchSchema } from '@/lib/schemas'
 import { logger, serializeError } from '@/lib/logger'
 import { companies, jobs } from '@/db/schema'
@@ -103,7 +103,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await requireApiKey(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await requireAuthentication(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
   const companyId = parseInt(id)

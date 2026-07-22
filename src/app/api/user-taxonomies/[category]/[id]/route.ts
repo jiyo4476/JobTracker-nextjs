@@ -11,7 +11,7 @@ import {
   userSkills,
   userSoftware,
 } from '@/db/schema'
-import { requireApiKey } from '@/lib/auth'
+import { requireAuthentication } from '@/lib/auth'
 import { logger, serializeError } from '@/lib/logger'
 import {
   parsePositiveProfileId,
@@ -84,7 +84,7 @@ async function parseTarget(context: Context) {
 }
 
 export async function PATCH(req: NextRequest, context: Context) {
-  if (!(await requireApiKey(req))) {
+  if (!(await requireAuthentication(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const { parsedCategory, taxonomyId } = await parseTarget(context)
@@ -161,7 +161,7 @@ export async function PATCH(req: NextRequest, context: Context) {
 }
 
 export async function DELETE(req: NextRequest, context: Context) {
-  if (!(await requireApiKey(req))) {
+  if (!(await requireAuthentication(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const { parsedCategory, taxonomyId } = await parseTarget(context)

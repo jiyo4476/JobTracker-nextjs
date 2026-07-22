@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireApiKey } from '@/lib/auth'
+import { requireAuthentication } from '@/lib/auth'
 import { scrapePayloadSchema } from '@/lib/schemas'
 import { extractTags, mergeExtractedTags } from '@/lib/nlp-extract'
 import { logger, serializeError } from '@/lib/logger'
@@ -52,7 +52,7 @@ async function attachTags(jobId: number, tags: Taxonomies) {
 export async function POST(req: NextRequest) {
   // External-only endpoint (Python scraper via OAuth2 bearer token) — the browser
   // UI never calls this directly, so the same-origin bypass must not apply here.
-  if (!(await requireApiKey(req, { allowSameOrigin: false }))) {
+  if (!(await requireAuthentication(req, { allowSameOrigin: false }))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

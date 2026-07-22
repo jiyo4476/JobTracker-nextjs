@@ -3,14 +3,14 @@ import { NextRequest } from 'next/server'
 import { PgDialect } from 'drizzle-orm/pg-core'
 
 vi.mock('@/lib/auth', () => ({
-  requireApiKey: vi.fn(),
+  requireAuthentication: vi.fn(),
 }))
 
 vi.mock('@/db', () => ({
   db: { select: vi.fn(), update: vi.fn(), execute: vi.fn() },
 }))
 
-import { requireApiKey } from '@/lib/auth'
+import { requireAuthentication } from '@/lib/auth'
 import { db } from '@/db'
 
 function makeChain(result: unknown) {
@@ -204,28 +204,28 @@ describe('PATCH /api/companies/[id]', () => {
   }
 
   it('returns 401 without auth', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(false)
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
     const { PATCH } = await import('@/app/api/companies/[id]/route')
     const res = await PATCH(makeReq({ name: 'New Name' }, false), { params: Promise.resolve({ id: '1' }) })
     expect(res.status).toBe(401)
   })
 
   it('returns 400 for invalid body', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/companies/[id]/route')
     const res = await PATCH(makeReq({ name: 123 }), { params: Promise.resolve({ id: '1' }) })
     expect(res.status).toBe(400)
   })
 
   it('rejects camelCase fields instead of silently ignoring them', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/companies/[id]/route')
     const res = await PATCH(makeReq({ linkedinUrl: 'https://linkedin.com/company/acme' }), { params: Promise.resolve({ id: '1' }) })
     expect(res.status).toBe(400)
   })
 
   it('returns 200 on success', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.update.mockReturnValue(makeUpdateChain())
 
@@ -237,7 +237,7 @@ describe('PATCH /api/companies/[id]', () => {
   })
 
   it('allows optional company fields to be cleared', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     const updateChain = makeUpdateChain()
     mockDb.update.mockReturnValue(updateChain)
@@ -250,7 +250,7 @@ describe('PATCH /api/companies/[id]', () => {
   })
 
   it('maps the snake_case company size field to the database column', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     const updateChain = makeUpdateChain()
     mockDb.update.mockReturnValue(updateChain)
@@ -263,7 +263,7 @@ describe('PATCH /api/companies/[id]', () => {
   })
 
   it('returns 400 for non-numeric id', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/companies/[id]/route')
     const res = await PATCH(makeReq({ name: 'X' }), { params: Promise.resolve({ id: 'nan' }) })
     expect(res.status).toBe(400)

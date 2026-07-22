@@ -1,5 +1,4 @@
 import { NextRequest } from "next/server";
-import { timingSafeEqual } from "node:crypto";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 const DEFAULT_AUTHENTIK_BASE_URL = "https://auth.yjimmy.dev";
@@ -15,7 +14,7 @@ const JWT_ALGORITHMS = ["RS256"];
 
 const jwksByUri = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
-type RequireApiKeyOptions = {
+type RequireAuthenticationOptions = {
   allowSameOrigin?: boolean;
 };
 
@@ -42,17 +41,12 @@ type IntrospectionResponse = {
 //     trivially forgeable by any non-browser client that simply sets a matching
 //     Origin header — it must never be relied on once a real deployment can enable
 //     the JWT path instead.
-export async function requireApiKey(
+export async function requireAuthentication(
   req: NextRequest,
-  options: RequireApiKeyOptions = {},
+  options: RequireAuthenticationOptions = {},
 ): Promise<boolean> {
   const allowSameOrigin = options.allowSameOrigin ?? true;
-  const key = process.env.API_KEY;
   const auth = req.headers.get("authorization");
-
-  // Temporary migration fallback for callers that have not moved to OAuth2 yet.
-  // Remove API_KEY from the environment to require Authentik tokens exclusively.
-  if (key && auth && safeCompare(auth, `Bearer ${key}`)) return true;
 
   if (allowSameOrigin && !auth) {
     if (process.env.AUTHENTIK_FORWARD_AUTH_ENABLED === "true") {
@@ -106,15 +100,6 @@ async function verifyForwardAuthJwt(token: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-// Constant-time string comparison to avoid leaking the shared API_KEY secret
-// via response-timing differences.
-function safeCompare(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
 }
 
 async function verifyOAuthToken(token: string): Promise<boolean> {

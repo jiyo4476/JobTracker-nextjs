@@ -11,7 +11,7 @@ import {
   userSkills,
   userSoftware,
 } from '@/db/schema'
-import { requireApiKey } from '@/lib/auth'
+import { requireAuthentication } from '@/lib/auth'
 import { logger, serializeError } from '@/lib/logger'
 import {
   profileCategorySchema,
@@ -142,7 +142,7 @@ async function getProfileItem(category: ProfileCategory, taxonomyId: number) {
 }
 
 export async function GET(req: NextRequest, context: Context) {
-  if (!(await requireApiKey(req))) {
+  if (!(await requireAuthentication(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const category = await parseCategory(context)
@@ -162,7 +162,7 @@ export async function GET(req: NextRequest, context: Context) {
 }
 
 export async function POST(req: NextRequest, context: Context) {
-  if (!(await requireApiKey(req))) {
+  if (!(await requireAuthentication(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const category = await parseCategory(context)

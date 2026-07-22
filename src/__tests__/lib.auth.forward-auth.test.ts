@@ -10,7 +10,7 @@ vi.mock('jose', () => ({
 }))
 
 import { jwtVerify } from 'jose'
-import { requireApiKey } from '@/lib/auth'
+import { requireAuthentication } from '@/lib/auth'
 
 const OAUTH_ENV = {
   AUTHENTIK_BASE_URL: 'https://auth.example.com',
@@ -19,10 +19,9 @@ const OAUTH_ENV = {
   AUTHENTIK_JWKS_URI: 'https://auth.example.com/application/o/job-tracker/jwks/',
 }
 
-describe('requireApiKey forward-auth JWT path (AUTHENTIK_FORWARD_AUTH_ENABLED)', () => {
+describe('requireAuthentication forward-auth JWT path (AUTHENTIK_FORWARD_AUTH_ENABLED)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    delete process.env.API_KEY
     process.env.AUTHENTIK_FORWARD_AUTH_ENABLED = 'true'
     for (const [k, v] of Object.entries(OAUTH_ENV)) process.env[k] = v
   })
@@ -41,7 +40,7 @@ describe('requireApiKey forward-auth JWT path (AUTHENTIK_FORWARD_AUTH_ENABLED)',
     const req = new NextRequest('http://localhost/api/test', {
       headers: { 'x-authentik-jwt': 'valid-forward-auth-jwt' },
     })
-    await expect(requireApiKey(req)).resolves.toBe(true)
+    await expect(requireAuthentication(req)).resolves.toBe(true)
   })
 
   // The forward-auth JWT is issued per-proxy-provider, so it must be checked against
@@ -59,7 +58,7 @@ describe('requireApiKey forward-auth JWT path (AUTHENTIK_FORWARD_AUTH_ENABLED)',
     const req = new NextRequest('http://localhost/api/test', {
       headers: { 'x-authentik-jwt': 'valid-forward-auth-jwt' },
     })
-    await requireApiKey(req)
+    await requireAuthentication(req)
 
     expect(jwtVerify).toHaveBeenCalledWith(
       'valid-forward-auth-jwt',
@@ -74,7 +73,7 @@ describe('requireApiKey forward-auth JWT path (AUTHENTIK_FORWARD_AUTH_ENABLED)',
     const req = new NextRequest('http://localhost/api/test', {
       headers: { 'x-authentik-jwt': 'forged-jwt' },
     })
-    await expect(requireApiKey(req)).resolves.toBe(false)
+    await expect(requireAuthentication(req)).resolves.toBe(false)
   })
 
   it('rejects a request when jwtVerify throws for a wrong-audience token', async () => {
@@ -83,12 +82,12 @@ describe('requireApiKey forward-auth JWT path (AUTHENTIK_FORWARD_AUTH_ENABLED)',
     const req = new NextRequest('http://localhost/api/test', {
       headers: { 'x-authentik-jwt': 'wrong-audience-jwt' },
     })
-    await expect(requireApiKey(req)).resolves.toBe(false)
+    await expect(requireAuthentication(req)).resolves.toBe(false)
   })
 
   it('rejects a request with no X-authentik-jwt header at all', async () => {
     const req = new NextRequest('http://localhost/api/test')
-    await expect(requireApiKey(req)).resolves.toBe(false)
+    await expect(requireAuthentication(req)).resolves.toBe(false)
     expect(jwtVerify).not.toHaveBeenCalled()
   })
 
@@ -96,7 +95,7 @@ describe('requireApiKey forward-auth JWT path (AUTHENTIK_FORWARD_AUTH_ENABLED)',
     const req = new NextRequest('http://localhost/api/test', {
       headers: { origin: 'http://localhost', host: 'localhost' },
     })
-    await expect(requireApiKey(req)).resolves.toBe(false)
+    await expect(requireAuthentication(req)).resolves.toBe(false)
     expect(jwtVerify).not.toHaveBeenCalled()
   })
 
@@ -104,7 +103,7 @@ describe('requireApiKey forward-auth JWT path (AUTHENTIK_FORWARD_AUTH_ENABLED)',
     const req = new NextRequest('http://localhost/api/test', {
       headers: { 'x-authentik-jwt': 'valid-forward-auth-jwt' },
     })
-    await expect(requireApiKey(req, { allowSameOrigin: false })).resolves.toBe(false)
+    await expect(requireAuthentication(req, { allowSameOrigin: false })).resolves.toBe(false)
     expect(jwtVerify).not.toHaveBeenCalled()
   })
 })

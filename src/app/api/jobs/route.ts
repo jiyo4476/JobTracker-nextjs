@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireApiKey } from '@/lib/auth'
+import { requireAuthentication } from '@/lib/auth'
 import { manualJobSchema } from '@/lib/schemas'
 import { logger, serializeError } from '@/lib/logger'
 import { escapeLikePattern } from '@/lib/db-utils'
@@ -206,7 +206,7 @@ async function listJobs(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await requireApiKey(req))) {
+  if (!(await requireAuthentication(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
