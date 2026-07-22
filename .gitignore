@@ -50,8 +50,13 @@ __pycache__/
 .pytest_cache/
 
 # Claude workspace and local settings
+.claude
 .claude/worktrees/
 .claude/settings.local.json
+.worktrees
+
+#Nextjs
+.next
 
 # Jenkins stores the pipeline definition outside this repository
 /Jenkinsfile
