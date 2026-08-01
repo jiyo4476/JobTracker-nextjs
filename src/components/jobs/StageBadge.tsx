@@ -8,17 +8,21 @@ import {
   type InterviewStage,
 } from '@/lib/enums'
 
-export function StageBadge({ stage }: { stage: string }) {
-  const key = stage as InterviewStage
+function isInterviewStage(value: string): value is InterviewStage {
+  return value in interviewStageBadgeStyles
+}
+
+export function StageBadge({ stage }: { stage: InterviewStage | string }) {
+  const known = isInterviewStage(stage)
   return (
     <Badge
       variant="secondary"
       className={cn(
         'text-xs font-medium',
-        interviewStageBadgeStyles[key] ?? 'bg-slate-100 text-slate-700',
+        known ? interviewStageBadgeStyles[stage] : 'bg-slate-100 text-slate-700',
       )}
     >
-      {interviewStageBadgeLabels[key] ?? stage}
+      {known ? interviewStageBadgeLabels[stage] : stage}
     </Badge>
   )
 }
