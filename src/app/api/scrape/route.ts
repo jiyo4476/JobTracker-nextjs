@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireApiKey } from '@/lib/auth'
+import { requireAuth, readJsonBody } from '@/lib/http'
 import { scrapePayloadSchema } from '@/lib/schemas'
 import { extractTags, mergeExtractedTags } from '@/lib/nlp-extract'
 import { logger, serializeError } from '@/lib/logger'
 import { escapeLikePattern } from '@/lib/db-utils'
+import { centsToAnnualEquivalent } from '@/lib/salary-format'
 import {
   companies, jobs, skills, software as softwareTable, keywords, certifications,
   jobSkills, jobSoftware, jobKeywords, jobCertifications,
@@ -52,21 +53,11 @@ async function attachTags(jobId: number, tags: Taxonomies) {
 export async function POST(req: NextRequest) {
   // External-only endpoint (Python scraper via OAuth2 bearer token) — the browser
   // UI never calls this directly, so the same-origin bypass must not apply here.
-  if (!(await requireApiKey(req, { allowSameOrigin: false }))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const denied = await requireAuth(req, { allowSameOrigin: false })
+  if (denied) return denied
 
-  let body: unknown
-  try {
-    body = await req.json()
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
-  }
-
-  const parsed = scrapePayloadSchema.safeParse(body)
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
-  }
+  const parsed = await readJsonBody(req, scrapePayloadSchema)
+  if (!parsed.ok) return parsed.response
 
   // Run the backend taxonomy pass even when the caller already extracted tags.
   // Caller values stay first; backend-only matches supplement local extraction.
@@ -121,8 +112,8 @@ export async function POST(req: NextRequest) {
     let annualEquivalentMin: number | undefined
     let annualEquivalentMax: number | undefined
     if (data.salary_type === 'hourly') {
-      if (data.hourly_rate_min != null) annualEquivalentMin = Math.round(data.hourly_rate_min * 2080 * 100)
-      if (data.hourly_rate_max != null) annualEquivalentMax = Math.round(data.hourly_rate_max * 2080 * 100)
+      if (data.hourly_rate_min != null) annualEquivalentMin = centsToAnnualEquivalent(data.hourly_rate_min)
+      if (data.hourly_rate_max != null) annualEquivalentMax = centsToAnnualEquivalent(data.hourly_rate_max)
     } else if (data.salary_type === 'annual') {
       annualEquivalentMin = data.salary_min
       annualEquivalentMax = data.salary_max

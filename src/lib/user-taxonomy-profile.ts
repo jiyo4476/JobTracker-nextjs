@@ -1,16 +1,12 @@
 import { z } from 'zod'
 import { taxonomyCategorySchema, type TaxonomyCategory } from '@/lib/taxonomy'
+import { softwareFamiliarityValues, keywordPreferenceValues } from '@/lib/enums'
 
 export const profileCategorySchema = taxonomyCategorySchema
 export type ProfileCategory = TaxonomyCategory
 
-export const softwareFamiliaritySchema = z.enum([
-  'learning',
-  'familiar',
-  'proficient',
-  'expert',
-])
-export const keywordPreferenceSchema = z.enum(['interest', 'exclusion'])
+export const softwareFamiliaritySchema = z.enum(softwareFamiliarityValues)
+export const keywordPreferenceSchema = z.enum(keywordPreferenceValues)
 
 const isoDateSchema = z
   .string()

@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireApiKey } from '@/lib/auth'
+import { requireAuth, readJsonBody } from '@/lib/http'
 import { userSkillCreateSchema } from '@/lib/schemas'
 import { logger } from '@/lib/logger'
 import { userSkills, skills } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 
 export async function GET(req: NextRequest) {
-  if (!(await requireApiKey(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = await requireAuth(req)
+  if (denied) return denied
 
   const rows = await db
     .select({
@@ -23,13 +24,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await requireApiKey(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = await requireAuth(req)
+  if (denied) return denied
 
-  let body: unknown
-  try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
-
-  const parsed = userSkillCreateSchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  const parsed = await readJsonBody(req, userSkillCreateSchema)
+  if (!parsed.ok) return parsed.response
 
   const d = parsed.data
 

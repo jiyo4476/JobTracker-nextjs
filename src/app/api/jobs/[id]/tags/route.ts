@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireApiKey } from '@/lib/auth'
+import { requireAuth, readJsonBody } from '@/lib/http'
 import { jobTagsPatchSchema } from '@/lib/schemas'
 import { logger, serializeError } from '@/lib/logger'
 import {
@@ -57,17 +57,15 @@ async function readJobTags(jobId: number) {
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await requireApiKey(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = await requireAuth(req)
+  if (denied) return denied
 
   const { id } = await params
   const jobId = parseInt(id)
   if (isNaN(jobId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
 
-  let body: unknown
-  try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
-
-  const parsed = jobTagsPatchSchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  const parsed = await readJsonBody(req, jobTagsPatchSchema)
+  if (!parsed.ok) return parsed.response
 
   const [job] = await db.select({ id: jobs.id }).from(jobs).where(eq(jobs.id, jobId)).limit(1)
   if (!job) return NextResponse.json({ error: 'Not found' }, { status: 404 })

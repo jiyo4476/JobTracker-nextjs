@@ -1,3 +1,20 @@
+// Salary is stored as integer cents for annual figures; hourly rates are decimal
+// dollars converted to an annual-equivalent for unified filtering/analytics.
+export const HOURS_PER_YEAR = 2080 // 40 h/week × 52 weeks
+export const CENTS_PER_DOLLAR = 100
+
+/**
+ * Convert an hourly rate (decimal dollars) to annual-equivalent integer cents:
+ * `hourly × 2080 × 100`. Passes through null/undefined so callers can map
+ * optional/nullable patch fields directly.
+ */
+export function centsToAnnualEquivalent<T extends number | null | undefined>(
+  hourly: T,
+): T extends number ? number : T {
+  if (hourly == null) return hourly as T extends number ? number : T
+  return Math.round(hourly * HOURS_PER_YEAR * CENTS_PER_DOLLAR) as T extends number ? number : T
+}
+
 type SalaryDisplay = {
   salaryType: 'annual' | 'hourly' | null
   salaryMin: number | null

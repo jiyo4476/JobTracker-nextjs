@@ -1,13 +1,18 @@
 import { z } from 'zod'
 import { sourcePlatformValues } from '@/lib/source-platforms'
+import {
+  jobTypeValues,
+  experienceLevelValues,
+  salaryTypeValues,
+  interviewStageValues,
+  companySizeValues,
+} from '@/lib/enums'
 
 export const sourcePlatformEnum = z.enum(sourcePlatformValues)
-export const jobTypeEnum = z.enum(['full_time','part_time','contract','internship','temp','freelance'])
-export const experienceLevelEnum = z.enum(['entry','mid','senior','lead','executive'])
-export const salaryTypeEnum = z.enum(['annual','hourly'])
-export const interviewStageEnum = z.enum([
-  'not_applied','applied','phone_screen','technical_screen','onsite','offer_received','rejected','withdrawn'
-])
+export const jobTypeEnum = z.enum(jobTypeValues)
+export const experienceLevelEnum = z.enum(experienceLevelValues)
+export const salaryTypeEnum = z.enum(salaryTypeValues)
+export const interviewStageEnum = z.enum(interviewStageValues)
 
 // Zod's .url() doesn't restrict scheme (it accepts javascript:/data: URIs), and these
 // values get rendered as clickable links in the UI — restrict to http(s) only.
@@ -123,7 +128,7 @@ export const companyPatchSchema = z.object({
   name: z.string().trim().min(1).max(500).optional(),
   website: httpUrlSchema.nullable().optional(),
   industry: z.string().max(300).nullable().optional(),
-  size_range: z.enum(['1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5000+']).nullable().optional(),
+  size_range: z.enum(companySizeValues).nullable().optional(),
   hq_location: z.string().max(300).nullable().optional(),
   glassdoor_url: httpUrlSchema.nullable().optional(),
   linkedin_url: httpUrlSchema.nullable().optional(),

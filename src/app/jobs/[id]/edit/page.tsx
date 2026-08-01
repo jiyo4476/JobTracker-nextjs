@@ -23,44 +23,18 @@ import {
 } from '@/lib/queries'
 import { jobPatchSchema } from '@/lib/schemas'
 import { getSourcePlatformLabel } from '@/lib/source-platforms'
+import {
+  interviewStageOptions as STAGE_OPTIONS,
+  jobTypeOptions as JOB_TYPES,
+  experienceLevelOptions as EXPERIENCE_LEVELS,
+  salaryTypeOptions as SALARY_TYPES,
+} from '@/lib/enums'
 
 type JobPatchFormValues = z.infer<typeof jobPatchSchema>
 
 const SELECT_CLASS =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
 
-const STAGE_OPTIONS = [
-  { value: 'not_applied', label: 'Not Applied' },
-  { value: 'applied', label: 'Applied' },
-  { value: 'phone_screen', label: 'Phone Screen' },
-  { value: 'technical_screen', label: 'Technical Screen' },
-  { value: 'onsite', label: 'Onsite' },
-  { value: 'offer_received', label: 'Offer Received' },
-  { value: 'rejected', label: 'Rejected' },
-  { value: 'withdrawn', label: 'Withdrawn' },
-]
-
-const JOB_TYPES = [
-  { value: 'full_time', label: 'Full Time' },
-  { value: 'part_time', label: 'Part Time' },
-  { value: 'contract', label: 'Contract' },
-  { value: 'internship', label: 'Internship' },
-  { value: 'temp', label: 'Temp' },
-  { value: 'freelance', label: 'Freelance' },
-]
-
-const EXPERIENCE_LEVELS = [
-  { value: 'entry', label: 'Entry' },
-  { value: 'mid', label: 'Mid' },
-  { value: 'senior', label: 'Senior' },
-  { value: 'lead', label: 'Lead' },
-  { value: 'executive', label: 'Executive' },
-]
-
-const SALARY_TYPES = [
-  { value: 'annual', label: 'Annual' },
-  { value: 'hourly', label: 'Hourly' },
-]
 
 const CURRENCY_OPTIONS = ['USD', 'EUR', 'GBP', 'CAD', 'AUD']
 

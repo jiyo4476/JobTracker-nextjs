@@ -11,7 +11,7 @@ import {
   userSkills,
   userSoftware,
 } from '@/db/schema'
-import { requireApiKey } from '@/lib/auth'
+import { requireAuth, readJsonBody } from '@/lib/http'
 import { logger, serializeError } from '@/lib/logger'
 import {
   profileCategorySchema,
@@ -142,9 +142,8 @@ async function getProfileItem(category: ProfileCategory, taxonomyId: number) {
 }
 
 export async function GET(req: NextRequest, context: Context) {
-  if (!(await requireApiKey(req))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const denied = await requireAuth(req)
+  if (denied) return denied
   const category = await parseCategory(context)
   if (!category.success) {
     return NextResponse.json(
@@ -162,9 +161,8 @@ export async function GET(req: NextRequest, context: Context) {
 }
 
 export async function POST(req: NextRequest, context: Context) {
-  if (!(await requireApiKey(req))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const denied = await requireAuth(req)
+  if (denied) return denied
   const category = await parseCategory(context)
   if (!category.success) {
     return NextResponse.json(
@@ -173,16 +171,8 @@ export async function POST(req: NextRequest, context: Context) {
     )
   }
 
-  let body: unknown
-  try {
-    body = await req.json()
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
-  }
-  const parsed = profileCreateSchemas[category.data].safeParse(body)
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
-  }
+  const parsed = await readJsonBody(req, profileCreateSchemas[category.data])
+  if (!parsed.ok) return parsed.response
 
   try {
     const outcome = await db.transaction(async (tx) => {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireApiKey } from '@/lib/auth'
+import { requireAuth } from '@/lib/http'
 import { extractTags } from '@/lib/nlp-extract'
 import { logger, serializeError } from '@/lib/logger'
 import {
@@ -56,9 +56,8 @@ async function resolveLookupIds(
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await requireApiKey(req))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const denied = await requireAuth(req)
+  if (denied) return denied
 
   const requestedLimit = Number(req.nextUrl.searchParams.get('limit') ?? '100')
   const limit =

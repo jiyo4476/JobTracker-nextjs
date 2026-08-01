@@ -1,23 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireApiKey } from '@/lib/auth'
+import { requireAuth, readJsonBody } from '@/lib/http'
 import { resumeVersionPatchSchema } from '@/lib/schemas'
 import { logger } from '@/lib/logger'
 import { resumeVersions } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await requireApiKey(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = await requireAuth(req)
+  if (denied) return denied
 
   const { id } = await params
   const resumeVersionId = parseInt(id)
   if (isNaN(resumeVersionId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
 
-  let body: unknown
-  try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
-
-  const parsed = resumeVersionPatchSchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  const parsed = await readJsonBody(req, resumeVersionPatchSchema)
+  if (!parsed.ok) return parsed.response
 
   const d = parsed.data
   const updated = await db.update(resumeVersions).set({
@@ -32,7 +30,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await requireApiKey(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = await requireAuth(req)
+  if (denied) return denied
 
   const { id } = await params
   const resumeVersionId = parseInt(id)

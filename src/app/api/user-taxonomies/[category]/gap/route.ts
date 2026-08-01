@@ -15,7 +15,7 @@ import {
   userSkills,
   userSoftware,
 } from '@/db/schema'
-import { requireApiKey } from '@/lib/auth'
+import { requireAuth } from '@/lib/http'
 import { escapeLikePattern } from '@/lib/db-utils'
 import { logger, serializeError } from '@/lib/logger'
 import { profileCategorySchema } from '@/lib/user-taxonomy-profile'
@@ -90,9 +90,8 @@ function parsePageParam(value: string | null, fallback: number, max?: number) {
 }
 
 export async function GET(req: NextRequest, context: Context) {
-  if (!(await requireApiKey(req))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const denied = await requireAuth(req)
+  if (denied) return denied
   const { category: rawCategory } = await context.params
   const category = profileCategorySchema.safeParse(rawCategory)
   if (!category.success) {
