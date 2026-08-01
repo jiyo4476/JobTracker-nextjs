@@ -72,7 +72,7 @@ export const jobs = pgTable(
     jobTitle: text("job_title").notNull(),
     jobLink: text("job_link"),
     jobLocation: text("job_location"),
-    isRemote: boolean("is_remote").default(false),
+    isRemote: boolean("is_remote").default(false).notNull(),
     sourcePlatform: sourcePlatformEnum("source_platform"),
     externalJobId: text("external_job_id"),
     jobType: jobTypeEnum("job_type"),
@@ -92,27 +92,31 @@ export const jobs = pgTable(
     annualEquivalentMin: integer("annual_equivalent_min"),
     annualEquivalentMax: integer("annual_equivalent_max"),
     salaryText: text("salary_text"),
+    // NOTE: not `.notNull()` yet — the salary PATCH route (jobs/[id]/salary,
+    // owned by TECHDEBT-001) intentionally accepts `salary_currency: null` to
+    // clear the field. Tightening this to NOT NULL requires coordinating that
+    // route's schema first; deferred to avoid touching route handlers here.
     salaryCurrency: char("salary_currency", { length: 3 }).default("USD"),
-    hasApplied: boolean("has_applied").default(false),
+    hasApplied: boolean("has_applied").default(false).notNull(),
     dateApplied: date("date_applied"),
-    heardBack: boolean("heard_back").default(false),
+    heardBack: boolean("heard_back").default(false).notNull(),
     interviewStage: interviewStageEnum("interview_stage").default("not_applied"),
     datePosted: date("date_posted"),
     dateFound: date("date_found"),
     lastScrapedAt: timestamp("last_scraped_at", { withTimezone: true }),
-    isActive: boolean("is_active").default(true),
+    isActive: boolean("is_active").default(true).notNull(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     applicationDeadline: date("application_deadline"),
     postingMdPath: text("posting_md_path"),
-    securityClearanceReq: boolean("security_clearance_req").default(false),
+    securityClearanceReq: boolean("security_clearance_req").default(false).notNull(),
     priority: smallint("priority"), // 1–5
-    referral: boolean("referral").default(false),
-    coverLetterSubmitted: boolean("cover_letter_submitted").default(false),
+    referral: boolean("referral").default(false).notNull(),
+    coverLetterSubmitted: boolean("cover_letter_submitted").default(false).notNull(),
     resumeVersion: text("resume_version"),
     rejectionReason: text("rejection_reason"),
     notes: text("notes"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
     // Partial unique index: only scraped jobs (external_job_id set) participate in
@@ -129,10 +133,16 @@ export const jobs = pgTable(
     index("jobs_source_platform_idx").on(t.sourcePlatform),
     index("jobs_priority_idx").on(t.priority),
     index("jobs_last_scraped_at_idx").on(t.lastScrapedAt),
+    // Push business rules that previously lived only in Zod down into the DB.
+    check("jobs_priority_range_check", sql`${t.priority} IS NULL OR ${t.priority} BETWEEN 1 AND 5`),
+    check(
+      "jobs_salary_min_max_check",
+      sql`${t.salaryMin} IS NULL OR ${t.salaryMax} IS NULL OR ${t.salaryMin} <= ${t.salaryMax}`,
+    ),
     // GIN full-text index must be added as a raw SQL migration — Drizzle doesn't
     // support functional indexes. After `npm run db:generate`, append this to the
     // generated migration file:
-    //   CREATE INDEX jobs_description_fts_idx ON jobs
+    //   CREATE INDEX jobs_description_search_idx ON jobs
     //   USING GIN (to_tsvector('english', coalesce(job_description, '')));
     //
     // jobs.job_title also has a pg_trgm GIN index (jobs_job_title_trgm_idx, see
@@ -278,15 +288,19 @@ export const userKeywords = pgTable("user_keywords", {
 // ── job_status_history ────────────────────────────────────────────────────────
 // Written every time interview_stage changes. Powers the recent activity feed.
 
-export const jobStatusHistory = pgTable("job_status_history", {
-  id: serial("id").primaryKey(),
-  jobId: integer("job_id")
-    .notNull()
-    .references(() => jobs.id, { onDelete: "cascade" }),
-  fromStage: interviewStageEnum("from_stage"),
-  toStage: interviewStageEnum("to_stage").notNull(),
-  changedAt: timestamp("changed_at", { withTimezone: true }).defaultNow(),
-});
+export const jobStatusHistory = pgTable(
+  "job_status_history",
+  {
+    id: serial("id").primaryKey(),
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    fromStage: interviewStageEnum("from_stage"),
+    toStage: interviewStageEnum("to_stage").notNull(),
+    changedAt: timestamp("changed_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [index("job_status_history_job_id_idx").on(t.jobId)],
+);
 
 // ── resume_versions ───────────────────────────────────────────────────────────
 // Labels-only — no file storage. jobs.resume_version stores the label string.
@@ -301,18 +315,22 @@ export const resumeVersions = pgTable("resume_versions", {
 
 // ── contacts ──────────────────────────────────────────────────────────────────
 
-export const contacts = pgTable("contacts", {
-  id: serial("id").primaryKey(),
-  jobId: integer("job_id")
-    .notNull()
-    .references(() => jobs.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  title: text("title"),
-  email: text("email"),
-  phone: text("phone"),
-  linkedinUrl: text("linkedin_url"),
-  role: text("role"),
-  contactedAt: date("contacted_at"),
-  notes: text("notes"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-});
+export const contacts = pgTable(
+  "contacts",
+  {
+    id: serial("id").primaryKey(),
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    title: text("title"),
+    email: text("email"),
+    phone: text("phone"),
+    linkedinUrl: text("linkedin_url"),
+    role: text("role"),
+    contactedAt: date("contacted_at"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [index("contacts_job_id_idx").on(t.jobId)],
+);
