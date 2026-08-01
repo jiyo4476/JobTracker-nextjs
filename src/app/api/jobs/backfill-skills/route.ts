@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireAuthentication } from '@/lib/auth'
+import { requireAuth } from '@/lib/http'
 import { extractTags } from '@/lib/nlp-extract'
 import { logger } from '@/lib/logger'
 import { jobs, skills, jobSkills } from '@/db/schema'
@@ -14,9 +14,8 @@ import { inArray, sql } from 'drizzle-orm'
 // Accepts ?limit=N (default 100, max 500) to keep each call bounded.
 // Each job's writes run in a transaction so a mid-run timeout leaves no partial rows.
 export async function POST(req: NextRequest) {
-  if (!(await requireAuthentication(req))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const denied = await requireAuth(req)
+  if (denied) return denied
 
   const requestedLimit = Number(req.nextUrl.searchParams.get('limit') ?? '100')
   const limit =

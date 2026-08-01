@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireAuthentication } from '@/lib/auth'
+import { requireAuth } from '@/lib/http'
 import { userSkills } from '@/db/schema'
 import { logger } from '@/lib/logger'
 import { eq } from 'drizzle-orm'
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await requireAuthentication(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = await requireAuth(req)
+  if (denied) return denied
 
   const { id } = await params
   const skillId = parseInt(id)

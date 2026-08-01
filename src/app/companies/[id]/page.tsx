@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CompanyTaxonomyDemand } from '@/components/companies/CompanyTaxonomyDemand'
 import { useCompany, usePatchCompany } from '@/lib/queries'
+import { interviewStageBadgeVariants, type InterviewStage } from '@/lib/enums'
 
 function formatSalary(min: number | null, max: number | null) {
   if (!min && !max) return '—'
@@ -19,16 +20,6 @@ function formatSalary(min: number | null, max: number | null) {
   return fmt((min ?? max)!)
 }
 
-const STAGE_COLORS: Record<string, string> = {
-  not_applied: 'secondary',
-  applied: 'default',
-  phone_screen: 'default',
-  technical_screen: 'default',
-  onsite: 'default',
-  offer_received: 'default',
-  rejected: 'destructive',
-  withdrawn: 'secondary',
-}
 
 export default function CompanyDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -167,7 +158,7 @@ export default function CompanyDetailPage() {
                       <Link href={`/jobs/${job.id}`} className="flex-1 text-sm text-blue-600 hover:underline font-medium">
                         {job.jobTitle}
                       </Link>
-                      <Badge variant={(STAGE_COLORS[job.interviewStage] as 'default' | 'secondary' | 'destructive') ?? 'default'}>
+                      <Badge variant={interviewStageBadgeVariants[job.interviewStage as InterviewStage] ?? 'default'}>
                         {job.interviewStage.replace(/_/g, ' ')}
                       </Badge>
                       <span className="text-sm text-slate-500 w-28 text-right">

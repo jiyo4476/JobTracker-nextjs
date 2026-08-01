@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireAuthentication } from '@/lib/auth'
+import { requireAuth, readJsonBody } from '@/lib/http'
 import { manualJobSchema } from '@/lib/schemas'
 import { logger, serializeError } from '@/lib/logger'
 import { escapeLikePattern } from '@/lib/db-utils'
@@ -206,21 +206,11 @@ async function listJobs(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await requireAuthentication(req))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const denied = await requireAuth(req)
+  if (denied) return denied
 
-  let rawBody: unknown
-  try {
-    rawBody = await req.json()
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
-  }
-
-  const parsed = manualJobSchema.safeParse(rawBody)
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
-  }
+  const parsed = await readJsonBody(req, manualJobSchema)
+  if (!parsed.ok) return parsed.response
 
   const b = parsed.data
   try {

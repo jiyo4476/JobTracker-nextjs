@@ -12,28 +12,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useCompanies, useCreateJob } from '@/lib/queries'
 import { manualJobSchema } from '@/lib/schemas'
+import { jobTypeOptions as JOB_TYPES, experienceLevelOptions as EXPERIENCE_LEVELS } from '@/lib/enums'
 
 type ManualJobFormValues = z.infer<typeof manualJobSchema>
 
 const SELECT_CLASS =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
 
-const JOB_TYPES = [
-  { value: 'full_time', label: 'Full Time' },
-  { value: 'part_time', label: 'Part Time' },
-  { value: 'contract', label: 'Contract' },
-  { value: 'internship', label: 'Internship' },
-  { value: 'temp', label: 'Temp' },
-  { value: 'freelance', label: 'Freelance' },
-]
-
-const EXPERIENCE_LEVELS = [
-  { value: 'entry', label: 'Entry' },
-  { value: 'mid', label: 'Mid' },
-  { value: 'senior', label: 'Senior' },
-  { value: 'lead', label: 'Lead' },
-  { value: 'executive', label: 'Executive' },
-]
 
 export default function NewJobPage() {
   const router = useRouter()

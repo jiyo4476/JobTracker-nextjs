@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireAuthentication } from '@/lib/auth'
+import { requireAuth, readJsonBody } from '@/lib/http'
 import { jobPatchSchema } from '@/lib/schemas'
 import { logger, serializeError } from '@/lib/logger'
+import { hourlyToAnnualEquivalentCents } from '@/lib/salary-format'
 import {
   jobs, companies, skills, software as softwareTable, keywords, certifications,
   jobSkills, jobSoftware, jobKeywords, jobCertifications, contacts, jobStatusHistory,
@@ -82,17 +83,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await requireAuthentication(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = await requireAuth(req)
+  if (denied) return denied
 
   const { id } = await params
   const jobId = parseInt(id)
   if (isNaN(jobId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
 
-  let body: unknown
-  try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
-
-  const parsed = jobPatchSchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  const parsed = await readJsonBody(req, jobPatchSchema)
+  if (!parsed.ok) return parsed.response
 
   const d = parsed.data
 
@@ -135,8 +134,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       salaryType = cur?.salaryType ?? undefined
     }
     if (salaryType === 'hourly') {
-      if (d.hourly_rate_min !== undefined) annualEquivalentMin = Math.round(d.hourly_rate_min * 2080 * 100)
-      if (d.hourly_rate_max !== undefined) annualEquivalentMax = Math.round(d.hourly_rate_max * 2080 * 100)
+      if (d.hourly_rate_min !== undefined) annualEquivalentMin = hourlyToAnnualEquivalentCents(d.hourly_rate_min)
+      if (d.hourly_rate_max !== undefined) annualEquivalentMax = hourlyToAnnualEquivalentCents(d.hourly_rate_max)
     } else if (salaryType === 'annual') {
       if (d.salary_min !== undefined) annualEquivalentMin = d.salary_min
       if (d.salary_max !== undefined) annualEquivalentMax = d.salary_max
@@ -187,7 +186,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await requireAuthentication(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = await requireAuth(req)
+  if (denied) return denied
 
   const { id } = await params
   const jobId = parseInt(id)

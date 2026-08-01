@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireAuthentication } from '@/lib/auth'
+import { requireAuth, readJsonBody } from '@/lib/http'
 import { resumeVersionCreateSchema } from '@/lib/schemas'
 import { logger, serializeError } from '@/lib/logger'
 import { resumeVersions } from '@/db/schema'
@@ -12,13 +12,11 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await requireAuthentication(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = await requireAuth(req)
+  if (denied) return denied
 
-  let body: unknown
-  try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
-
-  const parsed = resumeVersionCreateSchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  const parsed = await readJsonBody(req, resumeVersionCreateSchema)
+  if (!parsed.ok) return parsed.response
 
   try {
     const [row] = await db.insert(resumeVersions).values({

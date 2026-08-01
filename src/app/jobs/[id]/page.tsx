@@ -22,20 +22,12 @@ import {
   useDeleteContact,
   type Contact,
 } from '@/lib/queries'
+import {
+  interviewStageOptions as STAGE_OPTIONS,
+  jobTypeValues as JOB_TYPE_OPTIONS,
+  experienceLevelValues as EXPERIENCE_OPTIONS,
+} from '@/lib/enums'
 
-const STAGE_OPTIONS = [
-  { value: 'not_applied', label: 'Not Applied' },
-  { value: 'applied', label: 'Applied' },
-  { value: 'phone_screen', label: 'Phone Screen' },
-  { value: 'technical_screen', label: 'Technical Screen' },
-  { value: 'onsite', label: 'Onsite' },
-  { value: 'offer_received', label: 'Offer Received' },
-  { value: 'rejected', label: 'Rejected' },
-  { value: 'withdrawn', label: 'Withdrawn' },
-]
-
-const JOB_TYPE_OPTIONS = ['full_time', 'part_time', 'contract', 'internship', 'temp', 'freelance']
-const EXPERIENCE_OPTIONS = ['entry', 'mid', 'senior', 'lead', 'executive']
 
 type StatusDraft = {
   stage: string

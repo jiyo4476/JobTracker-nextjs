@@ -26,6 +26,7 @@ import { taxonomyJobsParams } from '@/lib/jobs-taxonomy-filters'
 import { formatSalary } from '@/lib/salary-format'
 import { formatJobLocation } from '@/lib/job-location-format'
 import { sourcePlatformOptions } from '@/lib/source-platforms'
+import { interviewStageValues, jobTypeValues, experienceLevelValues } from '@/lib/enums'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -36,9 +37,10 @@ function formatDate(d: string | null): string {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-const STAGES = ['', 'not_applied', 'applied', 'phone_screen', 'technical_screen', 'onsite', 'offer_received', 'rejected', 'withdrawn']
-const JOB_TYPES = ['', 'full_time', 'part_time', 'contract', 'internship', 'temp', 'freelance']
-const EXPERIENCE_LEVELS = ['', 'entry', 'mid', 'senior', 'lead', 'executive']
+// Leading '' is the "All …" filter option; labels are computed inline below.
+const STAGES = ['', ...interviewStageValues]
+const JOB_TYPES = ['', ...jobTypeValues]
+const EXPERIENCE_LEVELS = ['', ...experienceLevelValues]
 const EXTRA_FILTER_PARAMS = [
   'salary_min', 'salary_max', 'priority_min',
   'company_id',

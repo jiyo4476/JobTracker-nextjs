@@ -11,7 +11,7 @@ import {
   userSkills,
   userSoftware,
 } from '@/db/schema'
-import { requireAuthentication } from '@/lib/auth'
+import { requireAuth, readJsonBody } from '@/lib/http'
 import { logger, serializeError } from '@/lib/logger'
 import {
   parsePositiveProfileId,
@@ -84,9 +84,8 @@ async function parseTarget(context: Context) {
 }
 
 export async function PATCH(req: NextRequest, context: Context) {
-  if (!(await requireAuthentication(req))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const denied = await requireAuth(req)
+  if (denied) return denied
   const { parsedCategory, taxonomyId } = await parseTarget(context)
   if (!parsedCategory.success) {
     return NextResponse.json(
@@ -98,16 +97,8 @@ export async function PATCH(req: NextRequest, context: Context) {
     return NextResponse.json({ error: 'Invalid id: expected a positive integer' }, { status: 400 })
   }
 
-  let body: unknown
-  try {
-    body = await req.json()
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
-  }
-  const parsed = profilePatchSchemas[parsedCategory.data].safeParse(body)
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
-  }
+  const parsed = await readJsonBody(req, profilePatchSchemas[parsedCategory.data])
+  if (!parsed.ok) return parsed.response
 
   try {
     const existing = await readProfileItem(parsedCategory.data, taxonomyId)
@@ -161,9 +152,8 @@ export async function PATCH(req: NextRequest, context: Context) {
 }
 
 export async function DELETE(req: NextRequest, context: Context) {
-  if (!(await requireAuthentication(req))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const denied = await requireAuth(req)
+  if (denied) return denied
   const { parsedCategory, taxonomyId } = await parseTarget(context)
   if (!parsedCategory.success) {
     return NextResponse.json(

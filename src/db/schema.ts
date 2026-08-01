@@ -17,52 +17,33 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { sourcePlatformValues } from "@/lib/source-platforms";
+import {
+  interviewStageValues,
+  jobTypeValues,
+  experienceLevelValues,
+  companySizeValues,
+  salaryTypeValues,
+  softwareFamiliarityValues,
+  keywordPreferenceValues,
+} from "@/lib/enums";
 
 // ── ENUMs ────────────────────────────────────────────────────────────────────
+// Value tuples are single-sourced from @/lib/enums (and @/lib/source-platforms)
+// so the DB schema, Zod validation, and UI menus can't drift apart.
 
-export const interviewStageEnum = pgEnum("interview_stage_enum", [
-  "not_applied",
-  "applied",
-  "phone_screen",
-  "technical_screen",
-  "onsite",
-  "offer_received",
-  "rejected",
-  "withdrawn",
-]);
+export const interviewStageEnum = pgEnum("interview_stage_enum", interviewStageValues);
 
 export const sourcePlatformEnum = pgEnum("source_platform_enum", sourcePlatformValues);
 
-export const jobTypeEnum = pgEnum("job_type_enum", [
-  "full_time",
-  "part_time",
-  "contract",
-  "internship",
-  "temp",
-  "freelance",
-]);
+export const jobTypeEnum = pgEnum("job_type_enum", jobTypeValues);
 
-export const experienceLevelEnum = pgEnum("experience_level_enum", [
-  "entry",
-  "mid",
-  "senior",
-  "lead",
-  "executive",
-]);
+export const experienceLevelEnum = pgEnum("experience_level_enum", experienceLevelValues);
 
-export const companySizeEnum = pgEnum("company_size_enum", [
-  "1-10",
-  "11-50",
-  "51-200",
-  "201-500",
-  "501-1000",
-  "1001-5000",
-  "5000+",
-]);
+export const companySizeEnum = pgEnum("company_size_enum", companySizeValues);
 
 // "annual" → salary_min/salary_max (integer cents)
 // "hourly" → hourly_rate_min/hourly_rate_max (numeric dollars)
-export const salaryTypeEnum = pgEnum("salary_type_enum", ["annual", "hourly"]);
+export const salaryTypeEnum = pgEnum("salary_type_enum", salaryTypeValues);
 
 // ── companies ────────────────────────────────────────────────────────────────
 
@@ -254,17 +235,12 @@ export const userSkills = pgTable(
   (t) => [primaryKey({ columns: [t.skillId] })]
 );
 
-export const softwareFamiliarityEnum = pgEnum("software_familiarity_enum", [
-  "learning",
-  "familiar",
-  "proficient",
-  "expert",
-]);
+export const softwareFamiliarityEnum = pgEnum(
+  "software_familiarity_enum",
+  softwareFamiliarityValues,
+);
 
-export const keywordPreferenceEnum = pgEnum("keyword_preference_enum", [
-  "interest",
-  "exclusion",
-]);
+export const keywordPreferenceEnum = pgEnum("keyword_preference_enum", keywordPreferenceValues);
 
 export const userSoftware = pgTable("user_software", {
   softwareId: integer("software_id")
