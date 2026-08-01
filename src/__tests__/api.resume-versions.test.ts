@@ -120,16 +120,17 @@ describe('PATCH /api/resume-versions/[id]', () => {
     expect(res.status).toBe(400)
   })
 
-  it('returns 200 on success', async () => {
+  it('returns 200 with the updated row on success', async () => {
     vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
-    mockDb.update.mockReturnValue(makeChain([{ id: 1 }]))
+    mockDb.update.mockReturnValue(makeChain([{ ...mockVersion, label: 'v2' }]))
 
     const { PATCH } = await import('@/app/api/resume-versions/[id]/route')
     const res = await PATCH(makeReq('http://localhost/api/resume-versions/1', { label: 'v2' }, true, 'PATCH'), makeParams('1'))
     expect(res.status).toBe(200)
     const json = await res.json()
-    expect(json).toHaveProperty('success', true)
+    expect(json).toHaveProperty('id', 1)
+    expect(json).toHaveProperty('label', 'v2')
   })
 
   it('returns 404 when id not found', async () => {
@@ -193,5 +194,51 @@ describe('DELETE /api/resume-versions/[id]', () => {
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json).toHaveProperty('success', true)
+  })
+})
+
+// A forced DB fault must surface as the standard JSON { error } 500 envelope,
+// never the framework's default HTML 500. (TECHDEBT-004)
+describe('resume-versions error envelope on DB failure', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  async function expectJsonError(res: Response) {
+    expect(res.status).toBe(500)
+    expect(res.headers.get('content-type')).toContain('application/json')
+    const json = await res.json()
+    expect(json).toHaveProperty('error')
+  }
+
+  it('GET returns JSON error, not HTML, when the query throws', async () => {
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    mockDb.select.mockImplementation(() => { throw new Error('db down') })
+
+    const { GET } = await import('@/app/api/resume-versions/route')
+    await expectJsonError(await GET())
+  })
+
+  it('PATCH returns JSON error, not HTML, when the update throws', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    mockDb.update.mockImplementation(() => { throw new Error('db down') })
+
+    const { PATCH } = await import('@/app/api/resume-versions/[id]/route')
+    await expectJsonError(await PATCH(
+      makeReq('http://localhost/api/resume-versions/1', { label: 'v2' }, true, 'PATCH'),
+      makeParams('1'),
+    ))
+  })
+
+  it('DELETE returns JSON error, not HTML, when the delete throws', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    mockDb.delete.mockImplementation(() => { throw new Error('db down') })
+
+    const { DELETE } = await import('@/app/api/resume-versions/[id]/route')
+    const req = new NextRequest('http://localhost/api/resume-versions/1', {
+      method: 'DELETE',
+      headers: { authorization: 'Bearer test-key' },
+    })
+    await expectJsonError(await DELETE(req, makeParams('1')))
   })
 })

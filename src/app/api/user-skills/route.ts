@@ -1,56 +1,60 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireAuth, readJsonBody } from '@/lib/http'
+import { requireAuth, readJsonBody, withErrorHandling } from '@/lib/http'
 import { userSkillCreateSchema } from '@/lib/schemas'
 import { logger } from '@/lib/logger'
 import { userSkills, skills } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 
 export async function GET(req: NextRequest) {
-  const denied = await requireAuth(req)
-  if (denied) return denied
+  return withErrorHandling('GET /api/user-skills', async () => {
+    const denied = await requireAuth(req)
+    if (denied) return denied
 
-  const rows = await db
-    .select({
-      skillId: userSkills.skillId,
-      name: skills.name,
-      hasSkill: userSkills.hasSkill,
-    })
-    .from(userSkills)
-    .innerJoin(skills, eq(userSkills.skillId, skills.id))
-    .orderBy(skills.name)
+    const rows = await db
+      .select({
+        skillId: userSkills.skillId,
+        name: skills.name,
+        hasSkill: userSkills.hasSkill,
+      })
+      .from(userSkills)
+      .innerJoin(skills, eq(userSkills.skillId, skills.id))
+      .orderBy(skills.name)
 
-  return NextResponse.json(rows)
+    return NextResponse.json(rows)
+  })
 }
 
 export async function POST(req: NextRequest) {
-  const denied = await requireAuth(req)
-  if (denied) return denied
+  return withErrorHandling('POST /api/user-skills', async () => {
+    const denied = await requireAuth(req)
+    if (denied) return denied
 
-  const parsed = await readJsonBody(req, userSkillCreateSchema)
-  if (!parsed.ok) return parsed.response
+    const parsed = await readJsonBody(req, userSkillCreateSchema)
+    if (!parsed.ok) return parsed.response
 
-  const d = parsed.data
+    const d = parsed.data
 
-  let skillId: number
+    let skillId: number
 
-  if (d.name !== undefined) {
-    // Upsert into skills by name
-    const [skill] = await db
-      .insert(skills)
-      .values({ name: d.name })
-      .onConflictDoUpdate({ target: skills.name, set: { name: d.name } })
-      .returning({ id: skills.id })
-    skillId = skill.id
-  } else {
-    skillId = d.skill_id!
-  }
+    if (d.name !== undefined) {
+      // Upsert into skills by name
+      const [skill] = await db
+        .insert(skills)
+        .values({ name: d.name })
+        .onConflictDoUpdate({ target: skills.name, set: { name: d.name } })
+        .returning({ id: skills.id })
+      skillId = skill.id
+    } else {
+      skillId = d.skill_id!
+    }
 
-  await db
-    .insert(userSkills)
-    .values({ skillId, hasSkill: false })
-    .onConflictDoNothing()
+    await db
+      .insert(userSkills)
+      .values({ skillId, hasSkill: false })
+      .onConflictDoNothing()
 
-  logger.info('user skill added', { skillId })
-  return NextResponse.json({ success: true, skillId }, { status: 201 })
+    logger.info('user skill added', { skillId })
+    return NextResponse.json({ success: true, skillId }, { status: 201 })
+  })
 }

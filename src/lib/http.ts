@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import type { z } from 'zod'
 import { requireAuthentication } from '@/lib/auth'
+import { logger, serializeError } from '@/lib/logger'
 
 // Shared response/parse helpers for API route handlers. These centralize the
 // error envelopes that route tests assert on ({ error: '…' }) so the shape lives
@@ -58,4 +59,32 @@ export async function readJsonBody<T extends z.ZodTypeAny>(
     }
   }
   return { ok: true, data: parsed.data }
+}
+
+/**
+ * Run a route handler body and guarantee the standard JSON error envelope on an
+ * uncaught throw. Any error escaping `handler` is logged and mapped to the
+ * `{ error: 'Internal server error' }` 500 that every other route already
+ * returns — so a DB fault can never leak the framework's default HTML 500.
+ *
+ *   export async function GET() {
+ *     return withErrorHandling('GET /api/resume-versions', async () => {
+ *       const rows = await db.select()…
+ *       return NextResponse.json(rows)
+ *     })
+ *   }
+ *
+ * The handler keeps the route's exact exported signature (so Next.js route-type
+ * validation is unaffected); this wrapper only owns the try/catch.
+ */
+export async function withErrorHandling(
+  routeName: string,
+  handler: () => Promise<NextResponse>,
+): Promise<NextResponse> {
+  try {
+    return await handler()
+  } catch (err) {
+    logger.error(`${routeName} failed`, serializeError(err))
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }
