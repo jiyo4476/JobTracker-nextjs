@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatSalary } from '@/lib/salary-format'
+import { formatSalary, formatSalaryShort, formatSalaryRangeShort } from '@/lib/salary-format'
 
 describe('formatSalary', () => {
   it('formats an annual cents range with exactly two decimals', () => {
@@ -18,33 +18,32 @@ describe('formatSalary', () => {
     })).toBe('$45.50 - $62.25 per hour')
   })
 
-  it('recovers a misclassified hourly range from legacy salary text', () => {
+  it('prefers structured cents over a conflicting free-text range', () => {
+    // TECHDEBT-009: structured columns are authoritative; a stale/garbled
+    // salary_text must not override validated data.
     expect(formatSalary({
-      salaryType: 'annual', salaryMin: 2347, salaryMax: 3450,
+      salaryType: 'annual', salaryMin: 8_000_000, salaryMax: 12_050_000,
       hourlyRateMin: null, hourlyRateMax: null,
-      salaryText: '$23.47 - $34.50',
-    })).toBe('$23.47 - $34.50 per hour')
+      salaryText: '$1.00 - $2.00 per hour',
+    })).toBe('$80,000.00 - $120,500.00 per year')
+    expect(formatSalary({
+      salaryType: 'hourly', salaryMin: null, salaryMax: null,
+      hourlyRateMin: '45.5', hourlyRateMax: '62.25',
+      salaryText: 'Base pay range\n$95,000.00/yr - $130,000.00/yr',
+    })).toBe('$45.50 - $62.25 per hour')
   })
 
-  it('normalizes underscaled legacy annual ranges without exposing raw text', () => {
+  it('falls back to salary_text only when structured values are absent', () => {
     expect(formatSalary({
-      salaryType: 'annual', salaryMin: 6500, salaryMax: 7500,
+      salaryType: 'annual', salaryMin: null, salaryMax: null,
       hourlyRateMin: null, hourlyRateMax: null,
       salaryText: 'Base pay range\n$65,000.00/yr - $75,000.00/yr',
     })).toBe('$65,000.00 - $75,000.00 per year')
     expect(formatSalary({
-      salaryType: 'annual', salaryMin: 100, salaryMax: 120,
+      salaryType: 'hourly', salaryMin: null, salaryMax: null,
       hourlyRateMin: null, hourlyRateMax: null,
-      salaryText: '$100k-$120k',
-    })).toBe('$100,000.00 - $120,000.00 per year')
-  })
-
-  it('recovers the affected yearly range from legacy salary text', () => {
-    expect(formatSalary({
-      salaryType: 'annual', salaryMin: 9800, salaryMax: 17500,
-      hourlyRateMin: null, hourlyRateMax: null,
-      salaryText: 'Base pay range\n$98,900.00/yr - $175,300.00/yr',
-    })).toBe('$98,900.00 - $175,300.00 per year')
+      salaryText: '$23.47 - $34.50',
+    })).toBe('$23.47 - $34.50 per hour')
   })
 
   it('does not show raw, single-sided, zero, or invalid salaries', () => {
@@ -58,5 +57,34 @@ describe('formatSalary', () => {
       hourlyRateMin: '0', hourlyRateMax: 'not-a-number',
       salaryText: 'Competitive compensation',
     })).toBe('—')
+  })
+})
+
+describe('formatSalaryShort', () => {
+  it('rounds annual cents to the nearest thousand dollars', () => {
+    expect(formatSalaryShort(15_000_000)).toBe('$150k')
+    expect(formatSalaryShort(12_345_600)).toBe('$123k')
+  })
+
+  it('returns the placeholder for null, zero, or negative input', () => {
+    expect(formatSalaryShort(null)).toBe('—')
+    expect(formatSalaryShort(undefined)).toBe('—')
+    expect(formatSalaryShort(0)).toBe('—')
+    expect(formatSalaryShort(-100)).toBe('—')
+  })
+})
+
+describe('formatSalaryRangeShort', () => {
+  it('formats a two-sided range with an en dash', () => {
+    expect(formatSalaryRangeShort(12_000_000, 15_000_000)).toBe('$120k – $150k')
+  })
+
+  it('falls back to the single present bound', () => {
+    expect(formatSalaryRangeShort(null, 15_000_000)).toBe('$150k')
+    expect(formatSalaryRangeShort(12_000_000, null)).toBe('$120k')
+  })
+
+  it('returns the placeholder when neither bound is set', () => {
+    expect(formatSalaryRangeShort(null, null)).toBe('—')
   })
 })

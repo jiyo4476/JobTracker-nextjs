@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { formatSalary } from '@/lib/salary-format'
 import { JobTagsEditor } from '@/components/jobs/JobTagsEditor'
 import { JobDescriptionMarkdown } from '@/components/jobs/JobDescriptionMarkdown'
 import { JobSalaryInlineEditor } from '@/components/jobs/JobSalaryInlineEditor'
@@ -24,9 +25,13 @@ import {
 } from '@/lib/queries'
 import {
   interviewStageOptions as STAGE_OPTIONS,
-  jobTypeValues as JOB_TYPE_OPTIONS,
-  experienceLevelValues as EXPERIENCE_OPTIONS,
+  interviewStageLabels,
+  jobTypeOptions,
+  jobTypeLabels,
+  experienceLevelOptions,
+  experienceLevelLabels,
 } from '@/lib/enums'
+import { getSourcePlatformLabel } from '@/lib/source-platforms'
 
 
 type StatusDraft = {
@@ -39,26 +44,17 @@ type StatusDraft = {
   datePosted: string
 }
 
-function formatSalary(min: number | null, max: number | null, type: string | null, text: string | null): string {
-  if (text) return text
-  if (!min && !max) return '—'
-  const fmt = (v: number) =>
-    type === 'hourly'
-      ? `$${v.toFixed(0)}/hr`
-      : `$${(v / 100).toLocaleString()}`
-  if (min && max) return `${fmt(min)} – ${fmt(max)}`
-  if (min) return `${fmt(min)}+`
-  return `up to ${fmt(max!)}`
-}
-
 function formatDate(d: string | null | undefined): string {
   if (!d) return '—'
   return new Date(d).toLocaleDateString()
 }
 
-function labelify(s: string | null | undefined): string {
-  if (!s) return '—'
-  return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+// Look up a canonical display label from a single-source enum label map,
+// falling back to the raw value (or an em dash when unset). Replaces the former
+// hand-rolled `.replace`/`charAt` label derivation.
+function displayLabel(value: string | null | undefined, labels: Record<string, string>): string {
+  if (!value) return '—'
+  return labels[value] ?? value
 }
 
 type ContactFormState = {
@@ -201,7 +197,7 @@ export default function JobDetailPage() {
     )
   }
 
-  const salary = formatSalary(job.salaryMin, job.salaryMax, job.salaryType, job.salaryText)
+  const salary = formatSalary(job)
   function handleMarkApplied() {
     patchJob.mutate({
       id,
@@ -426,12 +422,12 @@ export default function JobDetailPage() {
             <CardContent className="space-y-3 text-sm">
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">Stage</span>
-                {editingStatus ? <select value={statusDraft.stage} onChange={event => updateStatusDraft('stage', event.target.value)} className="text-sm border rounded px-2 py-1 bg-background">{STAGE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select> : <span>{labelify(job.interviewStage)}</span>}
+                {editingStatus ? <select aria-label="Interview stage" value={statusDraft.stage} onChange={event => updateStatusDraft('stage', event.target.value)} className="text-sm border rounded px-2 py-1 bg-background">{STAGE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select> : <span>{displayLabel(job.interviewStage, interviewStageLabels)}</span>}
               </div>
 
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">Posting Status</span>
-                {editingStatus ? <select value={statusDraft.isActive ? 'active' : 'inactive'} onChange={event => updateStatusDraft('isActive', event.target.value === 'active')} className="text-sm border rounded px-2 py-1 bg-background"><option value="active">Active</option><option value="inactive">Inactive</option></select> : <span>{job.isActive === false ? 'Inactive' : 'Active'}</span>}
+                {editingStatus ? <select aria-label="Posting status" value={statusDraft.isActive ? 'active' : 'inactive'} onChange={event => updateStatusDraft('isActive', event.target.value === 'active')} className="text-sm border rounded px-2 py-1 bg-background"><option value="active">Active</option><option value="inactive">Inactive</option></select> : <span>{job.isActive === false ? 'Inactive' : 'Active'}</span>}
               </div>
 
               <div className="flex justify-between items-center">
@@ -447,6 +443,7 @@ export default function JobDetailPage() {
                       <button
                         key={star}
                         type="button"
+                        aria-label={`Set priority to ${star} star${star === 1 ? '' : 's'}`}
                         onClick={() => editingStatus && updateStatusDraft('priority', star)}
                         disabled={!editingStatus}
                         className={cn(
@@ -454,7 +451,7 @@ export default function JobDetailPage() {
                           star <= (editingStatus ? (statusDraft.priority ?? 0) : (job.priority ?? 0)) ? 'text-amber-400' : 'text-slate-300'
                         )}
                       >
-                        ★
+                        <span aria-hidden="true">★</span>
                       </button>
                     ))}
                   </div>
@@ -484,17 +481,17 @@ export default function JobDetailPage() {
 
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">Type</span>
-                {editingStatus ? <select value={statusDraft.jobType} onChange={event => updateStatusDraft('jobType', event.target.value)} className="text-sm border rounded px-2 py-1 bg-background"><option value="">Not set</option>{JOB_TYPE_OPTIONS.map(option => <option key={option} value={option}>{labelify(option)}</option>)}</select> : <span>{labelify(job.jobType)}</span>}
+                {editingStatus ? <select aria-label="Job type" value={statusDraft.jobType} onChange={event => updateStatusDraft('jobType', event.target.value)} className="text-sm border rounded px-2 py-1 bg-background"><option value="">Not set</option>{jobTypeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select> : <span>{displayLabel(job.jobType, jobTypeLabels)}</span>}
               </div>
 
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">Experience</span>
-                {editingStatus ? <select value={statusDraft.experienceLevel} onChange={event => updateStatusDraft('experienceLevel', event.target.value)} className="text-sm border rounded px-2 py-1 bg-background"><option value="">Not set</option>{EXPERIENCE_OPTIONS.map(option => <option key={option} value={option}>{labelify(option)}</option>)}</select> : <span>{labelify(job.experienceLevel)}</span>}
+                {editingStatus ? <select aria-label="Experience level" value={statusDraft.experienceLevel} onChange={event => updateStatusDraft('experienceLevel', event.target.value)} className="text-sm border rounded px-2 py-1 bg-background"><option value="">Not set</option>{experienceLevelOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select> : <span>{displayLabel(job.experienceLevel, experienceLevelLabels)}</span>}
               </div>
 
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">Platform</span>
-                <span>{labelify(job.sourcePlatform)}</span>
+                <span>{getSourcePlatformLabel(job.sourcePlatform)}</span>
               </div>
 
               <div className="flex justify-between items-center">

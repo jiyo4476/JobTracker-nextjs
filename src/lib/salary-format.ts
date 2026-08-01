@@ -73,22 +73,52 @@ function formatRange({ min, max, period }: SalaryRange): string {
 }
 
 export function formatSalary(salary: SalaryDisplay): string {
-  const textRange = rangeFromText(salary.salaryText)
-  if (textRange) return formatRange(textRange)
-
+  // Prefer the authoritative structured cents / hourly-rate columns; only fall
+  // back to the raw free-text range when the structured values are absent, so a
+  // stale or garbled `salary_text` can never override validated data.
   if (salary.salaryType === 'annual') {
     const min = positiveNumber(salary.salaryMin)
     const max = positiveNumber(salary.salaryMax)
-    if (min == null || max == null) return '—'
-    return formatRange({ min: min / 100, max: max / 100, period: 'year' })
-  }
-
-  if (salary.salaryType === 'hourly') {
+    if (min != null && max != null) {
+      return formatRange({ min: min / 100, max: max / 100, period: 'year' })
+    }
+  } else if (salary.salaryType === 'hourly') {
     const min = positiveNumber(salary.hourlyRateMin)
     const max = positiveNumber(salary.hourlyRateMax)
-    if (min == null || max == null) return '—'
-    return formatRange({ min, max, period: 'hour' })
+    if (min != null && max != null) {
+      return formatRange({ min, max, period: 'hour' })
+    }
   }
 
+  const textRange = rangeFromText(salary.salaryText)
+  if (textRange) return formatRange(textRange)
+
   return '—'
+}
+
+/**
+ * Compact "$150k"-style label for a single annual salary figure in integer
+ * cents (e.g. a company's average max), rounded to the nearest thousand
+ * dollars. Returns the em-dash placeholder for null/zero/negative input.
+ *
+ * Shared by the companies list and detail views, which previously each carried
+ * their own divergent copy of this `/100000` → "k" formatter.
+ */
+export function formatSalaryShort(cents: number | null | undefined): string {
+  if (!cents || cents <= 0) return '—'
+  return '$' + Math.round(cents / 100000) + 'k'
+}
+
+/**
+ * Compact salary range in "$120k – $150k" form from two annual-cent bounds,
+ * built on {@link formatSalaryShort}. Falls back to the single present bound,
+ * and to the em-dash placeholder when neither is set.
+ */
+export function formatSalaryRangeShort(
+  min: number | null | undefined,
+  max: number | null | undefined,
+): string {
+  if (!min && !max) return '—'
+  if (min && max) return `${formatSalaryShort(min)} – ${formatSalaryShort(max)}`
+  return formatSalaryShort(min ?? max)
 }

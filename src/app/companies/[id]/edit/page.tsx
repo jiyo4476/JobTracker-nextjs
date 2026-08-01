@@ -15,9 +15,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useCompany, usePatchCompany } from '@/lib/queries'
+import { companySizeValues } from '@/lib/enums'
 import type { CompanyDetail } from '@/types/queries'
 
-const COMPANY_SIZES = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5000+'] as const
+const COMPANY_SIZES = companySizeValues
 const FIELD_CLASS = 'space-y-1.5'
 const LABEL_CLASS = 'text-sm font-medium text-slate-700'
 const SELECT_CLASS = 'flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:cursor-not-allowed disabled:opacity-50'
