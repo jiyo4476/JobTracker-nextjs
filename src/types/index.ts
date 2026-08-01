@@ -3,7 +3,6 @@ import type { InferSelectModel, InferInsertModel } from "drizzle-orm";
 import type {
   jobs,
   companies,
-  contacts,
   skills,
   software,
   keywords,
@@ -17,7 +16,8 @@ export type Job = InferSelectModel<typeof jobs>;
 export type NewJob = InferInsertModel<typeof jobs>;
 export type Company = InferSelectModel<typeof companies>;
 export type NewCompany = InferInsertModel<typeof companies>;
-export type Contact = InferSelectModel<typeof contacts>;
+// Single canonical Contact type (serialized variant) lives in ./queries.
+export type { Contact } from "./queries";
 export type Skill = InferSelectModel<typeof skills>;
 export type Software = InferSelectModel<typeof software>;
 export type Keyword = InferSelectModel<typeof keywords>;

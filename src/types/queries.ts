@@ -1,3 +1,12 @@
+import type { InferSelectModel } from 'drizzle-orm'
+import type { contacts } from '@/db/schema'
+import type { InterviewStage, JobType, ExperienceLevel } from '@/lib/enums'
+import type { SourcePlatform } from '@/lib/source-platforms'
+import type { TaxonomyCategory } from '@/lib/taxonomy'
+
+// Single-source the taxonomy category set from the Zod schema in @/lib/taxonomy.
+export type { TaxonomyCategory }
+
 export type CompanyRow = {
   id: number
   name: string
@@ -39,16 +48,11 @@ export type CompanyTaxonomyDemand = {
   truncated: Record<'skills' | 'software' | 'certifications' | 'keywords', boolean>
 }
 
-export type Contact = {
-  id: number
-  jobId: number | null
-  name: string
-  title: string | null
-  email: string | null
-  phone: string | null
-  linkedinUrl: string | null
-  notes: string | null
-  createdAt: Date
+// Serialized `contacts` row as returned by the API: the `created_at` timestamp
+// arrives as an ISO string over JSON, not a Date. All other columns match the row
+// (jobId is NOT NULL in the schema). Single-sourced from the Drizzle model.
+export type Contact = Omit<InferSelectModel<typeof contacts>, 'createdAt'> & {
+  createdAt: string | null
 }
 
 export interface LookupItem {
@@ -71,7 +75,7 @@ export type UserSkill = {
   hasSkill: boolean | null
 }
 
-export type UserTaxonomyCategory = 'skills' | 'software' | 'certifications' | 'keywords'
+export type UserTaxonomyCategory = TaxonomyCategory
 
 export type UserSkillTaxonomyItem = {
   taxonomyId: number
@@ -185,10 +189,10 @@ export type JobDetail = {
   jobLink: string | null
   jobLocation: string | null
   isRemote: boolean | null
-  sourcePlatform: string | null
+  sourcePlatform: SourcePlatform | null
   externalJobId: string | null
-  jobType: string | null
-  experienceLevel: string | null
+  jobType: JobType | null
+  experienceLevel: ExperienceLevel | null
   jobDescription: string | null
   salaryType: 'annual' | 'hourly' | null
   salaryMin: number | null
@@ -202,7 +206,7 @@ export type JobDetail = {
   hasApplied: boolean | null
   dateApplied: string | null
   heardBack: boolean | null
-  interviewStage: string | null
+  interviewStage: InterviewStage | null
   datePosted: string | null
   dateFound: string | null
   lastScrapedAt: string | null
@@ -232,9 +236,9 @@ export interface JobListItem {
   jobLink: string | null
   jobLocation: string | null
   isRemote: boolean | null
-  sourcePlatform: string | null
-  jobType: string | null
-  experienceLevel: string | null
+  sourcePlatform: SourcePlatform | null
+  jobType: JobType | null
+  experienceLevel: ExperienceLevel | null
   salaryMin: number | null
   salaryMax: number | null
   salaryType: 'annual' | 'hourly' | null
@@ -245,7 +249,7 @@ export interface JobListItem {
   salaryText: string | null
   hasApplied: boolean
   dateApplied: string | null
-  interviewStage: string
+  interviewStage: InterviewStage
   datePosted: string | null
   dateFound: string
   isActive: boolean
@@ -321,8 +325,6 @@ export interface AnalyticsParams {
   platform?: string
   security_clearance?: boolean
 }
-
-export type TaxonomyCategory = 'skills' | 'software' | 'certifications' | 'keywords'
 
 export interface TaxonomyAnalyticsParams {
   category: TaxonomyCategory

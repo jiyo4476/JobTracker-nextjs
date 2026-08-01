@@ -7,19 +7,13 @@ import {
   interviewStageValues,
   companySizeValues,
 } from '@/lib/enums'
+import { httpUrlSchema, isoDateSchema } from '@/lib/validators'
 
 export const sourcePlatformEnum = z.enum(sourcePlatformValues)
 export const jobTypeEnum = z.enum(jobTypeValues)
 export const experienceLevelEnum = z.enum(experienceLevelValues)
 export const salaryTypeEnum = z.enum(salaryTypeValues)
 export const interviewStageEnum = z.enum(interviewStageValues)
-
-// Zod's .url() doesn't restrict scheme (it accepts javascript:/data: URIs), and these
-// values get rendered as clickable links in the UI — restrict to http(s) only.
-const httpUrlSchema = z.string().url().refine(
-  (v) => /^https?:\/\//i.test(v),
-  'Must be an http(s) URL'
-)
 
 const tagArraySchema = z.array(z.string().trim().min(1).max(100)).max(100)
 
@@ -32,7 +26,7 @@ export const scrapePayloadSchema = z.object({
   job_location: z.string().max(300).optional(),
   is_remote: z.boolean().default(false),
   job_description: z.string().max(50_000).optional(),
-  date_posted: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be ISO date (YYYY-MM-DD)').optional(),
+  date_posted: isoDateSchema.optional(),
   salary_text: z.string().max(200).optional(),
   salary_type: salaryTypeEnum.optional(),
   salary_min: z.number().int().optional(),
@@ -53,8 +47,9 @@ export const scrapePayloadSchema = z.object({
 })
 
 // Patch date fields also accept '' — the edit form sends empty string to clear a date;
-// the route maps '' to NULL before the DB write.
-const patchDateString = z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/, 'Must be ISO date (YYYY-MM-DD)')
+// the route maps '' to NULL before the DB write. Non-empty values go through the
+// shared calendar-validating isoDateSchema so impossible dates are still rejected.
+const patchDateString = z.union([z.literal(''), isoDateSchema])
 
 export const jobPatchSchema = z.object({
   job_title: z.string().trim().min(1).max(500).optional(),
@@ -106,7 +101,7 @@ export const contactCreateSchema = z.object({
   phone: z.string().max(50).optional(),
   linkedin_url: httpUrlSchema.optional(),
   role: z.string().max(300).optional(),
-  contacted_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  contacted_at: isoDateSchema.optional(),
   notes: z.string().max(20_000).optional(),
 }).strict()
 
@@ -137,13 +132,13 @@ export const companyPatchSchema = z.object({
 
 export const resumeVersionCreateSchema = z.object({
   label: z.string().min(1).max(200),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be ISO date (YYYY-MM-DD)').optional(),
+  date: isoDateSchema.optional(),
   notes: z.string().max(20_000).optional(),
 }).strict()
 
 export const resumeVersionPatchSchema = z.object({
   label: z.string().min(1).max(200).optional(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be ISO date (YYYY-MM-DD)').optional(),
+  date: isoDateSchema.optional(),
   notes: z.string().max(20_000).optional(),
 }).strict()
 
