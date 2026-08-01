@@ -10,7 +10,7 @@ vi.mock('jose', () => ({
 }))
 
 import { jwtVerify } from 'jose'
-import { requireApiKey, getOAuthConfig } from '@/lib/auth'
+import { requireAuthentication, getOAuthConfig } from '@/lib/auth'
 
 const OAUTH_ENV = {
   AUTHENTIK_BASE_URL: 'https://auth.example.com',
@@ -20,10 +20,9 @@ const OAUTH_ENV = {
   AUTHENTIK_JWKS_URI: 'https://auth.example.com/application/o/my-app/jwks/',
 }
 
-describe('requireApiKey OAuth2/JWT verification', () => {
+describe('requireAuthentication OAuth2/JWT verification', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    delete process.env.API_KEY // force the OAuth2 path
     delete process.env.AUTHENTIK_REQUIRED_SCOPES
     delete process.env.AUTHENTIK_TRUSTED_ISSUERS
     delete process.env.AUTHENTIK_AUDIENCES
@@ -46,7 +45,7 @@ describe('requireApiKey OAuth2/JWT verification', () => {
     const req = new NextRequest('http://localhost/api/test', {
       headers: { authorization: 'Bearer valid-token' },
     })
-    await expect(requireApiKey(req)).resolves.toBe(true)
+    await expect(requireAuthentication(req)).resolves.toBe(true)
   })
 
   it('accepts a Bearer token whose scope claim contains all required scopes', async () => {
@@ -60,7 +59,7 @@ describe('requireApiKey OAuth2/JWT verification', () => {
     const req = new NextRequest('http://localhost/api/test', {
       headers: { authorization: 'Bearer valid-token' },
     })
-    await expect(requireApiKey(req)).resolves.toBe(true)
+    await expect(requireAuthentication(req)).resolves.toBe(true)
   })
 
   it('rejects a Bearer token missing a required scope', async () => {
@@ -74,7 +73,7 @@ describe('requireApiKey OAuth2/JWT verification', () => {
     const req = new NextRequest('http://localhost/api/test', {
       headers: { authorization: 'Bearer incomplete-scope-token' },
     })
-    await expect(requireApiKey(req)).resolves.toBe(false)
+    await expect(requireAuthentication(req)).resolves.toBe(false)
   })
 
   it('rejects a Bearer token when jwtVerify throws (invalid issuer/audience/signature)', async () => {
@@ -83,7 +82,7 @@ describe('requireApiKey OAuth2/JWT verification', () => {
     const req = new NextRequest('http://localhost/api/test', {
       headers: { authorization: 'Bearer invalid-token' },
     })
-    await expect(requireApiKey(req)).resolves.toBe(false)
+    await expect(requireAuthentication(req)).resolves.toBe(false)
   })
 
   it('accepts an active introspected token when JWKS verification is unavailable', async () => {
@@ -105,7 +104,7 @@ describe('requireApiKey OAuth2/JWT verification', () => {
       headers: { authorization: 'Bearer introspected-token' },
     })
 
-    await expect(requireApiKey(req)).resolves.toBe(true)
+    await expect(requireAuthentication(req)).resolves.toBe(true)
   })
 
   it('rejects an active introspected token with the wrong audience', async () => {
@@ -127,7 +126,7 @@ describe('requireApiKey OAuth2/JWT verification', () => {
       headers: { authorization: 'Bearer wrong-audience-token' },
     })
 
-    await expect(requireApiKey(req)).resolves.toBe(false)
+    await expect(requireAuthentication(req)).resolves.toBe(false)
   })
 
   it('tries each trusted issuer until one verifies the bearer token', async () => {
@@ -149,7 +148,7 @@ describe('requireApiKey OAuth2/JWT verification', () => {
       headers: { authorization: 'Bearer extension-token' },
     })
 
-    await expect(requireApiKey(req)).resolves.toBe(true)
+    await expect(requireAuthentication(req)).resolves.toBe(true)
     expect(jwtVerify).toHaveBeenCalledTimes(2)
   })
 

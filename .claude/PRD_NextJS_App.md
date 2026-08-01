@@ -127,7 +127,9 @@ Define schemas once in `src/lib/` and share between:
 
 ```
 DATABASE_URL=postgresql://...
-API_KEY=...        # Bearer token for protected routes
+AUTHENTIK_ISSUER=https://auth.yjimmy.dev/application/o/job-tracker/
+AUTHENTIK_JWKS_URI=https://auth.yjimmy.dev/application/o/job-tracker/jwks/
+AUTHENTIK_AUDIENCE=job-tracker
 ```
 
 ### 4.6 Deployment
@@ -319,7 +321,7 @@ All charts powered by Recharts. Data fetched from `GET /api/analytics` with date
 - Match % per job = `(required skills user has) / (total required skills) × 100`.
 
 **Scraper Webhook Config**
-- Display-only: `POST /api/scrape` endpoint URL and the current API key.
+- Display-only: `POST /api/scrape` endpoint URL and Authentik OAuth2 machine-client requirements.
 
 **Export**
 - Full dataset download via `GET /api/export?format=csv` or `?format=json`.

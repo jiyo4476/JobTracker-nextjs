@@ -4,7 +4,7 @@ import { PgDialect } from 'drizzle-orm/pg-core'
 import type { SQL } from 'drizzle-orm'
 
 vi.mock('@/lib/auth', () => ({
-  requireApiKey: vi.fn(),
+  requireAuthentication: vi.fn(),
 }))
 
 vi.mock('@/db', () => ({
@@ -14,7 +14,7 @@ vi.mock('@/db', () => ({
   },
 }))
 
-import { requireApiKey } from '@/lib/auth'
+import { requireAuthentication } from '@/lib/auth'
 import { db } from '@/db'
 
 function sqlText(query: unknown): string {
@@ -377,21 +377,21 @@ describe('POST /api/jobs', () => {
   const validBody = { job_title: 'Engineer', company_id: 1 }
 
   it('returns 401 without auth', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(false)
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
     const { POST } = await import('@/app/api/jobs/route')
     const res = await POST(makeReq(validBody))
     expect(res.status).toBe(401)
   })
 
   it('returns 400 for invalid body', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { POST } = await import('@/app/api/jobs/route')
     const res = await POST(makeReq({ not_job_title: 'bad' }))
     expect(res.status).toBe(400)
   })
 
   it('returns 201 with job_id on success', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { POST } = await import('@/app/api/jobs/route')
     const res = await POST(makeReq(validBody))
     expect(res.status).toBe(201)

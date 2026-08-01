@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 vi.mock('@/lib/auth', () => ({
-  requireApiKey: vi.fn(),
+  requireAuthentication: vi.fn(),
 }))
 
 vi.mock('@/db', () => ({
@@ -13,7 +13,7 @@ vi.mock('@/db/schema', () => ({
   resumeVersions: {},
 }))
 
-import { requireApiKey } from '@/lib/auth'
+import { requireAuthentication } from '@/lib/auth'
 import { db } from '@/db'
 
 function makeChain(result: unknown) {
@@ -63,28 +63,28 @@ describe('POST /api/resume-versions', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 401 without auth', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(false)
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
     const { POST } = await import('@/app/api/resume-versions/route')
     const res = await POST(makeReq('http://localhost/api/resume-versions', { label: 'v1' }, false))
     expect(res.status).toBe(401)
   })
 
   it('returns 400 for missing label', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { POST } = await import('@/app/api/resume-versions/route')
     const res = await POST(makeReq('http://localhost/api/resume-versions', { notes: 'no label' }))
     expect(res.status).toBe(400)
   })
 
   it('returns 400 for invalid date format', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { POST } = await import('@/app/api/resume-versions/route')
     const res = await POST(makeReq('http://localhost/api/resume-versions', { label: 'v1', date: 'not-a-date' }))
     expect(res.status).toBe(400)
   })
 
   it('returns 201 on success', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.insert.mockReturnValue(makeChain([mockVersion]))
 
@@ -100,28 +100,28 @@ describe('PATCH /api/resume-versions/[id]', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 401 without auth', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(false)
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
     const { PATCH } = await import('@/app/api/resume-versions/[id]/route')
     const res = await PATCH(makeReq('http://localhost/api/resume-versions/1', { label: 'v2' }, false, 'PATCH'), makeParams('1'))
     expect(res.status).toBe(401)
   })
 
   it('returns 400 for non-numeric id', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/resume-versions/[id]/route')
     const res = await PATCH(makeReq('http://localhost/api/resume-versions/abc', { label: 'v2' }, true, 'PATCH'), makeParams('abc'))
     expect(res.status).toBe(400)
   })
 
   it('returns 400 for extra unknown fields (strict)', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/resume-versions/[id]/route')
     const res = await PATCH(makeReq('http://localhost/api/resume-versions/1', { label: 'v2', unknown_field: true }, true, 'PATCH'), makeParams('1'))
     expect(res.status).toBe(400)
   })
 
   it('returns 200 on success', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.update.mockReturnValue(makeChain([{ id: 1 }]))
 
@@ -133,7 +133,7 @@ describe('PATCH /api/resume-versions/[id]', () => {
   })
 
   it('returns 404 when id not found', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.update.mockReturnValue(makeChain([]))
 
@@ -147,7 +147,7 @@ describe('DELETE /api/resume-versions/[id]', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 401 without auth', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(false)
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
     const { DELETE } = await import('@/app/api/resume-versions/[id]/route')
     const req = new NextRequest('http://localhost/api/resume-versions/1', { method: 'DELETE' })
     const res = await DELETE(req, makeParams('1'))
@@ -155,7 +155,7 @@ describe('DELETE /api/resume-versions/[id]', () => {
   })
 
   it('returns 400 for non-numeric id', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { DELETE } = await import('@/app/api/resume-versions/[id]/route')
     const req = new NextRequest('http://localhost/api/resume-versions/abc', {
       method: 'DELETE',
@@ -166,7 +166,7 @@ describe('DELETE /api/resume-versions/[id]', () => {
   })
 
   it('returns 404 when not found', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.delete.mockReturnValue(makeChain([]))
 
@@ -180,7 +180,7 @@ describe('DELETE /api/resume-versions/[id]', () => {
   })
 
   it('returns 200 on success', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.delete.mockReturnValue(makeChain([mockVersion]))
 

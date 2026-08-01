@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 vi.mock('@/lib/auth', () => ({
-  requireApiKey: vi.fn(),
+  requireAuthentication: vi.fn(),
 }))
 
 vi.mock('@/lib/nlp-extract', async importOriginal => {
@@ -25,7 +25,7 @@ vi.mock('@/db', () => ({
   },
 }))
 
-import { requireApiKey } from '@/lib/auth'
+import { requireAuthentication } from '@/lib/auth'
 import { db } from '@/db'
 import { extractTags } from '@/lib/nlp-extract'
 import {
@@ -116,15 +116,15 @@ describe('POST /api/jobs/backfill-tags', () => {
     })
   })
 
-  it('returns 401 when requireApiKey returns false', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(false)
+  it('returns 401 when requireAuthentication returns false', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
     const { POST } = await import('@/app/api/jobs/backfill-tags/route')
     const res = await POST(makeRequest())
     expect(res.status).toBe(401)
   })
 
   it('attaches all three categories and reports per-category counts', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     mockCandidates([{ id: 5, jobDescription: 'Python, Docker, CISSP.' }])
     const { tx, insertCalls } = makeTx()
     useTx(tx)
@@ -151,7 +151,7 @@ describe('POST /api/jobs/backfill-tags', () => {
   })
 
   it('is idempotent — a second run over already-linked jobs reports zero new links', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     mockCandidates([{ id: 5, jobDescription: 'Python, Docker, CISSP.' }])
     const { tx } = makeTx(() => 'none') // every junction row already exists
     useTx(tx)
@@ -165,7 +165,7 @@ describe('POST /api/jobs/backfill-tags', () => {
   })
 
   it('fills in missing categories on a job with partial existing links', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     mockCandidates([{ id: 5, jobDescription: 'Python, Docker, CISSP.' }])
     // Skills were already linked by the legacy backfill; software/certs are new
     const { tx } = makeTx(table => (table === jobSkills ? 'none' : 'echo'))
@@ -179,7 +179,7 @@ describe('POST /api/jobs/backfill-tags', () => {
   })
 
   it('returns 500 with a resumable cursor when a job transaction fails', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     mockCandidates([
       { id: 5, jobDescription: 'Python.' },
       { id: 9, jobDescription: 'Docker.' },
@@ -202,7 +202,7 @@ describe('POST /api/jobs/backfill-tags', () => {
   })
 
   it('bounds the batch by cursor and limit', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const captured = mockCandidates([])
     const { tx } = makeTx()
     useTx(tx)
@@ -226,7 +226,7 @@ describe('POST /api/jobs/backfill-tags', () => {
   })
 
   it('reports extraction samples without writing anything on dry_run', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     mockCandidates([{ id: 5, jobDescription: 'Python, Docker, CISSP.' }])
 
     const { POST } = await import('@/app/api/jobs/backfill-tags/route')

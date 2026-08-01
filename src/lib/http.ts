@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import type { z } from 'zod'
-import { requireApiKey } from '@/lib/auth'
+import { requireAuthentication } from '@/lib/auth'
 
 // Shared response/parse helpers for API route handlers. These centralize the
 // error envelopes that route tests assert on ({ error: '…' }) so the shape lives
@@ -21,9 +21,9 @@ export function unauthorized(): NextResponse {
  */
 export async function requireAuth(
   req: NextRequest,
-  options?: Parameters<typeof requireApiKey>[1],
+  options?: Parameters<typeof requireAuthentication>[1],
 ): Promise<NextResponse | null> {
-  return (await requireApiKey(req, options)) ? null : unauthorized()
+  return (await requireAuthentication(req, options)) ? null : unauthorized()
 }
 
 type JsonBodyResult<T> =

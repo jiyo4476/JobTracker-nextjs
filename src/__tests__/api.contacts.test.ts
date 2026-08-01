@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 vi.mock('@/lib/auth', () => ({
-  requireApiKey: vi.fn(),
+  requireAuthentication: vi.fn(),
 }))
 
 vi.mock('@/db', () => ({
@@ -19,7 +19,7 @@ vi.mock('drizzle-orm', () => ({
   eq: vi.fn((column: unknown, value: unknown) => ({ op: 'eq', column, value })),
 }))
 
-import { requireApiKey } from '@/lib/auth'
+import { requireAuthentication } from '@/lib/auth'
 import { db } from '@/db'
 import { and } from 'drizzle-orm'
 
@@ -78,14 +78,14 @@ describe('POST /api/jobs/[id]/contacts', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 401 without auth', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(false)
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
     const { POST } = await import('@/app/api/jobs/[id]/contacts/route')
     const res = await POST(makeReq('http://localhost/api/jobs/1/contacts', { name: 'Jane' }, false), makeParams('1') as { params: Promise<{ id: string }> })
     expect(res.status).toBe(401)
   })
 
   it('returns 400 for invalid body', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { POST } = await import('@/app/api/jobs/[id]/contacts/route')
     // name is required, missing it should 400
     const res = await POST(makeReq('http://localhost/api/jobs/1/contacts', { email: 'not-an-email' }), makeParams('1') as { params: Promise<{ id: string }> })
@@ -93,7 +93,7 @@ describe('POST /api/jobs/[id]/contacts', () => {
   })
 
   it('returns 201 on success', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.insert.mockReturnValue(makeChain([mockContact]))
 
@@ -109,14 +109,14 @@ describe('PATCH /api/jobs/[id]/contacts/[contactId]', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 401 without auth', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(false)
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
     const { PATCH } = await import('@/app/api/jobs/[id]/contacts/[contactId]/route')
     const res = await PATCH(makeReq('http://localhost/api/jobs/1/contacts/1', { name: 'Jane' }, false, 'PATCH'), makeParams('1', '1') as { params: Promise<{ id: string; contactId: string }> })
     expect(res.status).toBe(401)
   })
 
   it('returns 404 when contact not found', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.update.mockReturnValue(makeChain([]))
 
@@ -126,7 +126,7 @@ describe('PATCH /api/jobs/[id]/contacts/[contactId]', () => {
   })
 
   it('returns 400 for empty body', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
 
     const { PATCH } = await import('@/app/api/jobs/[id]/contacts/[contactId]/route')
     const res = await PATCH(makeReq('http://localhost/api/jobs/1/contacts/1', {}, true, 'PATCH'), makeParams('1', '1') as { params: Promise<{ id: string; contactId: string }> })
@@ -134,7 +134,7 @@ describe('PATCH /api/jobs/[id]/contacts/[contactId]', () => {
   })
 
   it('returns 200 on success', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.update.mockReturnValue(makeChain([{ id: 1 }]))
 
@@ -154,7 +154,7 @@ describe('DELETE /api/jobs/[id]/contacts/[contactId]', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 401 without auth', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(false)
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
     const { DELETE } = await import('@/app/api/jobs/[id]/contacts/[contactId]/route')
     const req = new NextRequest('http://localhost/api/jobs/1/contacts/1', { method: 'DELETE' })
     const res = await DELETE(req, makeParams('1', '1') as { params: Promise<{ id: string; contactId: string }> })
@@ -162,7 +162,7 @@ describe('DELETE /api/jobs/[id]/contacts/[contactId]', () => {
   })
 
   it('returns 404 when contact not found', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.delete.mockReturnValue(makeChain([]))
 
@@ -176,7 +176,7 @@ describe('DELETE /api/jobs/[id]/contacts/[contactId]', () => {
   })
 
   it('returns 200 on success', async () => {
-    vi.mocked(requireApiKey).mockResolvedValue(true)
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.delete.mockReturnValue(makeChain([{ id: 1 }]))
 
