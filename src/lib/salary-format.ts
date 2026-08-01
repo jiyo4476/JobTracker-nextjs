@@ -8,7 +8,7 @@ export const CENTS_PER_DOLLAR = 100
  * `hourly × 2080 × 100`. Passes through null/undefined so callers can map
  * optional/nullable patch fields directly.
  */
-export function centsToAnnualEquivalent<T extends number | null | undefined>(
+export function hourlyToAnnualEquivalentCents<T extends number | null | undefined>(
   hourly: T,
 ): T extends number ? number : T {
   if (hourly == null) return hourly as T extends number ? number : T

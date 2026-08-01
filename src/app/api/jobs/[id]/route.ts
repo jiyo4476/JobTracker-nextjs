@@ -3,7 +3,7 @@ import { db } from '@/db'
 import { requireAuth, readJsonBody } from '@/lib/http'
 import { jobPatchSchema } from '@/lib/schemas'
 import { logger, serializeError } from '@/lib/logger'
-import { centsToAnnualEquivalent } from '@/lib/salary-format'
+import { hourlyToAnnualEquivalentCents } from '@/lib/salary-format'
 import {
   jobs, companies, skills, software as softwareTable, keywords, certifications,
   jobSkills, jobSoftware, jobKeywords, jobCertifications, contacts, jobStatusHistory,
@@ -134,8 +134,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       salaryType = cur?.salaryType ?? undefined
     }
     if (salaryType === 'hourly') {
-      if (d.hourly_rate_min !== undefined) annualEquivalentMin = centsToAnnualEquivalent(d.hourly_rate_min)
-      if (d.hourly_rate_max !== undefined) annualEquivalentMax = centsToAnnualEquivalent(d.hourly_rate_max)
+      if (d.hourly_rate_min !== undefined) annualEquivalentMin = hourlyToAnnualEquivalentCents(d.hourly_rate_min)
+      if (d.hourly_rate_max !== undefined) annualEquivalentMax = hourlyToAnnualEquivalentCents(d.hourly_rate_max)
     } else if (salaryType === 'annual') {
       if (d.salary_min !== undefined) annualEquivalentMin = d.salary_min
       if (d.salary_max !== undefined) annualEquivalentMax = d.salary_max

@@ -4,7 +4,7 @@ import { scrapePayloadSchema } from '@/lib/schemas'
 import { extractTags, mergeExtractedTags } from '@/lib/nlp-extract'
 import { logger, serializeError } from '@/lib/logger'
 import { escapeLikePattern } from '@/lib/db-utils'
-import { centsToAnnualEquivalent } from '@/lib/salary-format'
+import { hourlyToAnnualEquivalentCents } from '@/lib/salary-format'
 import { requireAuth, readJsonBody } from '@/lib/http'
 import {
   companies, jobs, skills, software as softwareTable, keywords, certifications,
@@ -177,8 +177,8 @@ async function handlePost(req: NextRequest) {
     let annualEquivalentMin: number | undefined
     let annualEquivalentMax: number | undefined
     if (data.salary_type === 'hourly') {
-      if (data.hourly_rate_min != null) annualEquivalentMin = centsToAnnualEquivalent(data.hourly_rate_min)
-      if (data.hourly_rate_max != null) annualEquivalentMax = centsToAnnualEquivalent(data.hourly_rate_max)
+      if (data.hourly_rate_min != null) annualEquivalentMin = hourlyToAnnualEquivalentCents(data.hourly_rate_min)
+      if (data.hourly_rate_max != null) annualEquivalentMax = hourlyToAnnualEquivalentCents(data.hourly_rate_max)
     } else if (data.salary_type === 'annual') {
       annualEquivalentMin = data.salary_min
       annualEquivalentMax = data.salary_max

@@ -3,7 +3,7 @@ import { db } from '@/db'
 import { jobs } from '@/db/schema'
 import { jobSalaryPatchSchema } from '@/lib/schemas'
 import { logger, serializeError } from '@/lib/logger'
-import { centsToAnnualEquivalent } from '@/lib/salary-format'
+import { hourlyToAnnualEquivalentCents } from '@/lib/salary-format'
 import { requireAuth, readJsonBody } from '@/lib/http'
 import { eq } from 'drizzle-orm'
 
@@ -36,11 +36,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const annualEquivalentMin =
       nextSalaryType === 'hourly'
-        ? centsToAnnualEquivalent(hourlyRateMin)
+        ? hourlyToAnnualEquivalentCents(hourlyRateMin)
         : salaryMinCents
     const annualEquivalentMax =
       nextSalaryType === 'hourly'
-        ? centsToAnnualEquivalent(hourlyRateMax)
+        ? hourlyToAnnualEquivalentCents(hourlyRateMax)
         : salaryMaxCents
 
     const [updated] = await db
