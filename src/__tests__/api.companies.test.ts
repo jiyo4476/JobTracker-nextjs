@@ -16,7 +16,7 @@ import { db } from '@/db'
 function makeChain(result: unknown) {
   const chain: Record<string, unknown> = {}
   const terminal = Promise.resolve(result)
-  const methods = ['from', 'leftJoin', 'where', 'groupBy', 'orderBy', 'limit', 'set']
+  const methods = ['from', 'leftJoin', 'where', 'groupBy', 'orderBy', 'limit', 'offset', 'set']
   methods.forEach(m => { chain[m] = vi.fn(() => chain) })
   chain.then = terminal.then.bind(terminal)
   chain.catch = terminal.catch.bind(terminal)
@@ -54,6 +54,26 @@ describe('GET /api/companies', () => {
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(Array.isArray(json)).toBe(true)
+  })
+
+  it('bounds the query with a default limit and zero offset', async () => {
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    const chain = makeChain([mockCompany])
+    mockDb.select.mockReturnValue(chain)
+    const { GET } = await import('@/app/api/companies/route')
+    await GET()
+    expect(chain.limit).toHaveBeenCalledWith(500)
+    expect(chain.offset).toHaveBeenCalledWith(0)
+  })
+
+  it('honors ?limit and ?page query params', async () => {
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    const chain = makeChain([mockCompany])
+    mockDb.select.mockReturnValue(chain)
+    const { GET } = await import('@/app/api/companies/route')
+    await GET(new NextRequest('http://localhost/api/companies?limit=50&page=2'))
+    expect(chain.limit).toHaveBeenCalledWith(50)
+    expect(chain.offset).toHaveBeenCalledWith(50)
   })
 })
 

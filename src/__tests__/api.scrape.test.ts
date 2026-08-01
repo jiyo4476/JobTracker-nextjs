@@ -58,16 +58,37 @@ function makeRequest(body: unknown, auth = true) {
   return req
 }
 
-function makeInsertMock(opts: { returning?: unknown[]; withConflictUpdate?: boolean }) {
+// Models a Drizzle insert builder. For lookup-tag upserts the shared
+// `upsertLookupIds` helper calls `.values(names).onConflictDoNothing().returning()`
+// — with `echoId` the returning result echoes each inserted { name } with that
+// id, so every name resolves in the insert branch (no follow-up select). Junction
+// inserts call `.onConflictDoNothing()` and simply await it, so that result is
+// also awaitable.
+function makeInsertMock(opts: { returning?: unknown[]; echoId?: number; withConflictUpdate?: boolean }) {
+  const captured: { values?: unknown } = {}
+  const buildRows = () => {
+    if (opts.echoId !== undefined && Array.isArray(captured.values)) {
+      return (captured.values as Array<{ name?: string }>).map(v => ({ id: opts.echoId, name: v.name }))
+    }
+    return opts.returning ?? []
+  }
   const valuesChain: Record<string, unknown> = {
-    onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
-    onConflictDoUpdate: vi.fn().mockReturnValue({
-      returning: vi.fn().mockResolvedValue(opts.returning ?? []),
+    onConflictDoNothing: vi.fn(() => {
+      const rows = buildRows()
+      const terminal = Promise.resolve(rows)
+      return {
+        returning: vi.fn(() => Promise.resolve(rows)),
+        then: terminal.then.bind(terminal),
+        catch: terminal.catch.bind(terminal),
+      }
     }),
-    returning: vi.fn().mockResolvedValue(opts.returning ?? []),
+    onConflictDoUpdate: vi.fn().mockReturnValue({
+      returning: vi.fn(() => Promise.resolve(buildRows())),
+    }),
+    returning: vi.fn(() => Promise.resolve(buildRows())),
   }
   return {
-    values: vi.fn().mockReturnValue(valuesChain),
+    values: vi.fn((vals: unknown) => { captured.values = vals; return valuesChain }),
   }
 }
 
@@ -88,7 +109,8 @@ function setupDbMocks(scenario: 'created' | 'updated' | 'duplicate') {
       if (insertCallCount === 1) {
         return makeInsertMock({ returning: [{ id: 1 }], withConflictUpdate: true })
       }
-      return makeInsertMock({ returning: [{ id: 99 }] })
+      // lookup upserts + junctions resolve every name to id 99
+      return makeInsertMock({ echoId: 99 })
     })
 
     let selectCallCount = 0
@@ -140,9 +162,9 @@ function setupDbMocks(scenario: 'created' | 'updated' | 'duplicate') {
       insertCallCount++
       if (insertCallCount === 1) return makeInsertMock({ returning: [{ id: 1 }], withConflictUpdate: true })
       if (insertCallCount === 2) return makeInsertMock({ returning: [{ id: 42 }] })
-      // lookup upserts (skills/software/keywords/certifications) resolve to id 7
-      // so the junction inserts fire and can be asserted on
-      return makeInsertMock({ returning: [{ id: 7 }] })
+      // lookup upserts (skills/software/keywords/certifications) resolve every
+      // name to id 7 so the junction inserts fire and can be asserted on
+      return makeInsertMock({ echoId: 7 })
     })
 
     mockDb.select.mockImplementation(() => ({
@@ -401,10 +423,11 @@ describe('POST /api/scrape', () => {
     expect(insertedValues).toContainEqual([{ name: 'TypeScript' }, { name: 'Python' }])
     expect(insertedValues).toContainEqual([{ name: 'Docker' }, { name: 'GitHub' }])
     expect(insertedValues).toContainEqual([{ name: 'CISSP' }])
-    // …and its own junction insert against the matched job
-    expect(insertedValues).toContainEqual([{ jobId: 99, skillId: 99 }])
-    expect(insertedValues).toContainEqual([{ jobId: 99, softwareId: 99 }])
-    expect(insertedValues).toContainEqual([{ jobId: 99, certificationId: 99 }])
+    // …and its own junction insert against the matched job (one row per resolved id)
+    const junctionRows = insertedValues.flat()
+    expect(junctionRows).toContainEqual({ jobId: 99, skillId: 99 })
+    expect(junctionRows).toContainEqual({ jobId: 99, softwareId: 99 })
+    expect(junctionRows).toContainEqual({ jobId: 99, certificationId: 99 })
   })
 
   it('attaches merged taxonomy matches independently when a new job is created', async () => {
@@ -426,9 +449,10 @@ describe('POST /api/scrape', () => {
     expect(insertedValues).toContainEqual([{ name: 'TypeScript' }, { name: 'Python' }])
     expect(insertedValues).toContainEqual([{ name: 'Docker' }, { name: 'GitHub' }])
     expect(insertedValues).toContainEqual([{ name: 'CISSP' }])
-    expect(insertedValues).toContainEqual([{ jobId: 42, skillId: 7 }])
-    expect(insertedValues).toContainEqual([{ jobId: 42, softwareId: 7 }])
-    expect(insertedValues).toContainEqual([{ jobId: 42, certificationId: 7 }])
+    const junctionRows = insertedValues.flat()
+    expect(junctionRows).toContainEqual({ jobId: 42, skillId: 7 })
+    expect(junctionRows).toContainEqual({ jobId: 42, softwareId: 7 })
+    expect(junctionRows).toContainEqual({ jobId: 42, certificationId: 7 })
   })
 
   it('returns 200 with action=duplicate_skipped when fuzzy match exists', async () => {

@@ -3,7 +3,7 @@ import { db } from '@/db'
 import { scrapePayloadSchema } from '@/lib/schemas'
 import { extractTags, mergeExtractedTags } from '@/lib/nlp-extract'
 import { logger, serializeError } from '@/lib/logger'
-import { escapeLikePattern } from '@/lib/db-utils'
+import { escapeLikePattern, upsertLookupIds } from '@/lib/db-utils'
 import { hourlyToAnnualEquivalentCents } from '@/lib/salary-format'
 import { requireAuth, readJsonBody } from '@/lib/http'
 import {
@@ -88,30 +88,18 @@ type Taxonomies = {
 }
 
 async function attachTags(jobId: number, tags: Taxonomies) {
-  async function upsertLookup(
-    names: string[],
-    lookupTable: typeof skills | typeof softwareTable | typeof keywords | typeof certifications,
-  ) {
-    if (names.length === 0) return []
-    return db
-      .insert(lookupTable)
-      .values(names.map(name => ({ name })))
-      .onConflictDoUpdate({ target: lookupTable.name, set: { name: lookupTable.name } })
-      .returning({ id: lookupTable.id })
-  }
-
-  const [skillRows, softwareRows, keywordRows, certRows] = await Promise.all([
-    upsertLookup(tags.skills, skills),
-    upsertLookup(tags.software, softwareTable),
-    upsertLookup(tags.keywords, keywords),
-    upsertLookup(tags.certifications, certifications),
+  const [skillIds, softwareIds, keywordIds, certIds] = await Promise.all([
+    upsertLookupIds(db, skills, tags.skills),
+    upsertLookupIds(db, softwareTable, tags.software),
+    upsertLookupIds(db, keywords, tags.keywords),
+    upsertLookupIds(db, certifications, tags.certifications),
   ])
 
   await Promise.all([
-    skillRows.length > 0 && db.insert(jobSkills).values(skillRows.map(r => ({ jobId, skillId: r.id }))).onConflictDoNothing(),
-    softwareRows.length > 0 && db.insert(jobSoftware).values(softwareRows.map(r => ({ jobId, softwareId: r.id }))).onConflictDoNothing(),
-    keywordRows.length > 0 && db.insert(jobKeywords).values(keywordRows.map(r => ({ jobId, keywordId: r.id }))).onConflictDoNothing(),
-    certRows.length > 0 && db.insert(jobCertifications).values(certRows.map(r => ({ jobId, certificationId: r.id }))).onConflictDoNothing(),
+    skillIds.length > 0 && db.insert(jobSkills).values(skillIds.map(id => ({ jobId, skillId: id }))).onConflictDoNothing(),
+    softwareIds.length > 0 && db.insert(jobSoftware).values(softwareIds.map(id => ({ jobId, softwareId: id }))).onConflictDoNothing(),
+    keywordIds.length > 0 && db.insert(jobKeywords).values(keywordIds.map(id => ({ jobId, keywordId: id }))).onConflictDoNothing(),
+    certIds.length > 0 && db.insert(jobCertifications).values(certIds.map(id => ({ jobId, certificationId: id }))).onConflictDoNothing(),
   ])
 }
 

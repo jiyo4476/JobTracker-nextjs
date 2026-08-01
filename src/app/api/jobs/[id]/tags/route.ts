@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireAuth, readJsonBody } from '@/lib/http'
+import { upsertLookupIds } from '@/lib/db-utils'
 import { jobTagsPatchSchema } from '@/lib/schemas'
 import { logger, serializeError } from '@/lib/logger'
 import {
@@ -14,24 +15,13 @@ import {
   skills,
   software as softwareTable,
 } from '@/db/schema'
-import { eq, inArray } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 
 type TagKey = 'skills' | 'software' | 'keywords' | 'certifications'
-type TagRow = { id: number; name: string }
 
 function uniqueNames(values: string[] | undefined) {
   if (!values) return undefined
   return Array.from(new Set(values.map(value => value.trim()).filter(Boolean)))
-}
-
-async function createAndReadTagRows(
-  names: string[],
-  create: () => PromiseLike<unknown>,
-  read: () => PromiseLike<TagRow[]>,
-) {
-  if (names.length === 0) return []
-  await create()
-  return read()
 }
 
 async function readJobTags(jobId: number) {
@@ -77,49 +67,36 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     certifications: uniqueNames(parsed.data.certifications),
   }
 
-  const lookupRows: Partial<Record<TagKey, TagRow[]>> = {}
-  if (requested.skills) lookupRows.skills = await createAndReadTagRows(
-    requested.skills,
-    () => db.insert(skills).values(requested.skills!.map(name => ({ name }))).onConflictDoNothing(),
-    () => db.select({ id: skills.id, name: skills.name }).from(skills).where(inArray(skills.name, requested.skills!)),
-  )
-  if (requested.software) lookupRows.software = await createAndReadTagRows(
-    requested.software,
-    () => db.insert(softwareTable).values(requested.software!.map(name => ({ name }))).onConflictDoNothing(),
-    () => db.select({ id: softwareTable.id, name: softwareTable.name }).from(softwareTable).where(inArray(softwareTable.name, requested.software!)),
-  )
-  if (requested.keywords) lookupRows.keywords = await createAndReadTagRows(
-    requested.keywords,
-    () => db.insert(keywords).values(requested.keywords!.map(name => ({ name }))).onConflictDoNothing(),
-    () => db.select({ id: keywords.id, name: keywords.name }).from(keywords).where(inArray(keywords.name, requested.keywords!)),
-  )
-  if (requested.certifications) lookupRows.certifications = await createAndReadTagRows(
-    requested.certifications,
-    () => db.insert(certifications).values(requested.certifications!.map(name => ({ name }))).onConflictDoNothing(),
-    () => db.select({ id: certifications.id, name: certifications.name }).from(certifications).where(inArray(certifications.name, requested.certifications!)),
-  )
+  // Resolve every requested tag name to its lookup id up front (outside the
+  // transaction), using the shared upsert helper so create/conflict semantics
+  // match the scrape and backfill paths.
+  const lookupIds: Partial<Record<TagKey, number[]>> = {}
+  if (requested.skills) lookupIds.skills = await upsertLookupIds(db, skills, requested.skills)
+  if (requested.software) lookupIds.software = await upsertLookupIds(db, softwareTable, requested.software)
+  if (requested.keywords) lookupIds.keywords = await upsertLookupIds(db, keywords, requested.keywords)
+  if (requested.certifications) lookupIds.certifications = await upsertLookupIds(db, certifications, requested.certifications)
 
   try {
     await db.transaction(async tx => {
       if (requested.skills) {
         await tx.delete(jobSkills).where(eq(jobSkills.jobId, jobId))
-        const rows = lookupRows.skills ?? []
-        if (rows.length > 0) await tx.insert(jobSkills).values(rows.map(row => ({ jobId, skillId: row.id })))
+        const ids = lookupIds.skills ?? []
+        if (ids.length > 0) await tx.insert(jobSkills).values(ids.map(id => ({ jobId, skillId: id })))
       }
       if (requested.software) {
         await tx.delete(jobSoftware).where(eq(jobSoftware.jobId, jobId))
-        const rows = lookupRows.software ?? []
-        if (rows.length > 0) await tx.insert(jobSoftware).values(rows.map(row => ({ jobId, softwareId: row.id })))
+        const ids = lookupIds.software ?? []
+        if (ids.length > 0) await tx.insert(jobSoftware).values(ids.map(id => ({ jobId, softwareId: id })))
       }
       if (requested.keywords) {
         await tx.delete(jobKeywords).where(eq(jobKeywords.jobId, jobId))
-        const rows = lookupRows.keywords ?? []
-        if (rows.length > 0) await tx.insert(jobKeywords).values(rows.map(row => ({ jobId, keywordId: row.id })))
+        const ids = lookupIds.keywords ?? []
+        if (ids.length > 0) await tx.insert(jobKeywords).values(ids.map(id => ({ jobId, keywordId: id })))
       }
       if (requested.certifications) {
         await tx.delete(jobCertifications).where(eq(jobCertifications.jobId, jobId))
-        const rows = lookupRows.certifications ?? []
-        if (rows.length > 0) await tx.insert(jobCertifications).values(rows.map(row => ({ jobId, certificationId: row.id })))
+        const ids = lookupIds.certifications ?? []
+        if (ids.length > 0) await tx.insert(jobCertifications).values(ids.map(id => ({ jobId, certificationId: id })))
       }
       await tx.update(jobs).set({ updatedAt: new Date() }).where(eq(jobs.id, jobId))
     })

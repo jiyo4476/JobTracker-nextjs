@@ -3,15 +3,23 @@ import { db } from '@/db'
 import { requireAuth } from '@/lib/http'
 import { logger, serializeError } from '@/lib/logger'
 import { jobs, companies } from '@/db/schema'
-import { desc, eq } from 'drizzle-orm'
+import { and, desc, eq, isNull } from 'drizzle-orm'
 
 const EXPORT_LIMIT = 10_000
+const EXPORT_FORMATS = ['csv', 'json'] as const
 
 export async function GET(req: NextRequest) {
   const denied = await requireAuth(req)
   if (denied) return denied
   const { searchParams } = new URL(req.url)
   const format = searchParams.get('format') ?? 'json'
+
+  if (!(EXPORT_FORMATS as readonly string[]).includes(format)) {
+    return NextResponse.json(
+      { error: `Invalid format: expected one of ${EXPORT_FORMATS.join(', ')}` },
+      { status: 400 },
+    )
+  }
 
   logger.info('export requested', { format })
 
@@ -41,6 +49,9 @@ export async function GET(req: NextRequest) {
       })
       .from(jobs)
       .leftJoin(companies, eq(jobs.companyId, companies.id))
+      // Exclude soft-deleted jobs, matching every other read (e.g. GET /api/jobs).
+      // Without this, jobs hidden by DELETE /api/jobs/[id] leaked into exports.
+      .where(and(eq(jobs.isActive, true), isNull(jobs.deletedAt)))
       .orderBy(desc(jobs.dateFound))
       .limit(EXPORT_LIMIT)
 
