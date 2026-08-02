@@ -122,3 +122,57 @@ export function formatSalaryRangeShort(
   if (min && max) return `${formatSalaryShort(min)} – ${formatSalaryShort(max)}`
   return formatSalaryShort(min ?? max)
 }
+
+/** Structured salary column values derived from a free-text salary string. */
+export type StructuredSalary = {
+  salaryType: 'annual' | 'hourly'
+  salaryMin: number | null
+  salaryMax: number | null
+  hourlyRateMin: string | null
+  hourlyRateMax: string | null
+  annualEquivalentMin: number | null
+  annualEquivalentMax: number | null
+}
+
+/**
+ * Derive structured salary columns from a free-text `salary_text` string, reusing
+ * the exact parser {@link formatSalary} uses to display it — so a backfill fills
+ * the structured columns with the same range the UI already shows.
+ *
+ * Annual ranges become integer cents (`dollars × 100`); hourly ranges become
+ * `numeric(10,2)` strings plus an `annual_equivalent_*` in cents
+ * (`hourly × 2080 × 100`). Returns `null` when the text can't be parsed into a
+ * valid range, so callers can skip the row untouched.
+ *
+ * Used by `scripts/backfill-structured-salary.ts` to make the structured columns
+ * authoritative for legacy rows that only ever had `salary_text`
+ * (see the `formatSalary` precedence flip in TECHDEBT-009).
+ */
+export function structuredSalaryFromText(text: string | null): StructuredSalary | null {
+  const range = rangeFromText(text)
+  if (!range) return null
+
+  if (range.period === 'year') {
+    const salaryMin = Math.round(range.min * CENTS_PER_DOLLAR)
+    const salaryMax = Math.round(range.max * CENTS_PER_DOLLAR)
+    return {
+      salaryType: 'annual',
+      salaryMin,
+      salaryMax,
+      hourlyRateMin: null,
+      hourlyRateMax: null,
+      annualEquivalentMin: salaryMin,
+      annualEquivalentMax: salaryMax,
+    }
+  }
+
+  return {
+    salaryType: 'hourly',
+    salaryMin: null,
+    salaryMax: null,
+    hourlyRateMin: range.min.toFixed(2),
+    hourlyRateMax: range.max.toFixed(2),
+    annualEquivalentMin: hourlyToAnnualEquivalentCents(range.min),
+    annualEquivalentMax: hourlyToAnnualEquivalentCents(range.max),
+  }
+}
