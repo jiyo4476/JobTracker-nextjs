@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 # ── Stage 1: install deps ──────────────────────────────────────────────────────
 FROM node:24.16-alpine@sha256:21f403ab171f2dc89bad4dd69d7721bfd15f084ccb46cdd225f31f2bc59b5c9a AS deps
 WORKDIR /app
@@ -19,7 +21,10 @@ RUN npm install --global npm@12.0.1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+RUN --mount=type=secret,id=job_tracker_env,required=true \
+    database_url="$(sed -n 's/^DATABASE_URL=//p' /run/secrets/job_tracker_env | tail -n 1 | tr -d '\r')" && \
+    test -n "$database_url" && \
+    DATABASE_URL="$database_url" npm run build
 
 # ── Stage 3: runtime ───────────────────────────────────────────────────────────
 FROM node:24.16-alpine@sha256:21f403ab171f2dc89bad4dd69d7721bfd15f084ccb46cdd225f31f2bc59b5c9a AS runner
