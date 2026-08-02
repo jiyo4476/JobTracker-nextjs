@@ -226,4 +226,14 @@ describe('lookup list endpoints are bounded', () => {
     expect(chain.limit).toHaveBeenCalledWith(DEFAULT_LIST_LIMIT)
     expect(chain.offset).toHaveBeenCalledWith(0)
   })
+
+  it('falls back to the first page when page would produce an unsafe offset', async () => {
+    const chain = makeChain([])
+    mockDb.select.mockReturnValue(chain)
+    const { GET } = await import('@/app/api/skills/route')
+    const res = await GET(new NextRequest('http://localhost/api/skills?limit=500&page=9007199254740991'))
+    expect(res.status).toBe(200)
+    expect(chain.limit).toHaveBeenCalledWith(500)
+    expect(chain.offset).toHaveBeenCalledWith(0)
+  })
 })

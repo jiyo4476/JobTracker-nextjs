@@ -28,9 +28,10 @@ export function parseListPagination(req?: NextRequest): { limit: number; offset:
       : DEFAULT_LIST_LIMIT
 
   const rawPage = Number(params?.get('page') ?? 1)
-  const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1
+  const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1
 
-  return { limit, offset: (page - 1) * limit }
+  const offset = (page - 1) * limit
+  return { limit, offset: Number.isSafeInteger(offset) ? offset : 0 }
 }
 
 // Shared response/parse helpers for API route handlers. These centralize the
