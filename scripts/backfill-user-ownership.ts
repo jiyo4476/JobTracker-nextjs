@@ -53,7 +53,7 @@ function overlayTableIdentifier(table: OverlayTable): ReturnType<typeof sql.raw>
 }
 
 async function scalar(query: ReturnType<typeof sql>): Promise<number> {
-  const rows = (await db.execute(query)) as unknown as Array<{ n: number | string }>;
+  const rows = await db.execute<{ n: number | string }>(query);
   return Number(rows[0]?.n ?? 0);
 }
 
@@ -106,7 +106,7 @@ async function main(): Promise<void> {
   await db.transaction(async (tx) => {
     // Upsert the legacy owner. Keyed only on (issuer, subject); metadata is refreshed
     // without wiping existing values and without reactivating a disabled account.
-    const inserted = (await tx.execute(sql`
+    const inserted = await tx.execute<{ id: number }>(sql`
       insert into users (issuer, subject, email, display_name)
       values (${issuer}, ${subject}, ${email}, ${displayName})
       on conflict (issuer, subject) do update
@@ -114,7 +114,7 @@ async function main(): Promise<void> {
             display_name = coalesce(excluded.display_name, users.display_name),
             updated_at = now()
       returning id
-    `)) as unknown as Array<{ id: number }>;
+    `);
     const insertedOwner = inserted[0];
     if (!insertedOwner) {
       throw new Error("backfill: legacy owner upsert returned no row");
