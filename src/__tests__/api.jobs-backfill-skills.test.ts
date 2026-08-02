@@ -165,4 +165,92 @@ describe('POST /api/jobs/backfill-skills', () => {
     expect(rendered).toMatch(/"jobs"\."id"\s*>\s*\$\d+/)
     expect(params).toContain(50)
   })
+
+  it('defaults the candidate limit to 100 when ?limit is omitted', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    const captured = mockCandidates([])
+    const { tx } = makeTx()
+    useTx(tx)
+
+    const { POST } = await import('@/app/api/jobs/backfill-skills/route')
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(200)
+    expect(captured.limit).toBe(100)
+  })
+
+  it('caps the candidate limit at 500 when ?limit exceeds the max', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    const captured = mockCandidates([])
+    const { tx } = makeTx()
+    useTx(tx)
+
+    const { POST } = await import('@/app/api/jobs/backfill-skills/route')
+    const res = await POST(makeRequest('?limit=1000'))
+    expect(res.status).toBe(200)
+    expect(captured.limit).toBe(500)
+  })
+
+  it('counts skillsLinked as the deduplicated ids from upsertLookupIds, not raw NLP names', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    // Extraction yields three names but only two distinct skills. upsertLookupIds
+    // de-duplicates before inserting, so exactly two ids come back and
+    // skillsLinked must equal 2 — the duplicate NLP name must not inflate it.
+    vi.mocked(extractTags).mockReturnValue({
+      skills: ['Python', 'React', 'Python'],
+      software: [],
+      keywords: [],
+      certifications: [],
+    })
+    mockCandidates([{ id: 7, jobDescription: 'Python and React role.' }])
+    const { tx, insertCalls } = makeTx()
+    useTx(tx)
+
+    const { POST } = await import('@/app/api/jobs/backfill-skills/route')
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.processed).toBe(1)
+    expect(json.skillsLinked).toBe(2)
+
+    // The lookup insert received the two distinct names, not the raw three.
+    const skillsInsert = insertCalls.find(c => c.table === skills)
+    expect(skillsInsert).toBeDefined()
+    expect(skillsInsert!.values).toEqual([{ name: 'Python' }, { name: 'React' }])
+
+    // The junction insert linked both resolved ids to the job.
+    const junctionInsert = insertCalls.find(c => c.table === jobSkills)
+    expect((junctionInsert!.values as Array<{ skillId: number }>).map(v => v.skillId).sort()).toEqual([1, 2])
+  })
+
+  it('falls back to cursor 0 for a non-numeric cursor without throwing', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    const captured = mockCandidates([])
+    const { tx } = makeTx()
+    useTx(tx)
+
+    const { POST } = await import('@/app/api/jobs/backfill-skills/route')
+    const res = await POST(makeRequest('?cursor=not-a-number'))
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.next_cursor).toBe(0)
+
+    const { params } = new PgDialect().sqlToQuery(captured.where!)
+    expect(params).toContain(0)
+  })
+
+  it('falls back to cursor 0 for a negative cursor', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    const captured = mockCandidates([])
+    const { tx } = makeTx()
+    useTx(tx)
+
+    const { POST } = await import('@/app/api/jobs/backfill-skills/route')
+    const res = await POST(makeRequest('?cursor=-5'))
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.next_cursor).toBe(0)
+
+    const { params } = new PgDialect().sqlToQuery(captured.where!)
+    expect(params).toContain(0)
+  })
 })

@@ -74,4 +74,20 @@ describe('upsertLookupIds', () => {
     const ids = await upsertLookupIds(executor as never, skills as never, ['Python', 'Docker'])
     expect(ids.sort()).toEqual([1, 2])
   })
+
+  it('falls back entirely to the select when every name already existed (empty RETURNING)', async () => {
+    // All names conflict, so ON CONFLICT DO NOTHING RETURNING resolves to [].
+    // An empty RETURNING is the normal "nothing new inserted" signal, not an
+    // error: every id must come from the follow-up SELECT.
+    const { executor, insertValues, selectWhere } = makeExecutor(
+      [],
+      [{ id: 5 }, { id: 6 }],
+    )
+    const ids = await upsertLookupIds(executor as never, skills as never, ['Python', 'Docker'])
+    expect(ids.sort()).toEqual([5, 6])
+    // The insert was still attempted (ON CONFLICT DO NOTHING is a no-op here)...
+    expect(insertValues).toHaveBeenCalledWith([{ name: 'Python' }, { name: 'Docker' }])
+    // ...and the ids were resolved by the conflict-resolution select.
+    expect(selectWhere).toHaveBeenCalledTimes(1)
+  })
 })
