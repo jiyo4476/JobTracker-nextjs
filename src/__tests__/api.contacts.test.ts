@@ -22,6 +22,7 @@ vi.mock('drizzle-orm', () => ({
 import { requireAuthentication } from '@/lib/auth'
 import { db } from '@/db'
 import { and } from 'drizzle-orm'
+import { authedGet } from './helpers/authed-request'
 
 function makeChain(result: unknown) {
   const chain: Record<string, unknown> = {}
@@ -53,19 +54,29 @@ const mockContact = { id: 1, jobId: 1, name: 'Jane Doe', email: 'jane@example.co
 describe('GET /api/jobs/[id]/contacts', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('returns 400 for non-numeric id', async () => {
+  it('returns 401 without auth (contacts carry PII)', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
     const { GET } = await import('@/app/api/jobs/[id]/contacts/route')
-    const req = new NextRequest('http://localhost/api/jobs/abc/contacts')
+    const req = new NextRequest('http://localhost/api/jobs/1/contacts')
+    const res = await GET(req, makeParams('1') as { params: Promise<{ id: string }> })
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 400 for non-numeric id', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    const { GET } = await import('@/app/api/jobs/[id]/contacts/route')
+    const req = authedGet('http://localhost/api/jobs/abc/contacts')
     const res = await GET(req, makeParams('abc') as { params: Promise<{ id: string }> })
     expect(res.status).toBe(400)
   })
 
-  it('returns 200 with contacts list', async () => {
+  it('returns 200 with contacts list when authed', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.select.mockReturnValue(makeChain([mockContact]))
 
     const { GET } = await import('@/app/api/jobs/[id]/contacts/route')
-    const req = new NextRequest('http://localhost/api/jobs/1/contacts')
+    const req = authedGet('http://localhost/api/jobs/1/contacts')
     const res = await GET(req, makeParams('1') as { params: Promise<{ id: string }> })
     expect(res.status).toBe(200)
     const json = await res.json()

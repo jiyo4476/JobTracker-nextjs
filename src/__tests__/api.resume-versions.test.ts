@@ -15,6 +15,7 @@ vi.mock('@/db/schema', () => ({
 
 import { requireAuthentication } from '@/lib/auth'
 import { db } from '@/db'
+import { authedGet } from './helpers/authed-request'
 
 function makeChain(result: unknown) {
   const chain: Record<string, unknown> = {}
@@ -46,12 +47,20 @@ function makeReq(url: string, body?: unknown, auth = true, method = 'POST') {
 describe('GET /api/resume-versions', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
+  it('returns 401 without auth', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
+    const { GET } = await import('@/app/api/resume-versions/route')
+    const res = await GET(makeReq('http://localhost/api/resume-versions', undefined, false, 'GET'))
+    expect(res.status).toBe(401)
+  })
+
   it('returns list of resume versions', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.select.mockReturnValue(makeChain([mockVersion]))
 
     const { GET } = await import('@/app/api/resume-versions/route')
-    const res = await GET()
+    const res = await GET(authedGet('http://localhost/api/resume-versions'))
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(Array.isArray(json)).toBe(true)

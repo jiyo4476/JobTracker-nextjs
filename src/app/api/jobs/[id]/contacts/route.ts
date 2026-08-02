@@ -6,7 +6,12 @@ import { logger, serializeError } from '@/lib/logger'
 import { contacts } from '@/db/schema'
 import { eq, asc } from 'drizzle-orm'
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // Contacts carry PII (email/phone), so reads are gated the same way writes are —
+  // same-origin browser calls pass; header-less non-same-origin callers get 401.
+  const authError = await requireAuth(req)
+  if (authError) return authError
+
   const { id } = await params
   const jobId = parseInt(id)
   if (isNaN(jobId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
@@ -21,8 +26,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const denied = await requireAuth(req)
-  if (denied) return denied
+  const authError = await requireAuth(req)
+  if (authError) return authError
 
   const { id } = await params
   const jobId = parseInt(id)
