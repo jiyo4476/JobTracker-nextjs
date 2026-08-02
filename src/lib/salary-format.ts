@@ -134,6 +134,37 @@ export type StructuredSalary = {
   annualEquivalentMax: number | null
 }
 
+type ExistingStructuredSalary = Pick<
+  SalaryDisplay,
+  'salaryType' | 'salaryMin' | 'salaryMax' | 'hourlyRateMin' | 'hourlyRateMax'
+>
+
+/**
+ * Identify legacy rows that are safe for the one-time structured salary
+ * backfill to repair. Besides unclassified rows, this includes incomplete
+ * structured ranges and the known pre-#66 failure mode where annual columns
+ * contain dollar/hour figures as cents (for example 6500 for a $65k salary).
+ * Complete, plausible structured ranges remain authoritative and untouched.
+ */
+export function needsStructuredSalaryBackfill(
+  current: ExistingStructuredSalary,
+  parsed: StructuredSalary,
+): boolean {
+  if (current.salaryType == null) return true
+
+  if (current.salaryType === 'hourly') {
+    return positiveNumber(current.hourlyRateMin) == null || positiveNumber(current.hourlyRateMax) == null
+  }
+
+  const min = positiveNumber(current.salaryMin)
+  const max = positiveNumber(current.salaryMax)
+  if (min == null || max == null) return true
+
+  const parsedRepresentsRealCompensation =
+    parsed.salaryType === 'hourly' || (parsed.salaryMax ?? 0) >= 1_000_000
+  return max < 1_000_000 && parsedRepresentsRealCompensation
+}
+
 /**
  * Derive structured salary columns from a free-text `salary_text` string, reusing
  * the exact parser {@link formatSalary} uses to display it — so a backfill fills

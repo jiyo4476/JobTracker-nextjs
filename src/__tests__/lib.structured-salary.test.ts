@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { structuredSalaryFromText } from '@/lib/salary-format'
+import { needsStructuredSalaryBackfill, structuredSalaryFromText } from '@/lib/salary-format'
 
 describe('structuredSalaryFromText', () => {
   it('parses an annual range into integer cents', () => {
@@ -51,5 +51,35 @@ describe('structuredSalaryFromText', () => {
   it('returns null for null/empty input', () => {
     expect(structuredSalaryFromText(null)).toBeNull()
     expect(structuredSalaryFromText('')).toBeNull()
+  })
+})
+
+describe('needsStructuredSalaryBackfill', () => {
+  const parsedAnnual = structuredSalaryFromText('$65,000 - $75,000 per year')!
+
+  it('repairs unclassified, incomplete, and underscaled legacy rows', () => {
+    expect(needsStructuredSalaryBackfill({
+      salaryType: null, salaryMin: null, salaryMax: null,
+      hourlyRateMin: null, hourlyRateMax: null,
+    }, parsedAnnual)).toBe(true)
+    expect(needsStructuredSalaryBackfill({
+      salaryType: 'annual', salaryMin: 6500, salaryMax: 7500,
+      hourlyRateMin: null, hourlyRateMax: null,
+    }, parsedAnnual)).toBe(true)
+    expect(needsStructuredSalaryBackfill({
+      salaryType: 'hourly', salaryMin: null, salaryMax: null,
+      hourlyRateMin: '45.00', hourlyRateMax: null,
+    }, parsedAnnual)).toBe(true)
+  })
+
+  it('does not overwrite complete plausible structured ranges', () => {
+    expect(needsStructuredSalaryBackfill({
+      salaryType: 'annual', salaryMin: 8_000_000, salaryMax: 12_000_000,
+      hourlyRateMin: null, hourlyRateMax: null,
+    }, parsedAnnual)).toBe(false)
+    expect(needsStructuredSalaryBackfill({
+      salaryType: 'hourly', salaryMin: null, salaryMax: null,
+      hourlyRateMin: '45.00', hourlyRateMax: '60.00',
+    }, parsedAnnual)).toBe(false)
   })
 })

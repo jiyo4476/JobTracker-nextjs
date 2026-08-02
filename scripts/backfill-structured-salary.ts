@@ -10,37 +10,52 @@
  *
  * SAFETY:
  *  - Dry run by DEFAULT. It only writes when invoked with `--apply`.
- *  - Non-destructive: it targets ONLY rows where `salary_type IS NULL` (never
- *    classified), so a row that already has structured salary is never touched.
+ *  - Conservative: it targets unclassified/incomplete rows plus the known
+ *    underscaled legacy-annual signature. Complete, plausible structured
+ *    salaries remain authoritative and are never overwritten.
  *  - Rows whose `salary_text` can't be parsed into a valid range are skipped.
  *  - All writes run inside a single transaction.
- *  - Idempotent: after a successful `--apply`, updated rows have a `salary_type`
- *    and are no longer candidates.
+ *  - Each target is re-read under a row lock before update, preventing a
+ *    concurrent application write from being overwritten by a stale plan.
+ *  - Idempotent: successfully repaired rows no longer require backfill.
  *
  * USAGE (needs DATABASE_URL in the environment):
  *   npm run db:backfill-salary            # dry run — prints planned changes
  *   npm run db:backfill-salary -- --apply # writes the changes
  */
-import { and, eq, isNull, isNotNull } from 'drizzle-orm'
+import { eq, isNotNull } from 'drizzle-orm'
 // Relative imports (not the `@/` alias) so the script runs under plain `tsx`
 // without a tsconfig-paths loader.
 import { db } from '../src/db'
 import { jobs } from '../src/db/schema'
-import { structuredSalaryFromText } from '../src/lib/salary-format'
+import { needsStructuredSalaryBackfill, structuredSalaryFromText } from '../src/lib/salary-format'
 
 const APPLY = process.argv.includes('--apply')
 
 async function main(): Promise<void> {
   const candidates = await db
-    .select({ id: jobs.id, salaryText: jobs.salaryText })
+    .select({
+      id: jobs.id,
+      salaryText: jobs.salaryText,
+      salaryType: jobs.salaryType,
+      salaryMin: jobs.salaryMin,
+      salaryMax: jobs.salaryMax,
+      hourlyRateMin: jobs.hourlyRateMin,
+      hourlyRateMax: jobs.hourlyRateMax,
+    })
     .from(jobs)
-    .where(and(isNotNull(jobs.salaryText), isNull(jobs.salaryType)))
+    .where(isNotNull(jobs.salaryText))
 
-  const planned = candidates
-    .map((row) => ({ id: row.id, salaryText: row.salaryText, parsed: structuredSalaryFromText(row.salaryText) }))
+  const evaluated = candidates.map((row) => ({
+    ...row,
+    parsed: structuredSalaryFromText(row.salaryText),
+  }))
+  const planned = evaluated
     .filter((row): row is typeof row & { parsed: NonNullable<typeof row.parsed> } => row.parsed !== null)
+    .filter((row) => needsStructuredSalaryBackfill(row, row.parsed))
 
-  const skipped = candidates.length - planned.length
+  const unparseable = evaluated.filter((row) => row.parsed === null).length
+  const alreadyStructured = candidates.length - planned.length - unparseable
 
   for (const row of planned) {
     const p = row.parsed
@@ -51,10 +66,29 @@ async function main(): Promise<void> {
     console.log(`${APPLY ? 'UPDATE' : 'WOULD UPDATE'} job ${row.id}: ${JSON.stringify(row.salaryText)} → ${summary}`)
   }
 
+  let applied = 0
   if (APPLY && planned.length > 0) {
     await db.transaction(async (tx) => {
       for (const row of planned) {
-        const p = row.parsed
+        // Re-read under a row lock so a concurrent application update cannot be
+        // overwritten using the stale candidate snapshot taken above.
+        const [current] = await tx
+          .select({
+            salaryText: jobs.salaryText,
+            salaryType: jobs.salaryType,
+            salaryMin: jobs.salaryMin,
+            salaryMax: jobs.salaryMax,
+            hourlyRateMin: jobs.hourlyRateMin,
+            hourlyRateMax: jobs.hourlyRateMax,
+          })
+          .from(jobs)
+          .where(eq(jobs.id, row.id))
+          .for('update')
+        if (!current) continue
+
+        const p = structuredSalaryFromText(current.salaryText)
+        if (!p || !needsStructuredSalaryBackfill(current, p)) continue
+
         await tx
           .update(jobs)
           .set({
@@ -68,17 +102,19 @@ async function main(): Promise<void> {
             updatedAt: new Date(),
           })
           .where(eq(jobs.id, row.id))
+        applied++
       }
     })
   }
 
   console.log(
-    `\n${candidates.length} candidate row(s) with salary_text and no salary_type; ` +
-      `${planned.length} parseable, ${skipped} unparseable (skipped).`,
+    `\n${candidates.length} row(s) with salary_text; ${planned.length} require backfill, ` +
+      `${alreadyStructured} already have authoritative structured values, ` +
+      `${unparseable} unparseable (skipped).`,
   )
   console.log(
     APPLY
-      ? `Applied ${planned.length} update(s).`
+      ? `Applied ${applied} update(s).`
       : 'Dry run — no rows changed. Re-run with `-- --apply` to write.',
   )
 }
