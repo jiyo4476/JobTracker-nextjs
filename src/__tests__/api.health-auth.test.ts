@@ -23,7 +23,10 @@ describe('GET /api/health/auth', () => {
 
     expect(res.status).toBe(200)
     await expect(res.json()).resolves.toEqual({ ok: true })
-    expect(requireAuthentication).toHaveBeenCalledWith(req, { allowSameOrigin: false })
+    expect(requireAuthentication).toHaveBeenCalledWith(req, {
+      allowSameOrigin: false,
+      principal: 'ingestion',
+    })
   })
 
   it('returns 401 when authentication is invalid', async () => {

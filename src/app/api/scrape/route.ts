@@ -106,7 +106,7 @@ async function attachTags(jobId: number, tags: Taxonomies) {
 async function handlePost(req: NextRequest) {
   // External-only endpoint (Python scraper via OAuth2 bearer token) — the browser
   // UI never calls this directly, so the same-origin bypass must not apply here.
-  const denied = await requireAuth(req, { allowSameOrigin: false })
+  const denied = await requireAuth(req, { allowSameOrigin: false, principal: 'ingestion' })
   if (denied) return denied
 
   const parsed = await readJsonBody(req, scrapePayloadSchema)

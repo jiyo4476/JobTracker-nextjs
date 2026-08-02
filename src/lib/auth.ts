@@ -1,11 +1,15 @@
 import { NextRequest } from "next/server";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
+import { logger } from "@/lib/logger";
 
 const DEFAULT_AUTHENTIK_BASE_URL = "https://auth.yjimmy.dev";
 const DEFAULT_AUTHENTIK_APP_SLUG = "job-tracker";
 const DEFAULT_AUTHENTIK_TRUSTED_ISSUERS = [
   "https://auth.yjimmy.dev/application/o/job-tracker-scraper/",
   "https://auth.yjimmy.dev/application/o/job-tracker-extension/",
+];
+const DEFAULT_AUTHENTIK_SERVICE_ISSUERS = [
+  "https://auth.yjimmy.dev/application/o/job-tracker-scraper/",
 ];
 
 // Authentik signs tokens with RS256; pin it explicitly so a malicious token
@@ -16,6 +20,7 @@ const jwksByUri = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
 type RequireAuthenticationOptions = {
   allowSameOrigin?: boolean;
+  principal?: "user" | "ingestion";
 };
 
 type IntrospectionResponse = {
@@ -24,7 +29,42 @@ type IntrospectionResponse = {
   aud?: string | string[];
   client_id?: string;
   scope?: string;
+  sub?: string;
 };
+
+export type AuthCapability = "jobs:ingest";
+
+type VerifiedIdentity = {
+  issuer: string;
+  subject: string;
+  scopes: string[];
+  method: "bearer" | "forward-auth" | "development";
+};
+
+export type UserPrincipal = VerifiedIdentity & {
+  kind: "user";
+  identityKey: string;
+  correlationId: string;
+};
+
+export type ServicePrincipal = VerifiedIdentity & {
+  kind: "service";
+  identityKey: string;
+  capabilities: AuthCapability[];
+  correlationId: string;
+};
+
+export type AuthPrincipal = UserPrincipal | ServicePrincipal;
+
+export class AuthenticationError extends Error {
+  constructor(
+    public readonly code: "unauthenticated" | "wrong_principal" | "missing_capability",
+    public readonly correlationId: string,
+  ) {
+    super(code);
+    this.name = "AuthenticationError";
+  }
+}
 
 // Validates OAuth2 Bearer tokens issued by Authentik for external callers.
 //
@@ -45,16 +85,85 @@ export async function requireAuthentication(
   req: NextRequest,
   options: RequireAuthenticationOptions = {},
 ): Promise<boolean> {
+  const principal = await authenticateRequest(req, options);
+  const allowed = principal
+    ? (options.principal ?? "user") === "user"
+      ? principal.kind === "user"
+      : principal.kind === "user" || principal.capabilities.includes("jobs:ingest")
+    : false;
+  if (!allowed) {
+    logger.warn("authentication rejected", {
+      correlationId: principal?.correlationId ?? getCorrelationId(req),
+      code: principal ? "wrong_principal" : "unauthenticated",
+      issuer: principal?.issuer,
+      subject: principal?.subject,
+      principalKind: principal?.kind,
+    });
+  }
+  return allowed;
+}
+
+export async function authenticateRequest(
+  req: NextRequest,
+  options: RequireAuthenticationOptions = {},
+): Promise<AuthPrincipal | null> {
   const allowSameOrigin = options.allowSameOrigin ?? true;
   const auth = req.headers.get("authorization");
+  const correlationId = getCorrelationId(req);
 
   if (allowSameOrigin && !auth) {
     if (process.env.AUTHENTIK_FORWARD_AUTH_ENABLED === "true") {
       const proxyJwt = req.headers.get("x-authentik-jwt");
-      return proxyJwt ? verifyForwardAuthJwt(proxyJwt) : false;
+      const identity = proxyJwt ? await verifyForwardAuthJwt(proxyJwt) : null;
+      return identity ? toPrincipal(identity, correlationId, false) : null;
     }
 
-    // Local/dev fallback — only reachable when forward-auth isn't configured.
+    // Explicit local-only fallback. NODE_ENV prevents this switch from weakening
+    // a production deployment even if AUTH_DEV_ALLOW_SAME_ORIGIN is set by mistake.
+    if (
+      process.env.NODE_ENV !== "production" &&
+      process.env.AUTH_DEV_ALLOW_SAME_ORIGIN === "true" &&
+      isSameOrigin(req)
+    ) {
+      const issuer = process.env.AUTH_DEV_ISSUER;
+      const subject = process.env.AUTH_DEV_SUBJECT;
+      if (issuer && subject) {
+        return toPrincipal(
+          { issuer: normalizeIssuer(issuer), subject, scopes: [], method: "development" },
+          correlationId,
+          false,
+        );
+      }
+    }
+  }
+
+  if (!auth?.startsWith("Bearer ")) return null;
+
+  const identity = await verifyOAuthToken(auth.slice("Bearer ".length));
+  return identity ? toPrincipal(identity, correlationId, true) : null;
+}
+
+export async function requireUser(req: NextRequest): Promise<UserPrincipal> {
+  const principal = await authenticateRequest(req);
+  if (!principal) throwAuth(req, "unauthenticated");
+  if (principal.kind !== "user") throwAuth(req, "wrong_principal", principal);
+  return principal;
+}
+
+export async function requireServicePrincipal(
+  req: NextRequest,
+  capability: AuthCapability,
+): Promise<ServicePrincipal> {
+  const principal = await authenticateRequest(req, { allowSameOrigin: false });
+  if (!principal) throwAuth(req, "unauthenticated");
+  if (principal.kind !== "service") throwAuth(req, "wrong_principal", principal);
+  if (!principal.capabilities.includes(capability)) {
+    throwAuth(req, "missing_capability", principal);
+  }
+  return principal;
+}
+
+function isSameOrigin(req: NextRequest): boolean {
     // Parse origin URL and compare hostname+port explicitly to avoid substring spoofing
     // (e.g. "https://localhost.evil.com" containing "localhost").
     const host = req.headers.get("host") ?? ""; // "hostname:port" or "hostname"
@@ -63,15 +172,26 @@ export async function requireAuthentication(
     const rawOrigin = req.headers.get("origin") ?? req.headers.get("referer") ?? "";
     try {
       const { host: parsedHost } = new URL(rawOrigin);
-      if (host !== "" && parsedHost === host) return true;
+      return host !== "" && parsedHost === host;
     } catch {
-      // empty or malformed origin — fall through to reject
+      return false;
     }
-  }
+}
 
-  if (!auth?.startsWith("Bearer ")) return false;
-
-  return verifyOAuthToken(auth.slice("Bearer ".length));
+function throwAuth(
+  req: NextRequest,
+  code: AuthenticationError["code"],
+  principal?: AuthPrincipal,
+): never {
+  const correlationId = principal?.correlationId ?? getCorrelationId(req);
+  logger.warn("authentication rejected", {
+    correlationId,
+    code,
+    issuer: principal?.issuer,
+    subject: principal?.subject,
+    principalKind: principal?.kind,
+  });
+  throw new AuthenticationError(code, correlationId);
 }
 
 // Verifies the signed JWT that Authentik's forward-auth outpost injects as
@@ -88,21 +208,25 @@ export async function requireAuthentication(
 // verifyOAuthToken does: without it, a JWT minted for a *different* application behind
 // the same Authentik instance/JWKS would also verify here if this backend were ever
 // reachable by a path that skips the Traefik ForwardAuth hop.
-async function verifyForwardAuthJwt(token: string): Promise<boolean> {
+async function verifyForwardAuthJwt(token: string): Promise<VerifiedIdentity | null> {
   const config = getOAuthConfig();
   try {
-    await jwtVerify(token, getJwks(config.jwksUri), {
+    const result = await jwtVerify(token, getJwks(config.jwksUri), {
       issuer: config.issuer,
       audience: config.audiences,
       algorithms: JWT_ALGORITHMS,
     });
-    return true;
+    const identity = identityFromPayload(result.payload, "forward-auth");
+    if (!identity) return null;
+    return config.requiredScopes.every((scope) => identity.scopes.includes(scope))
+      ? identity
+      : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
-async function verifyOAuthToken(token: string): Promise<boolean> {
+async function verifyOAuthToken(token: string): Promise<VerifiedIdentity | null> {
   const config = getOAuthConfig();
   for (const provider of config.providers) {
     try {
@@ -111,12 +235,11 @@ async function verifyOAuthToken(token: string): Promise<boolean> {
         audience: config.audiences,
         algorithms: JWT_ALGORITHMS,
       });
-      if (config.requiredScopes.length === 0) return true;
-
-      const scopeClaim = result.payload.scope;
-      const scopes =
-        typeof scopeClaim === "string" ? scopeClaim.split(/\s+/).filter(Boolean) : [];
-      return config.requiredScopes.every((scope) => scopes.includes(scope));
+      const identity = identityFromPayload(result.payload, "bearer");
+      if (!identity) return null;
+      return config.requiredScopes.every((scope) => identity.scopes.includes(scope))
+        ? identity
+        : null;
     } catch {
       // Try the next trusted issuer/JWKS pair.
     }
@@ -182,9 +305,9 @@ export function getOAuthConfig() {
 async function verifyTokenByIntrospection(
   token: string,
   config: ReturnType<typeof getOAuthConfig>,
-): Promise<boolean> {
+): Promise<VerifiedIdentity | null> {
   if (!config.introspectionClientId || !config.introspectionClientSecret) {
-    return false;
+    return null;
   }
 
   try {
@@ -200,16 +323,16 @@ async function verifyTokenByIntrospection(
       },
       body,
     });
-    if (!response.ok) return false;
+    if (!response.ok) return null;
 
     const data = (await response.json()) as IntrospectionResponse;
-    if (!data.active) return false;
+    if (!data.active) return null;
 
     const trustedIssuers = new Set(
       config.providers.map((provider) => provider.issuer),
     );
     if (!data.iss || !trustedIssuers.has(normalizeIssuer(data.iss))) {
-      return false;
+      return null;
     }
 
     const tokenAudiences = Array.isArray(data.aud) ? data.aud : [data.aud];
@@ -218,17 +341,98 @@ async function verifyTokenByIntrospection(
         (audience) => audience && config.audiences.includes(audience),
       )
     ) {
-      return false;
+      return null;
     }
-
-    if (config.requiredScopes.length === 0) return true;
 
     const scopes =
       typeof data.scope === "string" ? data.scope.split(/\s+/).filter(Boolean) : [];
-    return config.requiredScopes.every((scope) => scopes.includes(scope));
+    if (!config.requiredScopes.every((scope) => scopes.includes(scope))) return null;
+    if (!data.iss || !data.sub?.trim()) return null;
+    return {
+      issuer: normalizeIssuer(data.iss),
+      subject: data.sub,
+      scopes,
+      method: "bearer",
+    };
   } catch {
-    return false;
+    return null;
   }
+}
+
+function identityFromPayload(
+  payload: JWTPayload,
+  method: VerifiedIdentity["method"],
+): VerifiedIdentity | null {
+  if (typeof payload.iss !== "string" || typeof payload.sub !== "string" || !payload.sub.trim()) {
+    return null;
+  }
+  const scopes = typeof payload.scope === "string"
+    ? payload.scope.split(/\s+/).filter(Boolean)
+    : [];
+  return {
+    issuer: normalizeIssuer(payload.iss),
+    subject: payload.sub,
+    scopes,
+    method,
+  };
+}
+
+function toPrincipal(
+  identity: VerifiedIdentity,
+  correlationId: string,
+  allowService: boolean,
+): AuthPrincipal {
+  const identityKey = `${identity.issuer}#${encodeURIComponent(identity.subject)}`;
+  const service = allowService ? getServicePrincipal(identity) : null;
+  return service
+    ? { ...identity, ...service, kind: "service", identityKey, correlationId }
+    : { ...identity, kind: "user", identityKey, correlationId };
+}
+
+function getServicePrincipal(
+  identity: VerifiedIdentity,
+): { capabilities: AuthCapability[] } | null {
+  const raw = process.env.AUTHENTIK_SERVICE_PRINCIPALS;
+  if (raw) {
+    try {
+      const configured = JSON.parse(raw) as unknown;
+      if (Array.isArray(configured)) {
+        for (const item of configured) {
+          if (!item || typeof item !== "object") continue;
+          const record = item as Record<string, unknown>;
+          if (
+            typeof record.issuer === "string" &&
+            normalizeIssuer(record.issuer) === identity.issuer &&
+            record.subject === identity.subject &&
+            Array.isArray(record.capabilities)
+          ) {
+            const capabilities = record.capabilities.filter(
+              (value): value is AuthCapability => value === "jobs:ingest",
+            );
+            return { capabilities };
+          }
+        }
+      }
+    } catch {
+      // Invalid configuration grants no capabilities; issuer classification below
+      // still prevents a known service token from being treated as a human.
+    }
+  }
+  const serviceIssuers = splitEnvList(process.env.AUTHENTIK_SERVICE_ISSUERS);
+  const classifiedIssuers = serviceIssuers.length > 0
+    ? serviceIssuers
+    : DEFAULT_AUTHENTIK_SERVICE_ISSUERS;
+  if (classifiedIssuers.map(normalizeIssuer).includes(identity.issuer)) {
+    return { capabilities: [] };
+  }
+  return null;
+}
+
+function getCorrelationId(req: NextRequest): string {
+  const supplied = req.headers.get("x-request-id")?.trim();
+  return supplied && /^[A-Za-z0-9._:-]{1,128}$/.test(supplied)
+    ? supplied
+    : crypto.randomUUID();
 }
 
 function getJwks(uri: string) {

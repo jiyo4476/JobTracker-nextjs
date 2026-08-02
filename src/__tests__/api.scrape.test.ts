@@ -345,12 +345,15 @@ describe('POST /api/scrape', () => {
     expect(res.status).toBe(401)
   })
 
-  it('calls requireAuthentication with allowSameOrigin: false (external-only endpoint)', async () => {
+  it('requires the least-privilege ingestion principal contract', async () => {
     vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { POST } = await import('@/app/api/scrape/route')
     const req = makeRequest(validBody, false)
     await POST(req)
-    expect(requireAuthentication).toHaveBeenCalledWith(req, { allowSameOrigin: false })
+    expect(requireAuthentication).toHaveBeenCalledWith(req, {
+      allowSameOrigin: false,
+      principal: 'ingestion',
+    })
   })
 
   it('returns 400 when body is invalid JSON', async () => {
