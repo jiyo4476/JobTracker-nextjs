@@ -24,6 +24,7 @@ describe('verified application principal context', () => {
     process.env.AUTHENTIK_AUDIENCE = 'job-tracker'
     process.env.AUTHENTIK_JWKS_URI = `${ISSUER}jwks/`
     delete process.env.AUTHENTIK_SERVICE_PRINCIPALS
+    delete process.env.AUTHENTIK_SERVICE_ISSUERS
     delete process.env.AUTH_DEV_ALLOW_SAME_ORIGIN
     delete process.env.AUTH_DEV_ISSUER
     delete process.env.AUTH_DEV_SUBJECT
@@ -31,9 +32,11 @@ describe('verified application principal context', () => {
 
   afterEach(() => {
     delete process.env.AUTHENTIK_SERVICE_PRINCIPALS
+    delete process.env.AUTHENTIK_SERVICE_ISSUERS
     delete process.env.AUTH_DEV_ALLOW_SAME_ORIGIN
     delete process.env.AUTH_DEV_ISSUER
     delete process.env.AUTH_DEV_SUBJECT
+    vi.restoreAllMocks()
   })
 
   it('derives a stable human identity from verified issuer and subject only', async () => {
@@ -84,6 +87,7 @@ describe('verified application principal context', () => {
   })
 
   it('does not let an allow-listed service principal use the human helper', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     process.env.AUTHENTIK_SERVICE_PRINCIPALS = JSON.stringify([{
       issuer: ISSUER,
       subject: 'scraper-client',
@@ -97,6 +101,42 @@ describe('verified application principal context', () => {
     await expect(requireUser(bearerRequest('service-token'))).rejects.toMatchObject({
       code: 'wrong_principal',
     } satisfies Partial<AuthenticationError>)
+    const rejection = warn.mock.calls
+      .map(([entry]) => JSON.parse(String(entry)) as Record<string, unknown>)
+      .find(entry => entry.msg === 'authentication rejected')
+    expect(rejection).toMatchObject({
+      code: 'wrong_principal',
+      issuer: ISSUER,
+      subject: 'scraper-client',
+      principalKind: 'service',
+    })
+    expect(rejection).not.toHaveProperty('token')
+  })
+
+  it('warns safely and grants no capability when service-principal JSON is malformed', async () => {
+    const malformed = 'sensitive-deployment-value{'
+    process.env.AUTHENTIK_SERVICE_PRINCIPALS = malformed
+    process.env.AUTHENTIK_SERVICE_ISSUERS = ISSUER
+    vi.mocked(jwtVerify).mockResolvedValue({
+      payload: { iss: ISSUER, sub: 'scraper-client' },
+      protectedHeader: { alg: 'RS256' },
+    } as never)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    const principal = await authenticateRequest(bearerRequest('service-token'))
+
+    expect(principal).toMatchObject({ kind: 'service', capabilities: [] })
+    const configWarning = warn.mock.calls
+      .map(([entry]) => String(entry))
+      .find(entry => entry.includes('auth_service_principal_config_invalid'))
+    expect(configWarning).toBeDefined()
+    expect(JSON.parse(configWarning!)).toMatchObject({
+      msg: 'invalid Authentik service-principal configuration',
+      code: 'auth_service_principal_config_invalid',
+      variable: 'AUTHENTIK_SERVICE_PRINCIPALS',
+      reason: 'invalid_json',
+    })
+    expect(configWarning).not.toContain(malformed)
   })
 
   it('restricts service tokens to the ingestion route contract', async () => {

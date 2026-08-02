@@ -92,13 +92,11 @@ export async function requireAuthentication(
       : principal.kind === "user" || principal.capabilities.includes("jobs:ingest")
     : false;
   if (!allowed) {
-    logger.warn("authentication rejected", {
-      correlationId: principal?.correlationId ?? getCorrelationId(req),
-      code: principal ? "wrong_principal" : "unauthenticated",
-      issuer: principal?.issuer,
-      subject: principal?.subject,
-      principalKind: principal?.kind,
-    });
+    logAuthenticationRejection(
+      principal ? "wrong_principal" : "unauthenticated",
+      principal?.correlationId ?? getCorrelationId(req),
+      principal ?? undefined,
+    );
   }
   return allowed;
 }
@@ -184,6 +182,15 @@ function throwAuth(
   principal?: AuthPrincipal,
 ): never {
   const correlationId = principal?.correlationId ?? getCorrelationId(req);
+  logAuthenticationRejection(code, correlationId, principal);
+  throw new AuthenticationError(code, correlationId);
+}
+
+function logAuthenticationRejection(
+  code: AuthenticationError["code"],
+  correlationId: string,
+  principal?: AuthPrincipal,
+): void {
   logger.warn("authentication rejected", {
     correlationId,
     code,
@@ -191,7 +198,6 @@ function throwAuth(
     subject: principal?.subject,
     principalKind: principal?.kind,
   });
-  throw new AuthenticationError(code, correlationId);
 }
 
 // Verifies the signed JWT that Authentik's forward-auth outpost injects as
@@ -412,10 +418,11 @@ function getServicePrincipal(
             return { capabilities };
           }
         }
+      } else {
+        logServicePrincipalConfigurationWarning("not_array");
       }
     } catch {
-      // Invalid configuration grants no capabilities; issuer classification below
-      // still prevents a known service token from being treated as a human.
+      logServicePrincipalConfigurationWarning("invalid_json");
     }
   }
   const serviceIssuers = splitEnvList(process.env.AUTHENTIK_SERVICE_ISSUERS);
@@ -426,6 +433,18 @@ function getServicePrincipal(
     return { capabilities: [] };
   }
   return null;
+}
+
+function logServicePrincipalConfigurationWarning(
+  reason: "invalid_json" | "not_array",
+): void {
+  // Never include the raw environment value: it is deployment configuration and
+  // may contain sensitive identity metadata.
+  logger.warn("invalid Authentik service-principal configuration", {
+    code: "auth_service_principal_config_invalid",
+    variable: "AUTHENTIK_SERVICE_PRINCIPALS",
+    reason,
+  });
 }
 
 function getCorrelationId(req: NextRequest): string {
