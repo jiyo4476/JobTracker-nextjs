@@ -2,6 +2,10 @@ import { NextRequest } from "next/server";
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 import { logger } from "@/lib/logger";
 
+// Authentik is the default provider for this deployment, but every value below is
+// overridable so the app can front ANY OAuth2/OIDC provider (Auth0, Keycloak, Okta,
+// Cognito, Google, …). Prefer the provider-neutral OIDC_* env vars; the AUTHENTIK_*
+// (and OAUTH_*) names are kept as fallbacks so existing deployments keep working.
 const DEFAULT_AUTHENTIK_BASE_URL = "https://auth.yjimmy.dev";
 const DEFAULT_AUTHENTIK_APP_SLUG = "job-tracker";
 const DEFAULT_AUTHENTIK_TRUSTED_ISSUERS = [
@@ -12,9 +16,29 @@ const DEFAULT_AUTHENTIK_SERVICE_ISSUERS = [
   "https://auth.yjimmy.dev/application/o/job-tracker-scraper/",
 ];
 
-// Authentik signs tokens with RS256; pin it explicitly so a malicious token
-// can't try to downgrade to a weaker/none algorithm.
-const JWT_ALGORITHMS = ["RS256"];
+// Most OIDC providers sign with RS256; pin allowed algorithms explicitly so a
+// malicious token can't downgrade to a weaker/`none` algorithm. Providers that use a
+// different family (e.g. ES256/PS256) set OIDC_JWT_ALGORITHMS.
+const DEFAULT_JWT_ALGORITHMS = ["RS256"];
+
+// OIDC_JWT_ALGORITHMS is operator-supplied, so validate it against this allow-list of
+// asymmetric signature algorithms. JWKS verification pairs a public key with the token
+// signature; symmetric (HS*) algorithms and `none` must never be accepted even if
+// misconfigured, since they would let a caller forge tokens against a published key.
+const ALLOWED_JWT_ALGORITHMS = new Set([
+  "RS256", "RS384", "RS512",
+  "PS256", "PS384", "PS512",
+  "ES256", "ES384", "ES512",
+  "EdDSA",
+]);
+
+// Warn at most once per distinct rejected algorithm so a misconfiguration is visible
+// without spamming logs on every request (getOAuthConfig runs per request).
+const warnedUnsupportedAlgorithms = new Set<string>();
+
+// Authentik's forward-auth outpost injects its signed JWT as `X-authentik-jwt`.
+// Other reverse-proxy/OIDC setups can override the header name via OIDC_FORWARD_AUTH_HEADER.
+const DEFAULT_FORWARD_AUTH_HEADER = "x-authentik-jwt";
 
 const jwksByUri = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
@@ -70,11 +94,12 @@ export class AuthenticationError extends Error {
 //
 // Same-origin browser requests (no Authorization header) are allowed through one of
 // two paths:
-//   - AUTHENTIK_FORWARD_AUTH_ENABLED=true (real deployments behind the Authentik
-//     forward-auth outpost, e.g. Traefik ForwardAuth): every request that reaches
-//     this app already passed Authentik's login wall, and the outpost injects a
-//     signed `X-authentik-jwt` header as cryptographic proof of that. We verify its
-//     signature against Authentik's JWKS — this cannot be forged by a client that
+//   - Forward-auth enabled (OIDC_/AUTHENTIK_FORWARD_AUTH_ENABLED=true): real deployments
+//     behind a forward-auth outpost, e.g. Traefik ForwardAuth. Every request that reaches
+//     this app already passed the provider's login wall, and the outpost injects a
+//     signed JWT header (name from OIDC_FORWARD_AUTH_HEADER, default `x-authentik-jwt`)
+//     as cryptographic proof of that. We verify its
+//     signature against the provider's JWKS — this cannot be forged by a client that
 //     talks to the app directly, unlike a client-supplied Origin/Referer header.
 //   - Otherwise (local `npm run dev` / `docker compose up`, where no such proxy sits
 //     in front): fall back to a same-origin Origin/Referer check. This fallback is
@@ -110,8 +135,9 @@ export async function authenticateRequest(
   const correlationId = getCorrelationId(req);
 
   if (allowSameOrigin && !auth) {
-    if (process.env.AUTHENTIK_FORWARD_AUTH_ENABLED === "true") {
-      const proxyJwt = req.headers.get("x-authentik-jwt");
+    const config = getOAuthConfig();
+    if (config.forwardAuthEnabled) {
+      const proxyJwt = req.headers.get(config.forwardAuthHeader);
       const identity = proxyJwt ? await verifyForwardAuthJwt(proxyJwt) : null;
       return identity ? toPrincipal(identity, correlationId, false) : null;
     }
@@ -220,7 +246,7 @@ async function verifyForwardAuthJwt(token: string): Promise<VerifiedIdentity | n
     const result = await jwtVerify(token, getJwks(config.jwksUri), {
       issuer: config.issuer,
       audience: config.audiences,
-      algorithms: JWT_ALGORITHMS,
+      algorithms: config.algorithms,
     });
     const identity = identityFromPayload(result.payload, "forward-auth");
     if (!identity) return null;
@@ -239,7 +265,7 @@ async function verifyOAuthToken(token: string): Promise<VerifiedIdentity | null>
       const result = await jwtVerify(token, getJwks(provider.jwksUri), {
         issuer: provider.issuer,
         audience: config.audiences,
-        algorithms: JWT_ALGORITHMS,
+        algorithms: config.algorithms,
       });
       const identity = identityFromPayload(result.payload, "bearer");
       if (!identity) return null;
@@ -256,33 +282,54 @@ async function verifyOAuthToken(token: string): Promise<VerifiedIdentity | null>
 
 export function getOAuthConfig() {
   const baseUrl = (
-    process.env.AUTHENTIK_BASE_URL ?? DEFAULT_AUTHENTIK_BASE_URL
+    envAny("OIDC_BASE_URL", "AUTHENTIK_BASE_URL") ?? DEFAULT_AUTHENTIK_BASE_URL
   ).replace(/\/+$/, "");
-  const appSlug = process.env.AUTHENTIK_APP_SLUG ?? DEFAULT_AUTHENTIK_APP_SLUG;
-  const issuer =
-    normalizeIssuer(process.env.AUTHENTIK_ISSUER ?? `${baseUrl}/application/o/${appSlug}/`);
+  const appSlug =
+    envAny("OIDC_APP_SLUG", "AUTHENTIK_APP_SLUG") ?? DEFAULT_AUTHENTIK_APP_SLUG;
+  const explicitIssuer = envAny("OIDC_ISSUER", "AUTHENTIK_ISSUER");
+  const explicitJwksUri = envAny("OIDC_JWKS_URI", "AUTHENTIK_JWKS_URI");
+  // A generic provider supplies OIDC_ISSUER directly; the Authentik-style
+  // `${baseUrl}/application/o/${slug}/` shape is only the zero-config fallback.
+  const issuer = normalizeIssuer(
+    explicitIssuer ?? `${baseUrl}/application/o/${appSlug}/`,
+  );
   const audiences = unique([
-    ...splitEnvList(process.env.AUTHENTIK_AUDIENCES),
-    process.env.AUTHENTIK_AUDIENCE,
+    ...splitEnvList(envAny("OIDC_AUDIENCES", "AUTHENTIK_AUDIENCES")),
+    envAny("OIDC_AUDIENCE", "AUTHENTIK_AUDIENCE"),
     process.env.OAUTH_CLIENT_ID,
     DEFAULT_AUTHENTIK_APP_SLUG,
     ...getTrustedIssuers(baseUrl).map((trustedIssuer) =>
       issuerToAppSlug(trustedIssuer),
     ),
   ]);
-  const requiredScopes = (process.env.AUTHENTIK_REQUIRED_SCOPES ?? "")
-    .split(/\s+/)
-    .filter(Boolean);
+  const requiredScopes = splitEnvList(
+    envAny("OIDC_REQUIRED_SCOPES", "AUTHENTIK_REQUIRED_SCOPES"),
+  );
+  const algorithms = (() => {
+    const configured = splitEnvList(envAny("OIDC_JWT_ALGORITHMS")).filter((alg) => {
+      if (ALLOWED_JWT_ALGORITHMS.has(alg)) return true;
+      if (!warnedUnsupportedAlgorithms.has(alg)) {
+        warnedUnsupportedAlgorithms.add(alg);
+        logger.warn("ignoring unsupported JWT algorithm", {
+          code: "auth_jwt_algorithm_unsupported",
+          variable: "OIDC_JWT_ALGORITHMS",
+          algorithm: alg,
+        });
+      }
+      return false;
+    });
+    return configured.length > 0 ? configured : DEFAULT_JWT_ALGORITHMS;
+  })();
   const providers = getTrustedIssuers(baseUrl).map((trustedIssuer) => ({
     issuer: trustedIssuer,
     jwksUri: `${trustedIssuer}jwks/`,
   }));
-  if (process.env.AUTHENTIK_ISSUER || process.env.AUTHENTIK_JWKS_URI) {
+  // The primary provider is only added when an issuer/JWKS is explicitly set, so a
+  // pure trusted-issuers deployment isn't polluted with the Authentik default host.
+  if (explicitIssuer || explicitJwksUri) {
     providers.unshift({
       issuer,
-      jwksUri:
-        process.env.AUTHENTIK_JWKS_URI ??
-        `${issuer}jwks/`,
+      jwksUri: explicitJwksUri ?? `${issuer}jwks/`,
     });
   }
   const uniqueProviders = uniqueBy(providers, (provider) => provider.issuer);
@@ -293,18 +340,28 @@ export function getOAuthConfig() {
     audiences,
     providers: uniqueProviders,
     requiredScopes,
-    jwksUri: uniqueProviders[0]?.jwksUri ?? `${issuer}jwks/`,
+    algorithms,
+    forwardAuthEnabled:
+      envAny("OIDC_FORWARD_AUTH_ENABLED", "AUTHENTIK_FORWARD_AUTH_ENABLED") === "true",
+    forwardAuthHeader: (
+      envAny("OIDC_FORWARD_AUTH_HEADER") ?? DEFAULT_FORWARD_AUTH_HEADER
+    ).toLowerCase(),
+    jwksUri: uniqueProviders[0]?.jwksUri ?? explicitJwksUri ?? `${issuer}jwks/`,
     introspectionUri:
-      process.env.AUTHENTIK_INTROSPECTION_URI ??
+      envAny("OIDC_INTROSPECTION_URI", "AUTHENTIK_INTROSPECTION_URI") ??
       `${baseUrl}/application/o/introspect/`,
     introspectionClientId:
-      process.env.AUTHENTIK_INTROSPECTION_CLIENT_ID ??
-      process.env.OAUTH_CLIENT_ID ??
-      "",
+      envAny(
+        "OIDC_INTROSPECTION_CLIENT_ID",
+        "AUTHENTIK_INTROSPECTION_CLIENT_ID",
+        "OAUTH_CLIENT_ID",
+      ) ?? "",
     introspectionClientSecret:
-      process.env.AUTHENTIK_INTROSPECTION_CLIENT_SECRET ??
-      process.env.OAUTH_CLIENT_SECRET ??
-      "",
+      envAny(
+        "OIDC_INTROSPECTION_CLIENT_SECRET",
+        "AUTHENTIK_INTROSPECTION_CLIENT_SECRET",
+        "OAUTH_CLIENT_SECRET",
+      ) ?? "",
   };
 }
 
@@ -464,12 +521,29 @@ function getJwks(uri: string) {
 }
 
 function getTrustedIssuers(baseUrl: string): string[] {
-  const configured = splitEnvList(process.env.AUTHENTIK_TRUSTED_ISSUERS);
+  const configured = splitEnvList(
+    envAny("OIDC_TRUSTED_ISSUERS", "AUTHENTIK_TRUSTED_ISSUERS"),
+  );
   return unique(
     (configured.length > 0 ? configured : DEFAULT_AUTHENTIK_TRUSTED_ISSUERS).map(
-      (issuer) => normalizeIssuer(issuer.replace("${AUTHENTIK_BASE_URL}", baseUrl)),
+      (issuer) =>
+        normalizeIssuer(
+          issuer
+            .replace("${OIDC_BASE_URL}", baseUrl)
+            .replace("${AUTHENTIK_BASE_URL}", baseUrl),
+        ),
     ),
   );
+}
+
+// Returns the first environment variable that is set (non-empty after trimming),
+// letting provider-neutral OIDC_* names take precedence over legacy AUTHENTIK_*/OAUTH_*.
+function envAny(...names: string[]): string | undefined {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value !== undefined && value.trim() !== "") return value;
+  }
+  return undefined;
 }
 
 function splitEnvList(value: string | undefined): string[] {
