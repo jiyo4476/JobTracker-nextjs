@@ -45,6 +45,37 @@ export const companySizeEnum = pgEnum("company_size_enum", companySizeValues);
 // "hourly" → hourly_rate_min/hourly_rate_max (numeric dollars)
 export const salaryTypeEnum = pgEnum("salary_type_enum", salaryTypeValues);
 
+// ── users ────────────────────────────────────────────────────────────────────
+// DB-002: internal authorization principal for one authenticated human user.
+// Identity is the verified, normalized Authentik (issuer, subject) pair supplied by
+// AUTH-003 — never email, display name, headers, or a caller-supplied id. `email` and
+// `display_name` are mutable presentation metadata, never lookup keys.
+//
+// Ownership model (see Architecture Decision Register ADR-018): jobs and companies
+// stay GLOBAL/canonical (no user_id); per-user state lives in owner-scoped overlay
+// tables (user_job_priority) and the owner-scoped taxonomy/resume associations below.
+// Admin write access to the shared catalog is decided at the auth layer from an OIDC
+// group/scope claim; it is deliberately NOT stored here as an authorization source.
+
+export const users = pgTable(
+  "users",
+  {
+    id: serial("id").primaryKey(),
+    issuer: text("issuer").notNull(),
+    subject: text("subject").notNull(),
+    email: text("email"),
+    displayName: text("display_name"),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    // The normalized (issuer, subject) pair is the ONLY stable identity key and the
+    // conflict target for the transactional upsert in src/lib/users.ts.
+    uniqueIndex("users_issuer_subject_uq").on(t.issuer, t.subject),
+  ],
+);
+
 // ── companies ────────────────────────────────────────────────────────────────
 
 export const companies = pgTable("companies", {
@@ -151,6 +182,42 @@ export const jobs = pgTable(
   ]
 );
 
+// ── user_job_priority ──────────────────────────────────────────────────────────
+// DB-002: per-user overlay on the shared, global `jobs` catalog. `jobs.priority`
+// remains the canonical/admin default; this table lets each user rank or hide the
+// same shared job independently without owning the job row. Net-new table with no
+// existing readers, so it ships fully constrained and is the FIRST target of the
+// RLS rollout (migration 0009 — see src/db/migrations/0009_rls_user_job_priority.sql
+// and RLS Rollout Plan.md). RLS is keyed on the `app.user_id` session GUC set by
+// withUser() in src/db/session.ts; application owner predicates remain mandatory
+// regardless (ADR-005).
+
+export const userJobPriority = pgTable(
+  "user_job_priority",
+  {
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    priority: smallint("priority"), // 1–5, per-user override of jobs.priority
+    isHidden: boolean("is_hidden").default(false).notNull(),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    // Owner-first composite PK also indexes the (user_id) owner-scoped access path.
+    primaryKey({ columns: [t.userId, t.jobId] }),
+    index("user_job_priority_job_id_idx").on(t.jobId),
+    check(
+      "user_job_priority_priority_range_check",
+      sql`${t.priority} IS NULL OR ${t.priority} BETWEEN 1 AND 5`,
+    ),
+  ],
+);
+
 // ── Lookup tables ─────────────────────────────────────────────────────────────
 
 export const skills = pgTable("skills", {
@@ -237,12 +304,17 @@ export const jobCertifications = pgTable(
 export const userSkills = pgTable(
   "user_skills",
   {
+    // DB-002 expand phase: nullable owner FK added additively. Existing single-user
+    // routes keep working (they insert with a NULL owner) until the backfill assigns
+    // the legacy owner and the documented CONTRACT phase makes this NOT NULL and
+    // swaps the PK to (user_id, skill_id). See DB-002 task note.
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
     skillId: integer("skill_id")
       .notNull()
       .references(() => skills.id, { onDelete: "cascade" }),
     hasSkill: boolean("has_skill").default(false).notNull(),
   },
-  (t) => [primaryKey({ columns: [t.skillId] })]
+  (t) => [primaryKey({ columns: [t.skillId] }), index("user_skills_user_id_idx").on(t.userId)]
 );
 
 export const softwareFamiliarityEnum = pgEnum(
@@ -252,16 +324,26 @@ export const softwareFamiliarityEnum = pgEnum(
 
 export const keywordPreferenceEnum = pgEnum("keyword_preference_enum", keywordPreferenceValues);
 
-export const userSoftware = pgTable("user_software", {
-  softwareId: integer("software_id")
-    .primaryKey()
-    .references(() => software.id, { onDelete: "cascade" }),
-  familiarity: softwareFamiliarityEnum("familiarity"),
-});
+export const userSoftware = pgTable(
+  "user_software",
+  {
+    // DB-002 expand phase — see the note on userSkills.userId. CONTRACT phase makes
+    // this NOT NULL and swaps to a (user_id, software_id) composite PK.
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    softwareId: integer("software_id")
+      .primaryKey()
+      .references(() => software.id, { onDelete: "cascade" }),
+    familiarity: softwareFamiliarityEnum("familiarity"),
+  },
+  (t) => [index("user_software_user_id_idx").on(t.userId)],
+);
 
 export const userCertifications = pgTable(
   "user_certifications",
   {
+    // DB-002 expand phase — see the note on userSkills.userId. CONTRACT phase makes
+    // this NOT NULL and swaps to a (user_id, certification_id) composite PK.
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
     certificationId: integer("certification_id")
       .primaryKey()
       .references(() => certifications.id, { onDelete: "cascade" }),
@@ -275,15 +357,23 @@ export const userCertifications = pgTable(
       "user_certifications_dates_check",
       sql`${t.earnedDate} IS NULL OR ${t.expiresAt} IS NULL OR ${t.expiresAt} >= ${t.earnedDate}`,
     ),
+    index("user_certifications_user_id_idx").on(t.userId),
   ],
 );
 
-export const userKeywords = pgTable("user_keywords", {
-  keywordId: integer("keyword_id")
-    .primaryKey()
-    .references(() => keywords.id, { onDelete: "cascade" }),
-  preference: keywordPreferenceEnum("preference").default("interest").notNull(),
-});
+export const userKeywords = pgTable(
+  "user_keywords",
+  {
+    // DB-002 expand phase — see the note on userSkills.userId. CONTRACT phase makes
+    // this NOT NULL and swaps to a (user_id, keyword_id) composite PK.
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    keywordId: integer("keyword_id")
+      .primaryKey()
+      .references(() => keywords.id, { onDelete: "cascade" }),
+    preference: keywordPreferenceEnum("preference").default("interest").notNull(),
+  },
+  (t) => [index("user_keywords_user_id_idx").on(t.userId)],
+);
 
 // ── job_status_history ────────────────────────────────────────────────────────
 // Written every time interview_stage changes. Powers the recent activity feed.
@@ -305,13 +395,26 @@ export const jobStatusHistory = pgTable(
 // ── resume_versions ───────────────────────────────────────────────────────────
 // Labels-only — no file storage. jobs.resume_version stores the label string.
 
-export const resumeVersions = pgTable("resume_versions", {
-  id: serial("id").primaryKey(),
-  label: text("label").unique().notNull(),
-  date: date("date"),
-  notes: text("notes"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-});
+export const resumeVersions = pgTable(
+  "resume_versions",
+  {
+    id: serial("id").primaryKey(),
+    // DB-002 expand phase: nullable owner FK. Per-user uploaded resumes drive the
+    // per-user job priority overlay. The global `label` UNIQUE below is retained for
+    // now; the CONTRACT phase makes `user_id` NOT NULL and replaces the global unique
+    // with per-user `(user_id, label)` uniqueness once the routes are owner-aware.
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    label: text("label").unique().notNull(),
+    // Optional pointer to an uploaded resume file (storage key / relative path).
+    // Nullable and additive — actual file storage is a follow-up; the column exists
+    // so resume uploads have a home without a second migration.
+    filePath: text("file_path"),
+    date: date("date"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [index("resume_versions_user_id_idx").on(t.userId)],
+);
 
 // ── contacts ──────────────────────────────────────────────────────────────────
 
