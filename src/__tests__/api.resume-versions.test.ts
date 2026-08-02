@@ -217,7 +217,7 @@ describe('resume-versions error envelope on DB failure', () => {
     mockDb.select.mockImplementation(() => { throw new Error('db down') })
 
     const { GET } = await import('@/app/api/resume-versions/route')
-    await expectJsonError(await GET())
+    await expectJsonError(await GET(authedGet('http://localhost/api/resume-versions')))
   })
 
   it('PATCH returns JSON error, not HTML, when the update throws', async () => {
