@@ -2,6 +2,9 @@
 -- Generated 2026-08-01 from the attached exact company-name list.
 -- website is intentionally NULL when no official career page returned HTTP 2xx/3xx after redirects.
 -- NULL HQ/industry values preserve existing database values; they do not erase prior enrichment.
+-- HTTPS-only is intentional: insecure HTTP career links are treated as unavailable.
+-- Exact, case-sensitive names are intentional because this is a one-time update from a database export.
+-- Do not fuzzy-match aliases here: the unmatched-company query exposes drift without risking a wrong update.
 
 BEGIN;
 
