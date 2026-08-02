@@ -140,9 +140,12 @@ export type StructuredSalary = {
  * the structured columns with the same range the UI already shows.
  *
  * Annual ranges become integer cents (`dollars × 100`); hourly ranges become
- * `numeric(10,2)` strings plus an `annual_equivalent_*` in cents
- * (`hourly × 2080 × 100`). Returns `null` when the text can't be parsed into a
- * valid range, so callers can skip the row untouched.
+ * `numeric(10,2)` strings. Both branches populate `annual_equivalent_*` in cents
+ * so annual and hourly rows can be filtered and compared on one unified axis:
+ * for annual it equals the annual salary, for hourly it is `hourly × 2080 × 100`.
+ * `salaryType` — not the presence of `annual_equivalent_*` — is the discriminator
+ * between annual and hourly rows. Returns `null` when the text can't be parsed
+ * into a valid range, so callers can skip the row untouched.
  *
  * Used by `scripts/backfill-structured-salary.ts` to make the structured columns
  * authoritative for legacy rows that only ever had `salary_text`
