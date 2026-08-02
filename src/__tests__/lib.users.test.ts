@@ -42,6 +42,13 @@ describe('resolveUser', () => {
     expect(result).toEqual(ROW)
   })
 
+  it('throws a targeted error when the upsert returns no row', async () => {
+    mockInsert([])
+    await expect(
+      resolveUser({ issuer: ROW.issuer, subject: ROW.subject }),
+    ).rejects.toThrow(/upsert returned no row/)
+  })
+
   it('rejects an empty issuer or subject (identity must be non-empty)', async () => {
     await expect(resolveUser({ issuer: '  ', subject: 'x' })).rejects.toThrow(/issuer is required/)
     await expect(resolveUser({ issuer: 'x', subject: '' })).rejects.toThrow(/subject is required/)

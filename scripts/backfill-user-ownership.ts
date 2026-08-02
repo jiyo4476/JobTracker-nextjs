@@ -29,6 +29,7 @@
 import { sql } from "drizzle-orm";
 // Relative imports (not the `@/` alias) so the script runs under plain `tsx`.
 import { db } from "../src/db";
+import { setUserContext } from "../src/db/session";
 
 const APPLY = process.argv.includes("--apply");
 
@@ -42,14 +43,24 @@ const OVERLAY_TABLES = [
   "user_certifications",
   "user_keywords",
 ] as const;
+type OverlayTable = (typeof OVERLAY_TABLES)[number];
+
+function overlayTableIdentifier(table: OverlayTable): ReturnType<typeof sql.raw> {
+  if (!(OVERLAY_TABLES as readonly string[]).includes(table)) {
+    throw new Error(`backfill: unsupported overlay table ${table}`);
+  }
+  return sql.raw(`"${table}"`);
+}
 
 async function scalar(query: ReturnType<typeof sql>): Promise<number> {
   const rows = (await db.execute(query)) as unknown as Array<{ n: number | string }>;
   return Number(rows[0]?.n ?? 0);
 }
 
-async function nullOwnerCount(table: string): Promise<number> {
-  return scalar(sql.raw(`select count(*)::int as n from ${table} where user_id is null`));
+async function nullOwnerCount(table: OverlayTable): Promise<number> {
+  return scalar(
+    sql`select count(*)::int as n from ${overlayTableIdentifier(table)} where user_id is null`,
+  );
 }
 
 async function main(): Promise<void> {
@@ -104,17 +115,23 @@ async function main(): Promise<void> {
             updated_at = now()
       returning id
     `)) as unknown as Array<{ id: number }>;
-    const ownerId = Number(inserted[0].id);
+    const insertedOwner = inserted[0];
+    if (!insertedOwner) {
+      throw new Error("backfill: legacy owner upsert returned no row");
+    }
+    const ownerId = Number(insertedOwner.id);
     if (!Number.isInteger(ownerId) || ownerId <= 0) {
-      throw new Error(`backfill: unexpected legacy owner id ${inserted[0]?.id}`);
+      throw new Error(`backfill: unexpected legacy owner id ${insertedOwner.id}`);
     }
 
     // Owner context so the RLS-protected user_job_priority insert is permitted even
     // under a non-superuser application role (migration 0009).
-    await tx.execute(sql`select set_config('app.user_id', ${String(ownerId)}, true)`);
+    await setUserContext(tx, ownerId);
 
     for (const table of OVERLAY_TABLES) {
-      await tx.execute(sql.raw(`update ${table} set user_id = ${ownerId} where user_id is null`));
+      await tx.execute(
+        sql`update ${overlayTableIdentifier(table)} set user_id = ${ownerId} where user_id is null`,
+      );
     }
 
     await tx.execute(sql`
@@ -140,11 +157,9 @@ async function main(): Promise<void> {
   let orphans = 0;
   for (const table of OVERLAY_TABLES) {
     orphans += await scalar(
-      sql.raw(
-        `select count(*)::int as n from ${table} t ` +
-          `where t.user_id is not null and not exists ` +
-          `(select 1 from users u where u.id = t.user_id)`,
-      ),
+      sql`select count(*)::int as n from ${overlayTableIdentifier(table)} t
+          where t.user_id is not null and not exists
+            (select 1 from users u where u.id = t.user_id)`,
     );
   }
   const priorityRows = await scalar(sql`select count(*)::int as n from user_job_priority`);

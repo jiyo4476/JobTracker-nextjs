@@ -78,6 +78,12 @@ export async function resolveUser(identity: ResolvableIdentity): Promise<Resolve
       isActive: users.isActive,
     });
 
+  // `INSERT ... ON CONFLICT DO UPDATE ... RETURNING` yields exactly one row for a
+  // non-empty conflict target, but surface the impossible-in-practice empty case
+  // explicitly rather than returning `undefined` in violation of the return type
+  // (e.g. if a future permission/schema change ever suppressed RETURNING).
+  if (!row) throw new Error("resolveUser: upsert returned no row");
+
   return row;
 }
 
