@@ -41,7 +41,7 @@ Add these to `package.json` when scaffolding.
 |-------|--------|
 | Framework | Next.js 14 App Router, strict TypeScript |
 | ORM | Drizzle ORM |
-| Database | PostgreSQL 16 |
+| Database | PostgreSQL 18 |
 | Styling | Tailwind CSS + shadcn/ui |
 | Client data | TanStack Query (caching, optimistic updates) |
 | Tables | TanStack Table |
@@ -183,7 +183,7 @@ AUTHENTIK_FORWARD_AUTH_ENABLED=  # "true" only behind Authentik's forward-auth o
 ## Deployment
 
 - **App** → Vercel (zero-config). Set `NEXT_TELEMETRY_DISABLED=1`.
-- **DB** → Railway or Supabase (managed PostgreSQL 16).
+- **DB** → Railway or Supabase (managed PostgreSQL 18).
 - Dockerfile: 3-stage build (deps → builder → runner), non-root `nextjs` user, `output: 'standalone'` required in `next.config.ts`.
 
 ---
