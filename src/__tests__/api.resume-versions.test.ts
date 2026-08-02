@@ -213,11 +213,12 @@ describe('resume-versions error envelope on DB failure', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('GET returns JSON error, not HTML, when the query throws', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.select.mockImplementation(() => { throw new Error('db down') })
 
     const { GET } = await import('@/app/api/resume-versions/route')
-    await expectJsonError(await GET())
+    await expectJsonError(await GET(authedGet('http://localhost/api/resume-versions')))
   })
 
   it('PATCH returns JSON error, not HTML, when the update throws', async () => {
