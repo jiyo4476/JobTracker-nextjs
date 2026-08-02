@@ -2,11 +2,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AnalyticsClient } from '@/app/analytics/AnalyticsClient'
+import { AnalyticsClient, SkillDemandTooltip } from '@/app/analytics/AnalyticsClient'
 
 const mocks = vi.hoisted(() => ({
   analytics: vi.fn(),
   taxonomy: vi.fn(),
+  tooltip: vi.fn(),
 }))
 
 vi.mock('@/lib/queries', () => ({
@@ -28,7 +29,10 @@ vi.mock('recharts', () => ({
   XAxis: () => null,
   YAxis: () => null,
   CartesianGrid: () => null,
-  Tooltip: () => null,
+  Tooltip: (props: unknown) => {
+    mocks.tooltip(props)
+    return null
+  },
   Legend: () => null,
 }))
 
@@ -36,9 +40,59 @@ const initialState = { category: 'skills' as const, from: '2026-01-01', to: '', 
 
 describe('analytics taxonomy reporting', () => {
   beforeEach(() => {
+    mocks.tooltip.mockClear()
     mocks.analytics.mockReturnValue({ data: { skillDemandOverTime: [], salaryDistribution: [], platformBreakdown: [], remoteVsOnsiteByWeek: [] }, isLoading: false, isError: false, refetch: vi.fn() })
     mocks.taxonomy.mockReturnValue({ data: { category: 'skills', percentage_denominator: 'skill assignments', values: [{ name: 'TypeScript', count: 4, percentage: 40 }] }, isLoading: false, isError: false, refetch: vi.fn() })
     window.history.replaceState(null, '', '/analytics')
+  })
+
+  it('bounds the skill-demand tooltip and keeps every value scrollable', () => {
+    render(<SkillDemandTooltip
+      active
+      label="2026-06-01"
+      payload={Array.from({ length: 15 }, (_, index) => ({
+        color: `rgb(${index}, 0, 0)`,
+        dataKey: `skill-${index + 1}`,
+        name: `Skill ${index + 1}`,
+        value: index + 10,
+      }))}
+    />)
+
+    const tooltip = screen.getByRole('group', { name: /Skill demand for 2026-06-01/ })
+    expect(tooltip.className).toContain('max-h-40')
+    expect(tooltip.className).toContain('overflow-y-auto')
+    expect(tooltip.getAttribute('tabindex')).toBe('0')
+    expect(screen.getByText('Skill 15')).toBeTruthy()
+    expect(screen.getByText('24')).toBeTruthy()
+  })
+
+  it('uses the bounded tooltip only for skill demand and exposes a non-hover summary', () => {
+    mocks.analytics.mockReturnValue({
+      data: {
+        skillDemandOverTime: [
+          { month: '2026-06-01', skill: 'AWS', count: 139 },
+          { month: '2026-06-01', skill: 'Azure', count: 85 },
+        ],
+        salaryDistribution: [],
+        platformBreakdown: [],
+        remoteVsOnsiteByWeek: [],
+      },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    })
+
+    render(<AnalyticsClient initialState={initialState} />)
+
+    expect(screen.getByText('Skill demand over time')).toBeTruthy()
+    expect(screen.getByRole('columnheader', { name: 'Date' }).getAttribute('scope')).toBe('col')
+    expect(screen.getByRole('columnheader', { name: 'AWS' }).getAttribute('scope')).toBe('col')
+    expect(screen.getByRole('rowheader', { name: '2026-06-01' }).getAttribute('scope')).toBe('row')
+    expect(screen.getByRole('cell', { name: '139' })).toBeTruthy()
+    expect(mocks.tooltip).toHaveBeenCalledWith(expect.objectContaining({
+      content: expect.anything(),
+      wrapperStyle: expect.objectContaining({ pointerEvents: 'auto' }),
+    }))
   })
 
   it('names the active category throughout the report and exposes a screen-reader summary', () => {
