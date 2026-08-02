@@ -106,6 +106,11 @@ describe('scrapePayloadSchema', () => {
     expect(scrapePayloadSchema.safeParse({ ...validPayload, date_posted: '' }).success).toBe(false)
   })
 
+  it('rejects impossible calendar dates for date_posted', () => {
+    expect(scrapePayloadSchema.safeParse({ ...validPayload, date_posted: '2024-99-99' }).success).toBe(false)
+    expect(scrapePayloadSchema.safeParse({ ...validPayload, date_posted: '2026-02-30' }).success).toBe(false)
+  })
+
   it('accepts date_posted being absent (optional)', () => {
     const result = scrapePayloadSchema.safeParse(validPayload)
     expect(result.success).toBe(true)
@@ -171,6 +176,12 @@ describe('jobPatchSchema', () => {
       date_applied: '',
       application_deadline: '',
     }).success).toBe(true)
+  })
+
+  it('rejects impossible calendar dates for date fields', () => {
+    expect(jobPatchSchema.safeParse({ date_posted: '2024-99-99' }).success).toBe(false)
+    expect(jobPatchSchema.safeParse({ date_applied: '2026-02-30' }).success).toBe(false)
+    expect(jobPatchSchema.safeParse({ application_deadline: '2026-13-01' }).success).toBe(false)
   })
 
   it('accepts date fields being absent (optional)', () => {

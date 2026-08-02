@@ -1,28 +1,13 @@
 import { z } from 'zod'
 import { taxonomyCategorySchema, type TaxonomyCategory } from '@/lib/taxonomy'
 import { softwareFamiliarityValues, keywordPreferenceValues } from '@/lib/enums'
+import { httpUrlSchema, isoDateSchema } from '@/lib/validators'
 
 export const profileCategorySchema = taxonomyCategorySchema
 export type ProfileCategory = TaxonomyCategory
 
 export const softwareFamiliaritySchema = z.enum(softwareFamiliarityValues)
 export const keywordPreferenceSchema = z.enum(keywordPreferenceValues)
-
-const isoDateSchema = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be ISO date (YYYY-MM-DD)')
-  .refine((value) => {
-    const [year, month, day] = value.split('-').map(Number)
-    const date = new Date(Date.UTC(year, month - 1, day))
-    return date.getUTCFullYear() === year &&
-      date.getUTCMonth() === month - 1 &&
-      date.getUTCDate() === day
-  }, 'Must be a valid calendar date')
-
-const httpUrlSchema = z.string().url().max(2_000).refine(
-  (value) => value.startsWith('http://') || value.startsWith('https://'),
-  'Must use http or https',
-)
 
 const associationTargetSchema = z.object({
   taxonomy_id: z.number().int().positive().optional(),
