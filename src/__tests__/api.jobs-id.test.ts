@@ -26,6 +26,7 @@ vi.mock('@/db/schema', () => ({
 
 import { requireAuthentication } from '@/lib/auth'
 import { db } from '@/db'
+import { authedGet } from './helpers/authed-request'
 
 function makeChain(result: unknown) {
   const chain: Record<string, unknown> = {}
@@ -62,23 +63,34 @@ describe('GET /api/jobs/[id]', () => {
     vi.clearAllMocks()
   })
 
-  it('returns 400 for non-numeric id', async () => {
+  it('returns 401 without auth (response embeds contact PII)', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(false)
     const { GET } = await import('@/app/api/jobs/[id]/route')
-    const req = new NextRequest('http://localhost/api/jobs/abc')
+    const req = new NextRequest('http://localhost/api/jobs/1')
+    const res = await GET(req, makeParams('1'))
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 400 for non-numeric id', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    const { GET } = await import('@/app/api/jobs/[id]/route')
+    const req = authedGet('http://localhost/api/jobs/abc')
     const res = await GET(req, makeParams('abc'))
     expect(res.status).toBe(400)
   })
 
   it('returns 404 when job not found', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.select.mockReturnValue(makeChain([]))
     const { GET } = await import('@/app/api/jobs/[id]/route')
-    const req = new NextRequest('http://localhost/api/jobs/999')
+    const req = authedGet('http://localhost/api/jobs/999')
     const res = await GET(req, makeParams('999'))
     expect(res.status).toBe(404)
   })
 
   it('returns 200 with job and related arrays', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     let callCount = 0
     mockDb.select.mockImplementation(() => {
@@ -88,7 +100,7 @@ describe('GET /api/jobs/[id]', () => {
     })
 
     const { GET } = await import('@/app/api/jobs/[id]/route')
-    const req = new NextRequest('http://localhost/api/jobs/1')
+    const req = authedGet('http://localhost/api/jobs/1')
     const res = await GET(req, makeParams('1'))
     expect(res.status).toBe(200)
     const json = await res.json()

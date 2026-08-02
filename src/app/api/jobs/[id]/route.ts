@@ -11,6 +11,12 @@ import {
 import { eq } from 'drizzle-orm'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // The job detail response embeds contact rows (email/phone PII) below, so this
+  // read is gated the same way the dedicated /contacts route is — otherwise the
+  // contacts PII gate would be trivially bypassable through this route.
+  const authError = await requireAuth(req)
+  if (authError) return authError
+
   const { id } = await params
   const jobId = parseInt(id)
   if (isNaN(jobId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
@@ -83,8 +89,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const denied = await requireAuth(req)
-  if (denied) return denied
+  const authError = await requireAuth(req)
+  if (authError) return authError
 
   const { id } = await params
   const jobId = parseInt(id)
@@ -186,8 +192,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const denied = await requireAuth(req)
-  if (denied) return denied
+  const authError = await requireAuth(req)
+  if (authError) return authError
 
   const { id } = await params
   const jobId = parseInt(id)
