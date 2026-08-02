@@ -4,6 +4,37 @@ import type { z } from 'zod'
 import { requireAuthentication } from '@/lib/auth'
 import { logger, serializeError } from '@/lib/logger'
 
+// Default and hard-cap page sizes for the otherwise-unbounded lookup/company
+// list endpoints. These previously returned every row (a full table scan whose
+// result grows without bound as the scraper adds tags); a bounded page keeps the
+// response — and the memory it takes to build — predictable.
+export const DEFAULT_LIST_LIMIT = 500
+export const MAX_LIST_LIMIT = 500
+
+/**
+ * Parse `?limit` and `?page` for a bounded list endpoint. `limit` defaults to
+ * DEFAULT_LIST_LIMIT and is clamped to [1, MAX_LIST_LIMIT]; `page` defaults to 1
+ * (1-indexed). Any non-numeric / out-of-range input falls back to the defaults
+ * instead of erroring, so callers never turn bad query strings into a 500.
+ *
+ * `req` is optional so the same handler can be unit-tested with `GET()`.
+ */
+export function parseListPagination(req?: NextRequest): { limit: number; offset: number } {
+  const params = req?.nextUrl.searchParams
+
+  const rawLimit = Number(params?.get('limit') ?? DEFAULT_LIST_LIMIT)
+  const limit =
+    Number.isFinite(rawLimit) && rawLimit > 0
+      ? Math.min(Math.floor(rawLimit), MAX_LIST_LIMIT)
+      : DEFAULT_LIST_LIMIT
+
+  const rawPage = Number(params?.get('page') ?? 1)
+  const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1
+
+  const offset = (page - 1) * limit
+  return { limit, offset: Number.isSafeInteger(offset) ? offset : 0 }
+}
+
 // Shared response/parse helpers for API route handlers. These centralize the
 // error envelopes that route tests assert on ({ error: '…' }) so the shape lives
 // in one place instead of being copy-pasted into every handler.

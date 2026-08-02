@@ -1,17 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireAuth } from '@/lib/http'
+import { upsertLookupIds } from '@/lib/db-utils'
 import { extractTags } from '@/lib/nlp-extract'
 import { logger } from '@/lib/logger'
 import { jobs, skills, jobSkills } from '@/db/schema'
-import { inArray, sql } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 
 // POST /api/jobs/backfill-skills
-// Legacy skills-only backfill. Prefer POST /api/jobs/backfill-tags, which is
-// cursor-bounded and attaches software and certifications as well (TAXONOMY-001).
+// Legacy skills-only backfill. Prefer POST /api/jobs/backfill-tags, which
+// attaches software and certifications as well (TAXONOMY-001).
 // Re-runs NLP skill extraction on every job that has a description but no linked skills.
 // Safe to call multiple times — uses INSERT ... ON CONFLICT DO NOTHING.
-// Accepts ?limit=N (default 100, max 500) to keep each call bounded.
+//
+// Params:
+//   ?limit=N     batch size (default 100, max 500)
+//   ?cursor=ID   resume after this job id (exclusive; default 0)
+//
+// The candidate query is ordered by id and bounded by `id > cursor`, and the
+// returned `next_cursor` advances past EVERY candidate examined — including jobs
+// whose descriptions extract zero skills. Without this, zero-skill jobs match the
+// `NOT EXISTS (job_skills)` filter on every run and were reprocessed forever with
+// no forward progress. Callers sweep by passing the returned next_cursor until
+// `done` is true.
 // Each job's writes run in a transaction so a mid-run timeout leaves no partial rows.
 export async function POST(req: NextRequest) {
   const denied = await requireAuth(req)
@@ -23,69 +34,65 @@ export async function POST(req: NextRequest) {
       ? Math.min(requestedLimit, 500)
       : 100
 
-  // Find jobs that have a description but zero linked skills
+  const requestedCursor = Number(req.nextUrl.searchParams.get('cursor') ?? '0')
+  const cursor = Number.isFinite(requestedCursor) && requestedCursor > 0 ? requestedCursor : 0
+
+  // Find jobs past the cursor that have a description but zero linked skills,
+  // ordered by id so the cursor makes deterministic forward progress.
   const candidates = await db
     .select({ id: jobs.id, jobDescription: jobs.jobDescription })
     .from(jobs)
     .where(
-      sql`${jobs.jobDescription} is not null
+      sql`${jobs.id} > ${cursor}
+        and ${jobs.jobDescription} is not null
         and ${jobs.jobDescription} <> ''
         and not exists (
           select 1 from job_skills where job_skills.job_id = ${jobs.id}
         )`
     )
+    .orderBy(jobs.id)
     .limit(limit)
 
-  logger.info('backfill-skills: candidates found', { count: candidates.length, limit })
+  const done = candidates.length < limit
+
+  logger.info('backfill-skills: candidates found', { count: candidates.length, limit, cursor })
 
   let processed = 0
   let skillsLinked = 0 // upper bound — counts IDs resolved, not net-new junction rows
+  let nextCursor = cursor
 
   for (const job of candidates) {
+    // Advance the cursor for every candidate examined, so a zero-skill job is
+    // not revisited on the next page of the same sweep.
+    nextCursor = job.id
     if (!job.jobDescription) continue
 
     const { skills: extracted } = extractTags(job.jobDescription)
     if (extracted.length === 0) continue
 
-    const uniqueSkillNames = [...new Set(extracted)]
-
     // Wrap per-job writes in a transaction so a timeout or crash mid-loop
     // doesn't leave partial job_skills rows (which would exclude the job from
     // the next backfill run via the NOT EXISTS check).
     await db.transaction(async tx => {
-      // Batch insert all skill names at once; get IDs for newly inserted rows
-      const insertedSkills = await tx
-        .insert(skills)
-        .values(uniqueSkillNames.map(name => ({ name })))
-        .onConflictDoNothing()
-        .returning({ id: skills.id, name: skills.name })
-
-      // For names that conflicted (already existed), fetch their IDs in one query
-      const insertedNames = new Set(insertedSkills.map(r => r.name))
-      const missingNames = uniqueSkillNames.filter(name => !insertedNames.has(name))
-
-      let existingSkills: { id: number; name: string }[] = []
-      if (missingNames.length > 0) {
-        existingSkills = await tx
-          .select({ id: skills.id, name: skills.name })
-          .from(skills)
-          .where(inArray(skills.name, missingNames))
-      }
-
-      const skillRows = [...insertedSkills, ...existingSkills]
-
-      if (skillRows.length > 0) {
+      const skillIds = await upsertLookupIds(tx, skills, extracted)
+      if (skillIds.length > 0) {
         await tx
           .insert(jobSkills)
-          .values(skillRows.map(s => ({ jobId: job.id, skillId: s.id, isRequired: true })))
+          .values(skillIds.map(skillId => ({ jobId: job.id, skillId, isRequired: true })))
           .onConflictDoNothing()
-        skillsLinked += skillRows.length
+        skillsLinked += skillIds.length
       }
     })
 
     processed++
   }
 
-  logger.info('backfill-skills: done', { processed, skillsLinked })
-  return NextResponse.json({ processed, skillsLinked, candidates: candidates.length })
+  logger.info('backfill-skills: done', { processed, skillsLinked, nextCursor, done })
+  return NextResponse.json({
+    processed,
+    skillsLinked,
+    candidates: candidates.length,
+    next_cursor: nextCursor,
+    done,
+  })
 }

@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { requireAuth } from '@/lib/http'
+import { upsertLookupIds } from '@/lib/db-utils'
 import { extractTags } from '@/lib/nlp-extract'
 import { logger, serializeError } from '@/lib/logger'
 import {
   jobs, skills, software as softwareTable, certifications,
   jobSkills, jobSoftware, jobCertifications,
 } from '@/db/schema'
-import { inArray, sql } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 
 // POST /api/jobs/backfill-tags
 // Cursor-bounded, idempotent taxonomy backfill. Re-runs NLP extraction on every
@@ -25,35 +26,6 @@ import { inArray, sql } from 'drizzle-orm'
 // Response reports per-category net-new link counts (junction rows actually
 // inserted), plus next_cursor/done for pagination. Safe to call repeatedly —
 // all inserts use ON CONFLICT DO NOTHING.
-type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
-type LookupTable = typeof skills | typeof softwareTable | typeof certifications
-
-async function resolveLookupIds(
-  tx: DbTransaction,
-  table: LookupTable,
-  names: string[],
-): Promise<number[]> {
-  if (names.length === 0) return []
-
-  const inserted = await tx
-    .insert(table)
-    .values(names.map(name => ({ name })))
-    .onConflictDoNothing()
-    .returning({ id: table.id, name: table.name })
-
-  const insertedNames = new Set(inserted.map(r => r.name))
-  const missingNames = names.filter(name => !insertedNames.has(name))
-
-  let existing: { id: number }[] = []
-  if (missingNames.length > 0) {
-    existing = await tx
-      .select({ id: table.id })
-      .from(table)
-      .where(inArray(table.name, missingNames))
-  }
-
-  return [...inserted.map(r => r.id), ...existing.map(r => r.id)]
-}
 
 export async function POST(req: NextRequest) {
   const denied = await requireAuth(req)
@@ -138,9 +110,9 @@ export async function POST(req: NextRequest) {
       // at the failed job.
       const counts = await db.transaction(async tx => {
         const [skillIds, softwareIds, certIds] = [
-          await resolveLookupIds(tx, skills, tags.skills),
-          await resolveLookupIds(tx, softwareTable, tags.software),
-          await resolveLookupIds(tx, certifications, tags.certifications),
+          await upsertLookupIds(tx, skills, tags.skills),
+          await upsertLookupIds(tx, softwareTable, tags.software),
+          await upsertLookupIds(tx, certifications, tags.certifications),
         ]
 
         const result = { skills: 0, software: 0, certifications: 0 }
