@@ -32,7 +32,7 @@ describe('requireAuthentication forward-auth JWT path (AUTHENTIK_FORWARD_AUTH_EN
 
   it('accepts a request with a valid X-authentik-jwt header', async () => {
     vi.mocked(jwtVerify).mockResolvedValue({
-      payload: { iss: OAUTH_ENV.AUTHENTIK_ISSUER },
+      payload: { iss: OAUTH_ENV.AUTHENTIK_ISSUER, sub: 'user-1' },
       protectedHeader: { alg: 'RS256' },
       key: undefined,
     } as never)
@@ -50,7 +50,7 @@ describe('requireAuthentication forward-auth JWT path (AUTHENTIK_FORWARD_AUTH_EN
   // Traefik ForwardAuth hop.
   it('verifies the JWT audience against config.audiences, not just issuer/signature', async () => {
     vi.mocked(jwtVerify).mockResolvedValue({
-      payload: { iss: OAUTH_ENV.AUTHENTIK_ISSUER },
+      payload: { iss: OAUTH_ENV.AUTHENTIK_ISSUER, sub: 'user-1' },
       protectedHeader: { alg: 'RS256' },
       key: undefined,
     } as never)

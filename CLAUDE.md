@@ -176,6 +176,12 @@ AUTHENTIK_AUDIENCE=job-tracker
 AUTHENTIK_TRUSTED_ISSUERS="https://auth.yjimmy.dev/application/o/job-tracker-scraper/ https://auth.yjimmy.dev/application/o/job-tracker-extension/ https://auth.yjimmy.dev/application/o/job-tracker-scraper/"
 AUTHENTIK_AUDIENCES="job-tracker-scraper job-tracker-extension"
 AUTHENTIK_FORWARD_AUTH_ENABLED=  # "true" only behind Authentik's forward-auth outpost (see src/lib/auth.ts)
+AUTHENTIK_SERVICE_ISSUERS=https://auth.yjimmy.dev/application/o/job-tracker-scraper/
+AUTHENTIK_SERVICE_PRINCIPALS='[{"issuer":"<verified issuer>","subject":"<verified subject>","capabilities":["jobs:ingest"]}]'
+# Local development only; ignored when NODE_ENV=production:
+AUTH_DEV_ALLOW_SAME_ORIGIN=true
+AUTH_DEV_ISSUER=http://local-development/
+AUTH_DEV_SUBJECT=developer
 ```
 
 ---

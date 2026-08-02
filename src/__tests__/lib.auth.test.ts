@@ -53,7 +53,10 @@ describe('requireAuthentication', () => {
     await expect(requireAuthentication(req)).resolves.toBe(false)
   })
 
-  it('returns true for same-origin request with no auth header and a matching origin', async () => {
+  it('returns true only for explicitly configured local-development same-origin identity', async () => {
+    process.env.AUTH_DEV_ALLOW_SAME_ORIGIN = 'true'
+    process.env.AUTH_DEV_ISSUER = 'http://local-development/'
+    process.env.AUTH_DEV_SUBJECT = 'developer'
     const req = new NextRequest('http://localhost/api/test', {
       headers: { origin: 'http://localhost', host: 'localhost' },
     })

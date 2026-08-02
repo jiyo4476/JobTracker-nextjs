@@ -37,7 +37,7 @@ describe('requireAuthentication OAuth2/JWT verification', () => {
 
   it('accepts a Bearer token that passes JWKS verification and has no required scopes', async () => {
     vi.mocked(jwtVerify).mockResolvedValue({
-      payload: { iss: OAUTH_ENV.AUTHENTIK_ISSUER, aud: OAUTH_ENV.AUTHENTIK_AUDIENCE },
+      payload: { iss: OAUTH_ENV.AUTHENTIK_ISSUER, sub: 'user-1', aud: OAUTH_ENV.AUTHENTIK_AUDIENCE },
       protectedHeader: { alg: 'RS256' },
       key: undefined,
     } as never)
@@ -51,7 +51,7 @@ describe('requireAuthentication OAuth2/JWT verification', () => {
   it('accepts a Bearer token whose scope claim contains all required scopes', async () => {
     process.env.AUTHENTIK_REQUIRED_SCOPES = 'api.read api.write'
     vi.mocked(jwtVerify).mockResolvedValue({
-      payload: { scope: 'api.read api.write openid' },
+      payload: { iss: OAUTH_ENV.AUTHENTIK_ISSUER, sub: 'user-1', scope: 'api.read api.write openid' },
       protectedHeader: { alg: 'RS256' },
       key: undefined,
     } as never)
@@ -65,7 +65,7 @@ describe('requireAuthentication OAuth2/JWT verification', () => {
   it('rejects a Bearer token missing a required scope', async () => {
     process.env.AUTHENTIK_REQUIRED_SCOPES = 'api.read api.write'
     vi.mocked(jwtVerify).mockResolvedValue({
-      payload: { scope: 'api.read' },
+      payload: { iss: OAUTH_ENV.AUTHENTIK_ISSUER, sub: 'user-1', scope: 'api.read' },
       protectedHeader: { alg: 'RS256' },
       key: undefined,
     } as never)
@@ -94,6 +94,7 @@ describe('requireAuthentication OAuth2/JWT verification', () => {
       json: vi.fn().mockResolvedValue({
         active: true,
         iss: OAUTH_ENV.AUTHENTIK_ISSUER,
+        sub: 'service-1',
         aud: 'client-id',
         client_id: 'client-id',
         scope: 'openid profile email',
@@ -116,6 +117,7 @@ describe('requireAuthentication OAuth2/JWT verification', () => {
       json: vi.fn().mockResolvedValue({
         active: true,
         iss: OAUTH_ENV.AUTHENTIK_ISSUER,
+        sub: 'service-1',
         aud: 'wrong-audience',
         client_id: 'client-id',
         scope: 'openid profile email',
@@ -139,7 +141,7 @@ describe('requireAuthentication OAuth2/JWT verification', () => {
     vi.mocked(jwtVerify)
       .mockRejectedValueOnce(new Error('wrong issuer'))
       .mockResolvedValueOnce({
-        payload: { scope: 'openid profile email' },
+        payload: { iss: 'https://auth.yjimmy.dev/application/o/job-tracker-extension/', sub: 'user-1', scope: 'openid profile email' },
         protectedHeader: { alg: 'RS256' },
         key: undefined,
       } as never)
