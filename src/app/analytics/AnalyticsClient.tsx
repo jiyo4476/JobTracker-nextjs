@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -45,6 +45,37 @@ function ErrorState({ label, retry }: { label: string; retry: () => void }) {
   )
 }
 
+export function SkillDemandTooltip({
+  active,
+  label,
+  payload,
+}: {
+  active?: boolean
+  label?: ReactNode
+  payload?: Array<{ color?: string; name?: ReactNode; value?: number | string }>
+}) {
+  if (!active || !payload?.length) return null
+
+  return (
+    <div
+      aria-label={`Skill demand for ${String(label ?? '')}. Scroll for all skills.`}
+      className="max-h-40 max-w-[min(18rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain rounded-md border bg-background px-3 py-2 text-sm shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      role="group"
+      tabIndex={0}
+    >
+      <p className="sticky top-0 bg-background pb-1 font-medium">{label}</p>
+      <ul className="space-y-1">
+        {payload.map((entry, index) => (
+          <li key={`${String(entry.name)}-${index}`} className="flex items-baseline justify-between gap-3">
+            <span className="min-w-0 break-words" style={{ color: entry.color }}>{entry.name}</span>
+            <span className="shrink-0 tabular-nums" style={{ color: entry.color }}>{entry.value}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function SkillDemandChart({ data }: { data: SkillDemandRow[] }) {
   if (!data.length) return <EmptyState label="skill trend" />
   const skills = [...new Set(data.map(row => row.skill))]
@@ -52,7 +83,25 @@ function SkillDemandChart({ data }: { data: SkillDemandRow[] }) {
     ['month', month],
     ...skills.map(skill => [skill, data.find(row => row.month === month && row.skill === skill)?.count ?? 0]),
   ]))
-  return <ResponsiveContainer width="100%" height={208}><LineChart data={byMonth}><CartesianGrid strokeDasharray="3 3" className="stroke-border" /><XAxis dataKey="month" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Legend />{skills.map((skill, index) => <Line key={skill} type="monotone" dataKey={skill} stroke={COLORS[index % COLORS.length]} dot={false} strokeWidth={2} />)}</LineChart></ResponsiveContainer>
+  return (
+    <>
+      <ResponsiveContainer width="100%" height={208}>
+        <LineChart data={byMonth}>
+          <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+          <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+          <YAxis tick={{ fontSize: 11 }} />
+          <Tooltip content={<SkillDemandTooltip />} wrapperStyle={{ pointerEvents: 'auto', zIndex: 10 }} />
+          <Legend />
+          {skills.map((skill, index) => <Line key={skill} type="monotone" dataKey={skill} stroke={COLORS[index % COLORS.length]} dot={false} strokeWidth={2} />)}
+        </LineChart>
+      </ResponsiveContainer>
+      <table className="sr-only">
+        <caption>Skill demand over time</caption>
+        <thead><tr><th>Date</th>{skills.map(skill => <th key={skill}>{skill}</th>)}</tr></thead>
+        <tbody>{byMonth.map(row => <tr key={String(row.month)}><th>{row.month}</th>{skills.map(skill => <td key={skill}>{row[skill]}</td>)}</tr>)}</tbody>
+      </table>
+    </>
+  )
 }
 
 function SalaryChart({ data }: { data: SalaryDistributionRow[] }) {
