@@ -44,4 +44,26 @@ export const db = new Proxy({} as Database, {
     const value = Reflect.get(activeDatabase, property, activeDatabase);
     return typeof value === "function" ? value.bind(activeDatabase) : value;
   },
+  has(_target, property) {
+    return Reflect.has(getDatabase(), property);
+  },
+  ownKeys() {
+    return Reflect.ownKeys(getDatabase());
+  },
+  getOwnPropertyDescriptor(_target, property) {
+    const activeDatabase = getDatabase();
+    const descriptor = Reflect.getOwnPropertyDescriptor(activeDatabase, property);
+    if (!descriptor) return undefined;
+
+    // The proxy target is intentionally empty and extensible. Report reflected
+    // database properties as configurable so the descriptor remains compatible
+    // with that target while preserving the active database's other attributes.
+    return {
+      ...descriptor,
+      configurable: true,
+      ...(typeof descriptor.value === "function"
+        ? { value: descriptor.value.bind(activeDatabase) }
+        : {}),
+    };
+  },
 });

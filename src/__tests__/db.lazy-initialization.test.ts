@@ -22,7 +22,9 @@ describe("database initialization", () => {
     delete process.env.DATABASE_URL;
     const { db, MissingDatabaseUrlError } = await import("@/db");
 
-    expect(() => db.select).toThrow(MissingDatabaseUrlError);
+    expect(() => {
+      void db.select;
+    }).toThrow(MissingDatabaseUrlError);
   });
 
   it("creates the database interface lazily when DATABASE_URL is configured", async () => {
@@ -30,5 +32,15 @@ describe("database initialization", () => {
     const { db } = await import("@/db");
 
     expect(db.select).toBeTypeOf("function");
+    expect("select" in db).toBe(true);
+    expect(Reflect.ownKeys(db)).toContain("query");
+
+    const descriptor = Object.getOwnPropertyDescriptor(db, "query");
+    expect(descriptor).toMatchObject({
+      configurable: true,
+      enumerable: true,
+      writable: true,
+    });
+    expect(descriptor?.value).toBeTypeOf("object");
   });
 });
