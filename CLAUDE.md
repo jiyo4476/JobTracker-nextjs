@@ -79,7 +79,7 @@ src/
 
 ## API Routes (`src/app/api/`)
 
-External `POST`, `PATCH`, and `DELETE` callers require `Authorization: Bearer <OAuth2 access token>` issued by an explicitly trusted Authentik issuer at `https://auth.yjimmy.dev`. Same-origin browser calls are allowed without an Authorization header because Authentik protects the web app in front of Next.js. Authentik remains the supported provider; another provider requires a separately configured and tested trusted OIDC/JWKS or token-introspection adapter.
+External `POST`, `PATCH`, and `DELETE` callers require `Authorization: Bearer <OAuth2 access token>` issued by an explicitly trusted issuer. The verifier is provider-agnostic — any standard OAuth2/OIDC provider works by pointing the `OIDC_*` env vars (issuer, JWKS URI, audience, allowed algorithms) at it; Authentik at `https://auth.yjimmy.dev` is the default via the legacy `AUTHENTIK_*` fallbacks. Same-origin browser calls are allowed without an Authorization header because the provider (behind a reverse proxy / forward-auth outpost) protects the web app in front of Next.js. See the [Environment Variables](#environment-variables) section for the full configuration surface.
 
 | Method | Route | Description |
 |--------|-------|-------------|
@@ -168,12 +168,45 @@ Python scraper → POST /api/scrape
 
 ```
 DATABASE_URL=postgresql://...
+```
+
+### OAuth2 / OIDC (provider-agnostic)
+
+Auth is not tied to Authentik. `src/lib/auth.ts` verifies tokens with any standard
+OAuth2/OIDC provider (Auth0, Keycloak, Okta, Cognito, Google, …) via JWKS signature
+verification and optional RFC 7662 token introspection. Prefer the provider-neutral
+`OIDC_*` variables below; the legacy `AUTHENTIK_*` (and `OAUTH_CLIENT_*`) names are still
+read as fallbacks so existing Authentik deployments keep working unchanged. `OIDC_*`
+takes precedence over `AUTHENTIK_*` when both are set.
+
+```
+# Minimal generic provider (e.g. Keycloak):
+OIDC_ISSUER=https://id.example.com/realms/jobs/
+OIDC_JWKS_URI=https://id.example.com/realms/jobs/protocol/openid-connect/certs
+OIDC_AUDIENCE=job-tracker-api
+OIDC_JWT_ALGORITHMS=RS256          # space/comma list; default RS256 (use ES256/PS256 as needed)
+OIDC_REQUIRED_SCOPES=              # space/comma list of scopes the token must carry
+OIDC_TRUSTED_ISSUERS=             # extra issuers (each JWKS derived as ${issuer}jwks/ unless set)
+OIDC_AUDIENCES=                    # additional accepted audiences
+
+# Optional RFC 7662 introspection fallback (opaque tokens):
+OIDC_INTROSPECTION_URI=https://id.example.com/oauth/introspect
+OIDC_INTROSPECTION_CLIENT_ID=...
+OIDC_INTROSPECTION_CLIENT_SECRET=...
+
+# Optional reverse-proxy forward-auth (proxy injects a signed JWT header):
+OIDC_FORWARD_AUTH_ENABLED=         # "true" to trust the proxy-injected JWT header
+OIDC_FORWARD_AUTH_HEADER=          # header name; default "x-authentik-jwt"
+```
+
+```
+# Authentik defaults (legacy names, still supported):
 AUTHENTIK_BASE_URL=https://auth.yjimmy.dev
 AUTHENTIK_APP_SLUG=job-tracker
 AUTHENTIK_ISSUER=https://auth.yjimmy.dev/application/o/job-tracker/
 AUTHENTIK_JWKS_URI=https://auth.yjimmy.dev/application/o/job-tracker/jwks/
 AUTHENTIK_AUDIENCE=job-tracker
-AUTHENTIK_TRUSTED_ISSUERS="https://auth.yjimmy.dev/application/o/job-tracker-scraper/ https://auth.yjimmy.dev/application/o/job-tracker-extension/ https://auth.yjimmy.dev/application/o/job-tracker-scraper/"
+AUTHENTIK_TRUSTED_ISSUERS="https://auth.yjimmy.dev/application/o/job-tracker-scraper/ https://auth.yjimmy.dev/application/o/job-tracker-extension/"
 AUTHENTIK_AUDIENCES="job-tracker-scraper job-tracker-extension"
 AUTHENTIK_FORWARD_AUTH_ENABLED=  # "true" only behind Authentik's forward-auth outpost (see src/lib/auth.ts)
 AUTHENTIK_SERVICE_ISSUERS=https://auth.yjimmy.dev/application/o/job-tracker-scraper/
