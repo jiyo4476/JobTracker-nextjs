@@ -52,6 +52,7 @@ describe('analytics taxonomy reporting', () => {
       label="2026-06-01"
       payload={Array.from({ length: 15 }, (_, index) => ({
         color: `rgb(${index}, 0, 0)`,
+        dataKey: `skill-${index + 1}`,
         name: `Skill ${index + 1}`,
         value: index + 10,
       }))}
@@ -84,7 +85,9 @@ describe('analytics taxonomy reporting', () => {
     render(<AnalyticsClient initialState={initialState} />)
 
     expect(screen.getByText('Skill demand over time')).toBeTruthy()
-    expect(screen.getByRole('columnheader', { name: 'AWS' })).toBeTruthy()
+    expect(screen.getByRole('columnheader', { name: 'Date' }).getAttribute('scope')).toBe('col')
+    expect(screen.getByRole('columnheader', { name: 'AWS' }).getAttribute('scope')).toBe('col')
+    expect(screen.getByRole('rowheader', { name: '2026-06-01' }).getAttribute('scope')).toBe('row')
     expect(screen.getByRole('cell', { name: '139' })).toBeTruthy()
     expect(mocks.tooltip).toHaveBeenCalledWith(expect.objectContaining({
       content: expect.anything(),

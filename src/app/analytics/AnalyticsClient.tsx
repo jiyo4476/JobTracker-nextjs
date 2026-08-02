@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useState } from 'react'
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -51,22 +51,22 @@ export function SkillDemandTooltip({
   payload,
 }: {
   active?: boolean
-  label?: ReactNode
-  payload?: Array<{ color?: string; name?: ReactNode; value?: number | string }>
+  label?: string
+  payload?: Array<{ color?: string; dataKey?: number | string; name?: string; value?: number | string }>
 }) {
   if (!active || !payload?.length) return null
 
   return (
     <div
-      aria-label={`Skill demand for ${String(label ?? '')}. Scroll for all skills.`}
+      aria-label={`Skill demand for ${label ?? 'unknown date'}. Scroll for all skills.`}
       className="max-h-40 max-w-[min(18rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain rounded-md border bg-background px-3 py-2 text-sm shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       role="group"
       tabIndex={0}
     >
       <p className="sticky top-0 bg-background pb-1 font-medium">{label}</p>
       <ul className="space-y-1">
-        {payload.map((entry, index) => (
-          <li key={`${String(entry.name)}-${index}`} className="flex items-baseline justify-between gap-3">
+        {payload.map(entry => (
+          <li key={`${entry.dataKey ?? entry.name ?? 'unnamed-skill'}-${entry.value ?? 'no-value'}`} className="flex items-baseline justify-between gap-3">
             <span className="min-w-0 break-words" style={{ color: entry.color }}>{entry.name}</span>
             <span className="shrink-0 tabular-nums" style={{ color: entry.color }}>{entry.value}</span>
           </li>
@@ -97,8 +97,8 @@ function SkillDemandChart({ data }: { data: SkillDemandRow[] }) {
       </ResponsiveContainer>
       <table className="sr-only">
         <caption>Skill demand over time</caption>
-        <thead><tr><th>Date</th>{skills.map(skill => <th key={skill}>{skill}</th>)}</tr></thead>
-        <tbody>{byMonth.map(row => <tr key={String(row.month)}><th>{row.month}</th>{skills.map(skill => <td key={skill}>{row[skill]}</td>)}</tr>)}</tbody>
+        <thead><tr><th scope="col">Date</th>{skills.map(skill => <th key={skill} scope="col">{skill}</th>)}</tr></thead>
+        <tbody>{byMonth.map(row => <tr key={String(row.month)}><th scope="row">{row.month}</th>{skills.map(skill => <td key={skill}>{row[skill]}</td>)}</tr>)}</tbody>
       </table>
     </>
   )
