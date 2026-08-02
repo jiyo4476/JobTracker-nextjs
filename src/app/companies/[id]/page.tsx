@@ -11,14 +11,9 @@ import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CompanyTaxonomyDemand } from '@/components/companies/CompanyTaxonomyDemand'
 import { useCompany, usePatchCompany } from '@/lib/queries'
-import { interviewStageBadgeVariants, type InterviewStage } from '@/lib/enums'
-
-function formatSalary(min: number | null, max: number | null) {
-  if (!min && !max) return '—'
-  const fmt = (c: number) => '$' + Math.round(c / 100000) + 'k'
-  if (min && max) return `${fmt(min)} – ${fmt(max)}`
-  return fmt((min ?? max)!)
-}
+import { interviewStageBadgeVariants, interviewStageLabels } from '@/lib/enums'
+import { isInterviewStage } from '@/components/jobs/StageBadge'
+import { formatSalaryRangeShort } from '@/lib/salary-format'
 
 
 export default function CompanyDetailPage() {
@@ -158,11 +153,11 @@ export default function CompanyDetailPage() {
                       <Link href={`/jobs/${job.id}`} className="flex-1 text-sm text-blue-600 hover:underline font-medium">
                         {job.jobTitle}
                       </Link>
-                      <Badge variant={interviewStageBadgeVariants[job.interviewStage as InterviewStage] ?? 'default'}>
-                        {job.interviewStage.replace(/_/g, ' ')}
+                      <Badge variant={isInterviewStage(job.interviewStage) ? interviewStageBadgeVariants[job.interviewStage] : 'default'}>
+                        {isInterviewStage(job.interviewStage) ? interviewStageLabels[job.interviewStage] : job.interviewStage}
                       </Badge>
                       <span className="text-sm text-slate-500 w-28 text-right">
-                        {formatSalary(job.salaryMin, job.salaryMax)}
+                        {formatSalaryRangeShort(job.salaryMin, job.salaryMax)}
                       </span>
                       <span className="text-xs text-slate-600 w-24 text-right">
                         {new Date(job.dateFound).toLocaleDateString()}

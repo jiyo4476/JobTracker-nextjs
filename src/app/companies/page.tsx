@@ -6,10 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useCompanies } from '@/lib/queries'
-
-function formatSalary(cents: number | null) {
-  return cents ? '$' + Math.round(cents / 100000) + 'k' : '—'
-}
+import { formatSalaryShort } from '@/lib/salary-format'
 
 export default function CompaniesPage() {
   const { data: companies, isLoading } = useCompanies()
@@ -49,7 +46,7 @@ export default function CompaniesPage() {
                       <td className="px-4 py-3 text-slate-600">{row.industry ?? '—'}</td>
                       <td className="px-4 py-3 text-slate-600">{row.hqLocation ?? '—'}</td>
                       <td className="px-4 py-3 text-slate-600">{row.jobCount}</td>
-                      <td className="px-4 py-3 text-slate-600">{formatSalary(row.avgSalaryMax)}</td>
+                      <td className="px-4 py-3 text-slate-600">{formatSalaryShort(row.avgSalaryMax)}</td>
                       <td className="px-4 py-3">
                         {row.website
                           ? <a href={row.website} target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-blue-600">

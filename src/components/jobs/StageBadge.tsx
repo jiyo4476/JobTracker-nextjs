@@ -8,7 +8,7 @@ import {
   type InterviewStage,
 } from '@/lib/enums'
 
-function isInterviewStage(value: string): value is InterviewStage {
+export function isInterviewStage(value: string): value is InterviewStage {
   return value in interviewStageBadgeStyles
 }
 

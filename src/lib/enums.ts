@@ -135,6 +135,20 @@ export const salaryTypeLabels = labelsFrom(salaryTypeOptions)
 export const softwareFamiliarityValues = ['learning', 'familiar', 'proficient', 'expert'] as const
 export type SoftwareFamiliarity = (typeof softwareFamiliarityValues)[number]
 
+export const softwareFamiliarityOptions: ReadonlyArray<Option<SoftwareFamiliarity>> = [
+  { value: 'learning', label: 'Learning' },
+  { value: 'familiar', label: 'Familiar' },
+  { value: 'proficient', label: 'Proficient' },
+  { value: 'expert', label: 'Expert' },
+]
+export const softwareFamiliarityLabels = labelsFrom(softwareFamiliarityOptions)
+
 // ── keyword_preference ─────────────────────────────────────────────────────
 export const keywordPreferenceValues = ['interest', 'exclusion'] as const
 export type KeywordPreference = (typeof keywordPreferenceValues)[number]
+
+export const keywordPreferenceOptions: ReadonlyArray<Option<KeywordPreference>> = [
+  { value: 'interest', label: 'Interested in' },
+  { value: 'exclusion', label: 'Exclude' },
+]
+export const keywordPreferenceLabels = labelsFrom(keywordPreferenceOptions)

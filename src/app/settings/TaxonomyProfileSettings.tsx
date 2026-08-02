@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
+import { softwareFamiliarityOptions, keywordPreferenceOptions } from '@/lib/enums'
 import {
   useCreateUserTaxonomy,
   useDeleteUserTaxonomy,
@@ -186,10 +187,9 @@ function ProfileMetadataFields({
           className="flex h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
         >
           <option value="">Not specified</option>
-          <option value="learning">Learning</option>
-          <option value="familiar">Familiar</option>
-          <option value="proficient">Proficient</option>
-          <option value="expert">Expert</option>
+          {softwareFamiliarityOptions.map(option => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
         </select>
       </div>
     )
@@ -210,8 +210,9 @@ function ProfileMetadataFields({
           })}
           className="flex h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
         >
-          <option value="interest">Interested in</option>
-          <option value="exclusion">Exclude</option>
+          {keywordPreferenceOptions.map(option => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
         </select>
       </div>
     )

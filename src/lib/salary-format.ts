@@ -73,22 +73,140 @@ function formatRange({ min, max, period }: SalaryRange): string {
 }
 
 export function formatSalary(salary: SalaryDisplay): string {
-  const textRange = rangeFromText(salary.salaryText)
-  if (textRange) return formatRange(textRange)
-
+  // Prefer the authoritative structured cents / hourly-rate columns; only fall
+  // back to the raw free-text range when the structured values are absent, so a
+  // stale or garbled `salary_text` can never override validated data.
   if (salary.salaryType === 'annual') {
     const min = positiveNumber(salary.salaryMin)
     const max = positiveNumber(salary.salaryMax)
-    if (min == null || max == null) return '—'
-    return formatRange({ min: min / 100, max: max / 100, period: 'year' })
-  }
-
-  if (salary.salaryType === 'hourly') {
+    if (min != null && max != null) {
+      return formatRange({ min: min / 100, max: max / 100, period: 'year' })
+    }
+  } else if (salary.salaryType === 'hourly') {
     const min = positiveNumber(salary.hourlyRateMin)
     const max = positiveNumber(salary.hourlyRateMax)
-    if (min == null || max == null) return '—'
-    return formatRange({ min, max, period: 'hour' })
+    if (min != null && max != null) {
+      return formatRange({ min, max, period: 'hour' })
+    }
   }
 
+  const textRange = rangeFromText(salary.salaryText)
+  if (textRange) return formatRange(textRange)
+
   return '—'
+}
+
+/**
+ * Compact "$150k"-style label for a single annual salary figure in integer
+ * cents (e.g. a company's average max), rounded to the nearest thousand
+ * dollars. Returns the em-dash placeholder for null/zero/negative input.
+ *
+ * Shared by the companies list and detail views, which previously each carried
+ * their own divergent copy of this `/100000` → "k" formatter.
+ */
+export function formatSalaryShort(cents: number | null | undefined): string {
+  if (!cents || cents <= 0) return '—'
+  return '$' + Math.round(cents / 100000) + 'k'
+}
+
+/**
+ * Compact salary range in "$120k – $150k" form from two annual-cent bounds,
+ * built on {@link formatSalaryShort}. Falls back to the single present bound,
+ * and to the em-dash placeholder when neither is set.
+ */
+export function formatSalaryRangeShort(
+  min: number | null | undefined,
+  max: number | null | undefined,
+): string {
+  if (!min && !max) return '—'
+  if (min && max) return `${formatSalaryShort(min)} – ${formatSalaryShort(max)}`
+  return formatSalaryShort(min ?? max)
+}
+
+/** Structured salary column values derived from a free-text salary string. */
+export type StructuredSalary = {
+  salaryType: 'annual' | 'hourly'
+  salaryMin: number | null
+  salaryMax: number | null
+  hourlyRateMin: string | null
+  hourlyRateMax: string | null
+  annualEquivalentMin: number | null
+  annualEquivalentMax: number | null
+}
+
+type ExistingStructuredSalary = Pick<
+  SalaryDisplay,
+  'salaryType' | 'salaryMin' | 'salaryMax' | 'hourlyRateMin' | 'hourlyRateMax'
+>
+
+/**
+ * Identify legacy rows that are safe for the one-time structured salary
+ * backfill to repair. Besides unclassified rows, this includes incomplete
+ * structured ranges and the known pre-#66 failure mode where annual columns
+ * contain dollar/hour figures as cents (for example 6500 for a $65k salary).
+ * Complete, plausible structured ranges remain authoritative and untouched.
+ */
+export function needsStructuredSalaryBackfill(
+  current: ExistingStructuredSalary,
+  parsed: StructuredSalary,
+): boolean {
+  if (current.salaryType == null) return true
+
+  if (current.salaryType === 'hourly') {
+    return positiveNumber(current.hourlyRateMin) == null || positiveNumber(current.hourlyRateMax) == null
+  }
+
+  const min = positiveNumber(current.salaryMin)
+  const max = positiveNumber(current.salaryMax)
+  if (min == null || max == null) return true
+
+  const parsedRepresentsRealCompensation =
+    parsed.salaryType === 'hourly' || (parsed.salaryMax ?? 0) >= 1_000_000
+  return max < 1_000_000 && parsedRepresentsRealCompensation
+}
+
+/**
+ * Derive structured salary columns from a free-text `salary_text` string, reusing
+ * the exact parser {@link formatSalary} uses to display it — so a backfill fills
+ * the structured columns with the same range the UI already shows.
+ *
+ * Annual ranges become integer cents (`dollars × 100`); hourly ranges become
+ * `numeric(10,2)` strings. Both branches populate `annual_equivalent_*` in cents
+ * so annual and hourly rows can be filtered and compared on one unified axis:
+ * for annual it equals the annual salary, for hourly it is `hourly × 2080 × 100`.
+ * `salaryType` — not the presence of `annual_equivalent_*` — is the discriminator
+ * between annual and hourly rows. Returns `null` when the text can't be parsed
+ * into a valid range, so callers can skip the row untouched.
+ *
+ * Used by `scripts/backfill-structured-salary.ts` to make the structured columns
+ * authoritative for legacy rows that only ever had `salary_text`
+ * (see the `formatSalary` precedence flip in TECHDEBT-009).
+ */
+export function structuredSalaryFromText(text: string | null): StructuredSalary | null {
+  const range = rangeFromText(text)
+  if (!range) return null
+
+  if (range.period === 'year') {
+    const salaryMin = Math.round(range.min * CENTS_PER_DOLLAR)
+    const salaryMax = Math.round(range.max * CENTS_PER_DOLLAR)
+    return {
+      salaryType: 'annual',
+      salaryMin,
+      salaryMax,
+      hourlyRateMin: null,
+      hourlyRateMax: null,
+      annualEquivalentMin: salaryMin,
+      annualEquivalentMax: salaryMax,
+    }
+  }
+
+  return {
+    salaryType: 'hourly',
+    salaryMin: null,
+    salaryMax: null,
+    hourlyRateMin: range.min.toFixed(2),
+    hourlyRateMax: range.max.toFixed(2),
+    annualEquivalentMin: hourlyToAnnualEquivalentCents(range.min),
+    annualEquivalentMax: hourlyToAnnualEquivalentCents(range.max),
+  }
 }

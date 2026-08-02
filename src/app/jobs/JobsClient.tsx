@@ -26,7 +26,8 @@ import { taxonomyJobsParams } from '@/lib/jobs-taxonomy-filters'
 import { formatSalary } from '@/lib/salary-format'
 import { formatJobLocation } from '@/lib/job-location-format'
 import { sourcePlatformOptions } from '@/lib/source-platforms'
-import { interviewStageValues, jobTypeValues, experienceLevelValues } from '@/lib/enums'
+import { interviewStageOptions, jobTypeOptions, experienceLevelOptions } from '@/lib/enums'
+import type { JobsParams } from '@/types/queries'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -37,10 +38,15 @@ function formatDate(d: string | null): string {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-// Leading '' is the "All …" filter option; labels are computed inline below.
-const STAGES = ['', ...interviewStageValues]
-const JOB_TYPES = ['', ...jobTypeValues]
-const EXPERIENCE_LEVELS = ['', ...experienceLevelValues]
+// Allowed `sort_by` URL values; kept in sync with JobsParams via `satisfies`.
+const SORT_BY_VALUES = [
+  'company', 'role', 'stage', 'location', 'salary', 'found', 'priority', 'clearance',
+] as const satisfies readonly NonNullable<JobsParams['sort_by']>[]
+type SortBy = (typeof SORT_BY_VALUES)[number]
+function isSortBy(value: string): value is SortBy {
+  return (SORT_BY_VALUES as readonly string[]).includes(value)
+}
+
 const EXTRA_FILTER_PARAMS = [
   'salary_min', 'salary_max', 'priority_min',
   'company_id',
@@ -62,8 +68,10 @@ export default function JobsClient() {
   const experienceLevel = searchParams.get('experience_level') ?? ''
   const securityClearance = searchParams.get('security_clearance') ?? ''
   const isRemote = searchParams.get('is_remote') ?? ''
-  const sortBy = (searchParams.get('sort_by') ?? 'found') as NonNullable<import('@/types/queries').JobsParams['sort_by']>
-  const sortOrder = (searchParams.get('sort_order') ?? 'desc') as 'asc' | 'desc'
+  const sortByParam = searchParams.get('sort_by')
+  const sortBy: SortBy = sortByParam && isSortBy(sortByParam) ? sortByParam : 'found'
+  const sortOrderParam = searchParams.get('sort_order')
+  const sortOrder: 'asc' | 'desc' = sortOrderParam === 'asc' ? 'asc' : 'desc'
   const urlQ = searchParams.get('q') ?? ''
   const companyIdRaw = searchParams.get('company_id')
   const parsedCompanyId = companyIdRaw && /^\d+$/.test(companyIdRaw) ? Number(companyIdRaw) : NaN
@@ -130,7 +138,8 @@ export default function JobsClient() {
     platform,
     job_type: jobType,
     experience_level: experienceLevel,
-    security_clearance: (securityClearance || undefined) as 'true' | 'false' | undefined,
+    security_clearance:
+      securityClearance === 'true' || securityClearance === 'false' ? securityClearance : undefined,
     is_remote: isRemote,
     sort_by: sortBy,
     sort_order: sortOrder,
@@ -350,15 +359,18 @@ export default function JobsClient() {
           value={stage}
           onChange={(e) => updateParams({ stage: e.target.value })}
           className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          aria-label="Filter by stage"
         >
-          {STAGES.map((s) => (
-            <option key={s} value={s}>{s ? s.replace(/_/g, ' ') : 'All stages'}</option>
+          <option value="">All stages</option>
+          {interviewStageOptions.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
         <select
           value={platform}
           onChange={(e) => updateParams({ platform: e.target.value })}
           className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          aria-label="Filter by platform"
         >
           <option value="">All platforms</option>
           {sourcePlatformOptions.map((p) => (
@@ -369,24 +381,29 @@ export default function JobsClient() {
           value={jobType}
           onChange={(e) => updateParams({ job_type: e.target.value })}
           className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          aria-label="Filter by job type"
         >
-          {JOB_TYPES.map((t) => (
-            <option key={t} value={t}>{t ? t.replace(/_/g, ' ') : 'All types'}</option>
+          <option value="">All types</option>
+          {jobTypeOptions.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
         <select
           value={experienceLevel}
           onChange={(e) => updateParams({ experience_level: e.target.value })}
           className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          aria-label="Filter by experience level"
         >
-          {EXPERIENCE_LEVELS.map((l) => (
-            <option key={l} value={l}>{l ? l.charAt(0).toUpperCase() + l.slice(1) : 'All levels'}</option>
+          <option value="">All levels</option>
+          {experienceLevelOptions.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
         <select
           value={securityClearance}
           onChange={(e) => updateParams({ security_clearance: e.target.value })}
           className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          aria-label="Filter by security clearance"
         >
           <option value="">All clearance</option>
           <option value="true">Clearance required</option>
@@ -396,6 +413,7 @@ export default function JobsClient() {
           value={isRemote}
           onChange={(e) => updateParams({ is_remote: e.target.value })}
           className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          aria-label="Filter by remote"
         >
           <option value="">Remote + On-site</option>
           <option value="true">Remote only</option>
@@ -428,10 +446,11 @@ export default function JobsClient() {
             onChange={(e) => setBulkStage(e.target.value)}
             className="h-7 rounded border border-slate-600 bg-slate-800 px-2 text-xs text-white"
             disabled={bulkPending}
+            aria-label="Change stage for selected jobs"
           >
             <option value="">Change stage…</option>
-            {STAGES.filter(Boolean).map((s) => (
-              <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
+            {interviewStageOptions.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
           {bulkStage && (
