@@ -5,8 +5,9 @@ import { userSkills } from '@/db/schema'
 import { logger } from '@/lib/logger'
 import { eq } from 'drizzle-orm'
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return withErrorHandling('DELETE /api/user-skills/[id]', async () => {
+export const DELETE = withErrorHandling(
+  'DELETE /api/user-skills/[id]',
+  async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const denied = await requireAuth(req)
     if (denied) return denied
 
@@ -23,5 +24,5 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     logger.info('user skill removed', { skillId })
     return NextResponse.json({ success: true })
-  })
-}
+  },
+)

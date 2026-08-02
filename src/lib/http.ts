@@ -62,29 +62,40 @@ export async function readJsonBody<T extends z.ZodTypeAny>(
 }
 
 /**
- * Run a route handler body and guarantee the standard JSON error envelope on an
- * uncaught throw. Any error escaping `handler` is logged and mapped to the
- * `{ error: 'Internal server error' }` 500 that every other route already
- * returns — so a DB fault can never leak the framework's default HTML 500.
+ * Wrap a route handler so any uncaught throw is logged and mapped to the
+ * standard `{ error: 'Internal server error' }` 500 that every other route
+ * already returns — so a DB fault can never leak the framework's default HTML
+ * 500.
  *
- *   export async function GET() {
- *     return withErrorHandling('GET /api/resume-versions', async () => {
- *       const rows = await db.select()…
- *       return NextResponse.json(rows)
- *     })
- *   }
+ * This is a signature-preserving higher-order wrapper: it forwards every
+ * argument (`req`, and the `{ params }` context for dynamic routes) to the
+ * inner handler and returns a function with the route's original Next.js
+ * signature, so it's assigned straight to the exported handler:
  *
- * The handler keeps the route's exact exported signature (so Next.js route-type
- * validation is unaffected); this wrapper only owns the try/catch.
+ *   export const GET = withErrorHandling('GET /api/resume-versions', async () => {
+ *     const rows = await db.select()…
+ *     return NextResponse.json(rows)
+ *   })
+ *
+ *   export const PATCH = withErrorHandling(
+ *     'PATCH /api/resume-versions/[id]',
+ *     async (req: NextRequest, ctx: { params: Promise<{ id: string }> }) => { … },
+ *   )
+ *
+ * The generic `Args` tuple captures whatever parameters the inner handler
+ * declares (0-arg, `(req)`, or `(req, ctx)`), so both static and dynamic route
+ * handlers type-check and Next.js route-type validation is unaffected.
  */
-export async function withErrorHandling(
+export function withErrorHandling<Args extends unknown[]>(
   routeName: string,
-  handler: () => Promise<NextResponse>,
-): Promise<NextResponse> {
-  try {
-    return await handler()
-  } catch (err) {
-    logger.error(`${routeName} failed`, serializeError(err))
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  handler: (...args: Args) => Promise<NextResponse>,
+): (...args: Args) => Promise<NextResponse> {
+  return async (...args: Args): Promise<NextResponse> => {
+    try {
+      return await handler(...args)
+    } catch (err) {
+      logger.error(`${routeName} failed`, serializeError(err))
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    }
   }
 }

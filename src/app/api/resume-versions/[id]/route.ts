@@ -6,8 +6,9 @@ import { logger } from '@/lib/logger'
 import { resumeVersions } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return withErrorHandling('PATCH /api/resume-versions/[id]', async () => {
+export const PATCH = withErrorHandling(
+  'PATCH /api/resume-versions/[id]',
+  async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const denied = await requireAuth(req)
     if (denied) return denied
 
@@ -29,11 +30,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     logger.info('resume version updated', { resumeVersionId })
     return NextResponse.json(updated)
-  })
-}
+  },
+)
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return withErrorHandling('DELETE /api/resume-versions/[id]', async () => {
+export const DELETE = withErrorHandling(
+  'DELETE /api/resume-versions/[id]',
+  async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const denied = await requireAuth(req)
     if (denied) return denied
 
@@ -46,5 +48,5 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     logger.info('resume version deleted', { resumeVersionId })
     return NextResponse.json({ success: true })
-  })
-}
+  },
+)

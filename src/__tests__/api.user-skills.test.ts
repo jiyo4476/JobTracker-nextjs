@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
+import { expectJsonError } from './helpers/json-error'
 
 vi.mock('@/lib/auth', () => ({
   requireAuthentication: vi.fn(),
@@ -191,13 +192,6 @@ describe('DELETE /api/user-skills/[id]', () => {
 // never the framework's default HTML 500. (TECHDEBT-004)
 describe('user-skills error envelope on DB failure', () => {
   beforeEach(() => { vi.clearAllMocks() })
-
-  async function expectJsonError(res: Response) {
-    expect(res.status).toBe(500)
-    expect(res.headers.get('content-type')).toContain('application/json')
-    const json = await res.json()
-    expect(json).toHaveProperty('error')
-  }
 
   it('GET returns JSON error, not HTML, when the query throws', async () => {
     vi.mocked(requireAuthentication).mockResolvedValue(true)
