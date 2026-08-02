@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
+import { expectJsonError } from './helpers/json-error'
 
 vi.mock('@/lib/auth', () => ({
   requireAuthentication: vi.fn(),
@@ -184,5 +185,50 @@ describe('DELETE /api/user-skills/[id]', () => {
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json).toHaveProperty('success', true)
+  })
+})
+
+// A forced DB fault must surface as the standard JSON { error } 500 envelope,
+// never the framework's default HTML 500. (TECHDEBT-004)
+describe('user-skills error envelope on DB failure', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('GET returns JSON error, not HTML, when the query throws', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    mockDb.select.mockImplementation(() => { throw new Error('db down') })
+
+    const { GET } = await import('@/app/api/user-skills/route')
+    const req = new NextRequest('http://localhost/api/user-skills', {
+      headers: { authorization: 'Bearer test-key' },
+    })
+    await expectJsonError(await GET(req))
+  })
+
+  it('POST returns JSON error, not HTML, when the insert throws', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    mockDb.insert.mockImplementation(() => { throw new Error('db down') })
+
+    const { POST } = await import('@/app/api/user-skills/route')
+    const req = new NextRequest('http://localhost/api/user-skills', {
+      method: 'POST',
+      body: JSON.stringify({ skill_id: 3 }),
+      headers: { 'content-type': 'application/json', authorization: 'Bearer test-key' },
+    })
+    await expectJsonError(await POST(req))
+  })
+
+  it('DELETE returns JSON error, not HTML, when the delete throws', async () => {
+    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    mockDb.delete.mockImplementation(() => { throw new Error('db down') })
+
+    const { DELETE } = await import('@/app/api/user-skills/[id]/route')
+    const req = new NextRequest('http://localhost/api/user-skills/1', {
+      method: 'DELETE',
+      headers: { authorization: 'Bearer test-key' },
+    })
+    await expectJsonError(await DELETE(req, makeParams('1')))
   })
 })

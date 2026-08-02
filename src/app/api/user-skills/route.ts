@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireAuth, readJsonBody } from '@/lib/http'
+import { requireAuth, readJsonBody, withErrorHandling } from '@/lib/http'
 import { userSkillCreateSchema } from '@/lib/schemas'
 import { logger } from '@/lib/logger'
 import { userSkills, skills } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 
-export async function GET(req: NextRequest) {
+export const GET = withErrorHandling('GET /api/user-skills', async (req: NextRequest) => {
   const denied = await requireAuth(req)
   if (denied) return denied
 
@@ -21,9 +21,9 @@ export async function GET(req: NextRequest) {
     .orderBy(skills.name)
 
   return NextResponse.json(rows)
-}
+})
 
-export async function POST(req: NextRequest) {
+export const POST = withErrorHandling('POST /api/user-skills', async (req: NextRequest) => {
   const denied = await requireAuth(req)
   if (denied) return denied
 
@@ -53,4 +53,4 @@ export async function POST(req: NextRequest) {
 
   logger.info('user skill added', { skillId })
   return NextResponse.json({ success: true, skillId }, { status: 201 })
-}
+})
