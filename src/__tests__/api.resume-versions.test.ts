@@ -15,6 +15,7 @@ vi.mock('@/db/schema', () => ({
 
 import { requireAuthentication } from '@/lib/auth'
 import { db } from '@/db'
+import { authedGet } from './helpers/authed-request'
 
 function makeChain(result: unknown) {
   const chain: Record<string, unknown> = {}
@@ -59,7 +60,7 @@ describe('GET /api/resume-versions', () => {
     mockDb.select.mockReturnValue(makeChain([mockVersion]))
 
     const { GET } = await import('@/app/api/resume-versions/route')
-    const res = await GET(makeReq('http://localhost/api/resume-versions', undefined, true, 'GET'))
+    const res = await GET(authedGet('http://localhost/api/resume-versions'))
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(Array.isArray(json)).toBe(true)

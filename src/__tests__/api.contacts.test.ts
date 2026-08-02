@@ -22,6 +22,7 @@ vi.mock('drizzle-orm', () => ({
 import { requireAuthentication } from '@/lib/auth'
 import { db } from '@/db'
 import { and } from 'drizzle-orm'
+import { authedGet } from './helpers/authed-request'
 
 function makeChain(result: unknown) {
   const chain: Record<string, unknown> = {}
@@ -64,9 +65,7 @@ describe('GET /api/jobs/[id]/contacts', () => {
   it('returns 400 for non-numeric id', async () => {
     vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { GET } = await import('@/app/api/jobs/[id]/contacts/route')
-    const req = new NextRequest('http://localhost/api/jobs/abc/contacts', {
-      headers: { authorization: 'Bearer test-key' },
-    })
+    const req = authedGet('http://localhost/api/jobs/abc/contacts')
     const res = await GET(req, makeParams('abc') as { params: Promise<{ id: string }> })
     expect(res.status).toBe(400)
   })
@@ -77,9 +76,7 @@ describe('GET /api/jobs/[id]/contacts', () => {
     mockDb.select.mockReturnValue(makeChain([mockContact]))
 
     const { GET } = await import('@/app/api/jobs/[id]/contacts/route')
-    const req = new NextRequest('http://localhost/api/jobs/1/contacts', {
-      headers: { authorization: 'Bearer test-key' },
-    })
+    const req = authedGet('http://localhost/api/jobs/1/contacts')
     const res = await GET(req, makeParams('1') as { params: Promise<{ id: string }> })
     expect(res.status).toBe(200)
     const json = await res.json()

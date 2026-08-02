@@ -26,6 +26,7 @@ vi.mock('@/db/schema', () => ({
 
 import { requireAuthentication } from '@/lib/auth'
 import { db } from '@/db'
+import { authedGet } from './helpers/authed-request'
 
 function makeChain(result: unknown) {
   const chain: Record<string, unknown> = {}
@@ -73,9 +74,7 @@ describe('GET /api/jobs/[id]', () => {
   it('returns 400 for non-numeric id', async () => {
     vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { GET } = await import('@/app/api/jobs/[id]/route')
-    const req = new NextRequest('http://localhost/api/jobs/abc', {
-      headers: { authorization: 'Bearer test-key' },
-    })
+    const req = authedGet('http://localhost/api/jobs/abc')
     const res = await GET(req, makeParams('abc'))
     expect(res.status).toBe(400)
   })
@@ -85,9 +84,7 @@ describe('GET /api/jobs/[id]', () => {
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.select.mockReturnValue(makeChain([]))
     const { GET } = await import('@/app/api/jobs/[id]/route')
-    const req = new NextRequest('http://localhost/api/jobs/999', {
-      headers: { authorization: 'Bearer test-key' },
-    })
+    const req = authedGet('http://localhost/api/jobs/999')
     const res = await GET(req, makeParams('999'))
     expect(res.status).toBe(404)
   })
@@ -103,9 +100,7 @@ describe('GET /api/jobs/[id]', () => {
     })
 
     const { GET } = await import('@/app/api/jobs/[id]/route')
-    const req = new NextRequest('http://localhost/api/jobs/1', {
-      headers: { authorization: 'Bearer test-key' },
-    })
+    const req = authedGet('http://localhost/api/jobs/1')
     const res = await GET(req, makeParams('1'))
     expect(res.status).toBe(200)
     const json = await res.json()

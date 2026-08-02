@@ -9,8 +9,8 @@ import { eq, asc } from 'drizzle-orm'
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   // Contacts carry PII (email/phone), so reads are gated the same way writes are —
   // same-origin browser calls pass; header-less non-same-origin callers get 401.
-  const denied = await requireAuth(req)
-  if (denied) return denied
+  const authError = await requireAuth(req)
+  if (authError) return authError
 
   const { id } = await params
   const jobId = parseInt(id)
@@ -26,8 +26,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const denied = await requireAuth(req)
-  if (denied) return denied
+  const authError = await requireAuth(req)
+  if (authError) return authError
 
   const { id } = await params
   const jobId = parseInt(id)
