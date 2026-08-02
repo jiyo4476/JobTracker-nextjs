@@ -48,9 +48,10 @@ export type CompanyTaxonomyDemand = {
   truncated: Record<'skills' | 'software' | 'certifications' | 'keywords', boolean>
 }
 
-// Serialized `contacts` row as returned by the API: the `created_at` timestamp
-// arrives as an ISO string over JSON, not a Date. All other columns match the row
-// (jobId is NOT NULL in the schema). Single-sourced from the Drizzle model.
+// Serialized `contacts` row as returned by the API: a present `created_at`
+// timestamp arrives as an ISO string over JSON, not a Date. The column has a
+// default but is not declared NOT NULL, so the serialized value remains nullable.
+// All other columns match the row (jobId is NOT NULL in the schema).
 export type Contact = Omit<InferSelectModel<typeof contacts>, 'createdAt'> & {
   createdAt: string | null
 }
