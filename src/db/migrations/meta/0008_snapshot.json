@@ -1,5 +1,5 @@
 {
-  "id": "2002238a-fd6a-4c23-ab87-8bd2f7be282f",
+  "id": "fa28ec00-2d02-40ea-99a1-80852a5bacab",
   "prevId": "d2de53c6-f773-420a-8d19-9d4578cb1003",
   "version": "7",
   "dialect": "postgresql",
@@ -1076,6 +1076,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "resume_versions_user_id_id_uq": {
+          "name": "resume_versions_user_id_id_uq",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -1270,8 +1291,173 @@
       },
       "isRLSEnabled": false
     },
-    "public.user_job_priority": {
-      "name": "user_job_priority",
+    "public.user_job_contacts": {
+      "name": "user_job_contacts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "job_id": {
+          "name": "job_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone": {
+          "name": "phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "linkedin_url": {
+          "name": "linkedin_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "contacted_at": {
+          "name": "contacted_at",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "user_job_contacts_user_job_idx": {
+          "name": "user_job_contacts_user_job_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "job_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_job_contacts_job_id_idx": {
+          "name": "user_job_contacts_job_id_idx",
+          "columns": [
+            {
+              "expression": "job_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "user_job_contacts_user_id_users_id_fk": {
+          "name": "user_job_contacts_user_id_users_id_fk",
+          "tableFrom": "user_job_contacts",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_job_contacts_job_id_jobs_id_fk": {
+          "name": "user_job_contacts_job_id_jobs_id_fk",
+          "tableFrom": "user_job_contacts",
+          "tableTo": "jobs",
+          "columnsFrom": [
+            "job_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_job_contacts_state_fk": {
+          "name": "user_job_contacts_state_fk",
+          "tableFrom": "user_job_contacts",
+          "tableTo": "user_job_state",
+          "columnsFrom": [
+            "user_id",
+            "job_id"
+          ],
+          "columnsTo": [
+            "user_id",
+            "job_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user_job_state": {
+      "name": "user_job_state",
       "schema": "",
       "columns": {
         "user_id": {
@@ -1299,6 +1485,60 @@
           "notNull": true,
           "default": false
         },
+        "has_applied": {
+          "name": "has_applied",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "date_applied": {
+          "name": "date_applied",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "heard_back": {
+          "name": "heard_back",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "interview_stage": {
+          "name": "interview_stage",
+          "type": "interview_stage_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'not_applied'"
+        },
+        "referral": {
+          "name": "referral",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "cover_letter_submitted": {
+          "name": "cover_letter_submitted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "resume_version_id": {
+          "name": "resume_version_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rejection_reason": {
+          "name": "rejection_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "notes": {
           "name": "notes",
           "type": "text",
@@ -1321,8 +1561,236 @@
         }
       },
       "indexes": {
-        "user_job_priority_job_id_idx": {
-          "name": "user_job_priority_job_id_idx",
+        "user_job_state_job_id_idx": {
+          "name": "user_job_state_job_id_idx",
+          "columns": [
+            {
+              "expression": "job_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_job_state_user_stage_idx": {
+          "name": "user_job_state_user_stage_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "interview_stage",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_job_state_user_applied_idx": {
+          "name": "user_job_state_user_applied_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "has_applied",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_job_state_user_priority_idx": {
+          "name": "user_job_state_user_priority_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "priority",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_job_state_resume_version_id_idx": {
+          "name": "user_job_state_resume_version_id_idx",
+          "columns": [
+            {
+              "expression": "resume_version_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "user_job_state_user_id_users_id_fk": {
+          "name": "user_job_state_user_id_users_id_fk",
+          "tableFrom": "user_job_state",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_job_state_job_id_jobs_id_fk": {
+          "name": "user_job_state_job_id_jobs_id_fk",
+          "tableFrom": "user_job_state",
+          "tableTo": "jobs",
+          "columnsFrom": [
+            "job_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_job_state_owner_resume_fk": {
+          "name": "user_job_state_owner_resume_fk",
+          "tableFrom": "user_job_state",
+          "tableTo": "resume_versions",
+          "columnsFrom": [
+            "user_id",
+            "resume_version_id"
+          ],
+          "columnsTo": [
+            "user_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "user_job_state_user_id_job_id_pk": {
+          "name": "user_job_state_user_id_job_id_pk",
+          "columns": [
+            "user_id",
+            "job_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "user_job_state_priority_range_check": {
+          "name": "user_job_state_priority_range_check",
+          "value": "\"user_job_state\".\"priority\" IS NULL OR \"user_job_state\".\"priority\" BETWEEN 1 AND 5"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.user_job_status_history": {
+      "name": "user_job_status_history",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "job_id": {
+          "name": "job_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_stage": {
+          "name": "from_stage",
+          "type": "interview_stage_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "to_stage": {
+          "name": "to_stage",
+          "type": "interview_stage_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "changed_at": {
+          "name": "changed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "user_job_status_history_user_job_changed_idx": {
+          "name": "user_job_status_history_user_job_changed_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "job_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "changed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_job_status_history_job_id_idx": {
+          "name": "user_job_status_history_job_id_idx",
           "columns": [
             {
               "expression": "job_id",
@@ -1338,9 +1806,9 @@
         }
       },
       "foreignKeys": {
-        "user_job_priority_user_id_users_id_fk": {
-          "name": "user_job_priority_user_id_users_id_fk",
-          "tableFrom": "user_job_priority",
+        "user_job_status_history_user_id_users_id_fk": {
+          "name": "user_job_status_history_user_id_users_id_fk",
+          "tableFrom": "user_job_status_history",
           "tableTo": "users",
           "columnsFrom": [
             "user_id"
@@ -1351,9 +1819,9 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "user_job_priority_job_id_jobs_id_fk": {
-          "name": "user_job_priority_job_id_jobs_id_fk",
-          "tableFrom": "user_job_priority",
+        "user_job_status_history_job_id_jobs_id_fk": {
+          "name": "user_job_status_history_job_id_jobs_id_fk",
+          "tableFrom": "user_job_status_history",
           "tableTo": "jobs",
           "columnsFrom": [
             "job_id"
@@ -1363,25 +1831,27 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "user_job_priority_user_id_job_id_pk": {
-          "name": "user_job_priority_user_id_job_id_pk",
-          "columns": [
+        },
+        "user_job_status_history_state_fk": {
+          "name": "user_job_status_history_state_fk",
+          "tableFrom": "user_job_status_history",
+          "tableTo": "user_job_state",
+          "columnsFrom": [
             "user_id",
             "job_id"
-          ]
+          ],
+          "columnsTo": [
+            "user_id",
+            "job_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "user_job_priority_priority_range_check": {
-          "name": "user_job_priority_priority_range_check",
-          "value": "\"user_job_priority\".\"priority\" IS NULL OR \"user_job_priority\".\"priority\" BETWEEN 1 AND 5"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.user_keywords": {

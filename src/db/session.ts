@@ -4,7 +4,7 @@ import { db } from "./index";
 /**
  * DB-002 — per-request owner context for PostgreSQL Row-Level Security.
  *
- * The RLS policies added in migration 0009 (currently `user_job_priority`, extended
+ * The RLS policies added in migration 0009 (`user_job_state` and its private children,
  * to the other owner-scoped tables in SEC-001) match rows against the `app.user_id`
  * GUC. `set_config(name, value, is_local => true)` scopes the value to the current
  * transaction, so it is automatically reset on COMMIT/ROLLBACK and never leaks across

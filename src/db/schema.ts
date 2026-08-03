@@ -13,6 +13,7 @@ import {
   uniqueIndex,
   index,
   primaryKey,
+  foreignKey,
   check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -53,7 +54,7 @@ export const salaryTypeEnum = pgEnum("salary_type_enum", salaryTypeValues);
 //
 // Ownership model (see Architecture Decision Register ADR-018): jobs and companies
 // stay GLOBAL/canonical (no user_id); per-user state lives in owner-scoped overlay
-// tables (user_job_priority) and the owner-scoped taxonomy/resume associations below.
+// tables (user_job_state and its children) and owner-scoped taxonomy/resume associations.
 // Admin write access to the shared catalog is decided at the auth layer from an OIDC
 // group/scope claim; it is deliberately NOT stored here as an authorization source.
 
@@ -182,18 +183,12 @@ export const jobs = pgTable(
   ]
 );
 
-// ── user_job_priority ──────────────────────────────────────────────────────────
-// DB-002: per-user overlay on the shared, global `jobs` catalog. `jobs.priority`
-// remains the canonical/admin default; this table lets each user rank or hide the
-// same shared job independently without owning the job row. Net-new table with no
-// existing readers, so it ships fully constrained and is the FIRST target of the
-// RLS rollout (migration 0009 — see src/db/migrations/0009_rls_user_job_priority.sql
-// and RLS Rollout Plan.md). RLS is keyed on the `app.user_id` session GUC set by
-// withUser() in src/db/session.ts; application owner predicates remain mandatory
-// regardless (ADR-005).
+// ── user_job_state ────────────────────────────────────────────────────────────
+// Sparse private state for one user tracking one shared catalog job. Application
+// fields remain on jobs only as a legacy EXPAND-phase read source until API-013.
 
-export const userJobPriority = pgTable(
-  "user_job_priority",
+export const userJobState = pgTable(
+  "user_job_state",
   {
     userId: integer("user_id")
       .notNull()
@@ -201,8 +196,16 @@ export const userJobPriority = pgTable(
     jobId: integer("job_id")
       .notNull()
       .references(() => jobs.id, { onDelete: "cascade" }),
-    priority: smallint("priority"), // 1–5, per-user override of jobs.priority
+    priority: smallint("priority"),
     isHidden: boolean("is_hidden").default(false).notNull(),
+    hasApplied: boolean("has_applied").default(false).notNull(),
+    dateApplied: date("date_applied"),
+    heardBack: boolean("heard_back").default(false).notNull(),
+    interviewStage: interviewStageEnum("interview_stage").default("not_applied").notNull(),
+    referral: boolean("referral").default(false).notNull(),
+    coverLetterSubmitted: boolean("cover_letter_submitted").default(false).notNull(),
+    resumeVersionId: integer("resume_version_id"),
+    rejectionReason: text("rejection_reason"),
     notes: text("notes"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -210,11 +213,85 @@ export const userJobPriority = pgTable(
   (t) => [
     // Owner-first composite PK also indexes the (user_id) owner-scoped access path.
     primaryKey({ columns: [t.userId, t.jobId] }),
-    index("user_job_priority_job_id_idx").on(t.jobId),
+    index("user_job_state_job_id_idx").on(t.jobId),
+    index("user_job_state_user_stage_idx").on(t.userId, t.interviewStage),
+    index("user_job_state_user_applied_idx").on(t.userId, t.hasApplied),
+    index("user_job_state_user_priority_idx").on(t.userId, t.priority),
+    index("user_job_state_resume_version_id_idx").on(t.resumeVersionId),
+    foreignKey({
+      columns: [t.userId, t.resumeVersionId],
+      foreignColumns: [resumeVersions.userId, resumeVersions.id],
+      name: "user_job_state_owner_resume_fk",
+    }),
     check(
-      "user_job_priority_priority_range_check",
+      "user_job_state_priority_range_check",
       sql`${t.priority} IS NULL OR ${t.priority} BETWEEN 1 AND 5`,
     ),
+  ],
+);
+
+export const userJobContacts = pgTable(
+  "user_job_contacts",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    jobId: integer("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    title: text("title"),
+    email: text("email"),
+    phone: text("phone"),
+    linkedinUrl: text("linkedin_url"),
+    role: text("role"),
+    contactedAt: date("contacted_at"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [
+    index("user_job_contacts_user_job_idx").on(t.userId, t.jobId),
+    index("user_job_contacts_job_id_idx").on(t.jobId),
+    foreignKey({
+      columns: [t.userId, t.jobId],
+      foreignColumns: [userJobState.userId, userJobState.jobId],
+      name: "user_job_contacts_state_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+export const userJobStatusHistory = pgTable(
+  "user_job_status_history",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    jobId: integer("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+    fromStage: interviewStageEnum("from_stage"),
+    toStage: interviewStageEnum("to_stage").notNull(),
+    changedAt: timestamp("changed_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("user_job_status_history_user_job_changed_idx").on(t.userId, t.jobId, t.changedAt),
+    index("user_job_status_history_job_id_idx").on(t.jobId),
+    foreignKey({
+      columns: [t.userId, t.jobId],
+      foreignColumns: [userJobState.userId, userJobState.jobId],
+      name: "user_job_status_history_state_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+export const resumeVersions = pgTable(
+  "resume_versions",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    label: text("label").unique().notNull(),
+    filePath: text("file_path"),
+    date: date("date"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [
+    index("resume_versions_user_id_idx").on(t.userId),
+    uniqueIndex("resume_versions_user_id_id_uq").on(t.userId, t.id),
   ],
 );
 
@@ -390,30 +467,6 @@ export const jobStatusHistory = pgTable(
     changedAt: timestamp("changed_at", { withTimezone: true }).defaultNow(),
   },
   (t) => [index("job_status_history_job_id_idx").on(t.jobId)],
-);
-
-// ── resume_versions ───────────────────────────────────────────────────────────
-// Labels-only — no file storage. jobs.resume_version stores the label string.
-
-export const resumeVersions = pgTable(
-  "resume_versions",
-  {
-    id: serial("id").primaryKey(),
-    // DB-002 expand phase: nullable owner FK. Per-user uploaded resumes drive the
-    // per-user job priority overlay. The global `label` UNIQUE below is retained for
-    // now; the CONTRACT phase makes `user_id` NOT NULL and replaces the global unique
-    // with per-user `(user_id, label)` uniqueness once the routes are owner-aware.
-    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
-    label: text("label").unique().notNull(),
-    // Optional pointer to an uploaded resume file (storage key / relative path).
-    // Nullable and additive — actual file storage is a follow-up; the column exists
-    // so resume uploads have a home without a second migration.
-    filePath: text("file_path"),
-    date: date("date"),
-    notes: text("notes"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-  },
-  (t) => [index("resume_versions_user_id_idx").on(t.userId)],
 );
 
 // ── contacts ──────────────────────────────────────────────────────────────────

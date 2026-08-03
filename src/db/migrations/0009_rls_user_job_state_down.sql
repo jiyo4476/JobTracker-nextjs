@@ -1,0 +1,10 @@
+DROP POLICY IF EXISTS "user_job_status_history_insert" ON "user_job_status_history";
+DROP POLICY IF EXISTS "user_job_status_history_select" ON "user_job_status_history";
+DROP POLICY IF EXISTS "user_job_contacts_owner" ON "user_job_contacts";
+DROP POLICY IF EXISTS "user_job_state_owner" ON "user_job_state";
+ALTER TABLE "user_job_status_history" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "user_job_status_history" DISABLE ROW LEVEL SECURITY;
+ALTER TABLE "user_job_contacts" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "user_job_contacts" DISABLE ROW LEVEL SECURITY;
+ALTER TABLE "user_job_state" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "user_job_state" DISABLE ROW LEVEL SECURITY;
