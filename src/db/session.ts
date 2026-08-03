@@ -37,7 +37,7 @@ export async function setUserContext(tx: SqlExecutor, userId: number): Promise<v
  * tables are visible/writable for exactly this user:
  *
  *   const rows = await withUser(user.id, (tx) =>
- *     tx.select().from(userJobPriority)  // only this user's rows
+ *     tx.select().from(userJobState)  // only this user's rows
  *   )
  */
 export function withUser<T>(
