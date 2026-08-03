@@ -15,13 +15,15 @@ import type {
   TaxonomyCategory, TaxonomyClearanceComparison,
   SalaryPatchResponse, TagsPatchResponse,
 } from '@/types/queries'
+import { optimisticJobsUpdate, type JobStateAction } from '@/lib/job-state'
 
 // Re-export all types so consumers can import from '@/lib/queries' unchanged
 export type {
   ActivityItem,
   CompanyRow, CompanyDetail, CompanyTaxonomyDemand, CompanyTaxonomyDemandItem,
   Contact,
-  JobDetail, JobListItem, JobsResponse, JobsParams,
+  JobDetail, JobListItem, JobsResponse, JobsParams, JobScope,
+  UserJobState, SelectedResume,
   LookupItem, StatsResponse, StatsCatalog, ResumeVersion, UserSkill,
   UserTaxonomyCategory, UserTaxonomyCreatePayload, UserTaxonomyCreateVariables,
   UserTaxonomyGapItem, UserTaxonomyGapResponse, UserTaxonomyItem, UserTaxonomyPatchPayload,
@@ -96,6 +98,62 @@ export function usePatchJob() {
     onError: () => {
       toast.error('Failed to save job changes')
     },
+  })
+}
+
+// ── Owner-scoped personal job state (API-013 /api/jobs/[id]/state) ────────────
+// These replace the old global PATCH /api/jobs/[id] for every personal field. They
+// invalidate the full set of personal caches so the list, detail, dashboard, and
+// activity feed all reflect the change.
+function invalidatePersonalState(qc: ReturnType<typeof useQueryClient>, id: string | number) {
+  qc.invalidateQueries({ queryKey: ['jobs'] })
+  qc.invalidateQueries({ queryKey: ['job', String(id)] })
+  qc.invalidateQueries({ queryKey: ['stats'] })
+  qc.invalidateQueries({ queryKey: ['activity'] })
+  qc.invalidateQueries({ queryKey: ['companies'] })
+}
+
+// General-purpose PATCH of the caller's user_job_state. Used by the job-detail
+// "My application" editor and the personal edit form. A sparse body creates the
+// state row on first write. Returns the updated row.
+export function usePatchJobState() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string | number; body: Record<string, unknown> }) =>
+      api.patch(`/jobs/${id}/state`, body),
+    onSuccess: (_data, { id }) => invalidatePersonalState(qc, id),
+    onError: () => {
+      toast.error('Failed to save your application changes')
+    },
+  })
+}
+
+// Optimistic row-level personal actions for the jobs list: Save to My Jobs, Hide,
+// Unhide, Remove from My Jobs. Rolls back every touched ['jobs'] cache on failure.
+export function useJobStateAction() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, action }: { id: number; action: JobStateAction }) => {
+      if (action === 'remove') return api.delete(`/jobs/${id}/state`)
+      const is_hidden = action === 'hide'
+      return api.patch(`/jobs/${id}/state`, { is_hidden })
+    },
+    onMutate: async ({ id, action }) => {
+      await qc.cancelQueries({ queryKey: ['jobs'] })
+      const snapshots = qc.getQueriesData<JobsResponse>({ queryKey: ['jobs'] })
+      for (const [key, data] of snapshots) {
+        if (data) qc.setQueryData(key, optimisticJobsUpdate(data, id, action))
+      }
+      return { snapshots }
+    },
+    onError: (_err, { action }, context) => {
+      for (const [key, data] of context?.snapshots ?? []) {
+        qc.setQueryData(key, data)
+      }
+      const verb = action === 'remove' ? 'remove' : action
+      toast.error(`Failed to ${verb} job`)
+    },
+    onSettled: (_data, _err, { id }) => invalidatePersonalState(qc, id),
   })
 }
 
@@ -259,6 +317,8 @@ export function useDeleteContact() {
 
 export function useJobs(params: JobsParams = {}) {
   const qs = new URLSearchParams()
+  if (params.scope) qs.set('scope', params.scope)
+  if (params.has_applied) qs.set('has_applied', params.has_applied)
   if (params.page) qs.set('page', String(params.page))
   if (params.company_id) qs.set('company_id', String(params.company_id))
   if (params.q) qs.set('q', params.q)

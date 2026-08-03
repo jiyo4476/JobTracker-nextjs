@@ -21,13 +21,17 @@ import {
 import { PageHeader } from '@/components/layout/PageHeader'
 import { StageBadge } from '@/components/jobs/StageBadge'
 import { TaxonomyFilters } from '@/components/jobs/TaxonomyFilters'
-import { useJobs, useDeleteJob, usePatchJob, type JobListItem } from '@/lib/queries'
+import { ScopeTabs, JOB_SCOPE_TABS } from '@/components/jobs/ScopeTabs'
+import {
+  useJobs, usePatchJobState, useJobStateAction, type JobListItem,
+} from '@/lib/queries'
+import { removalConfirmationText, type JobStateAction } from '@/lib/job-state'
 import { taxonomyJobsParams } from '@/lib/jobs-taxonomy-filters'
 import { formatSalary } from '@/lib/salary-format'
 import { formatJobLocation } from '@/lib/job-location-format'
 import { sourcePlatformOptions } from '@/lib/source-platforms'
 import { interviewStageOptions, jobTypeOptions, experienceLevelOptions } from '@/lib/enums'
-import type { JobsParams } from '@/types/queries'
+import type { JobScope, JobsParams } from '@/types/queries'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -36,6 +40,10 @@ const col = createColumnHelper<JobListItem>()
 function formatDate(d: string | null): string {
   if (!d) return '—'
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function isJobScope(value: string): value is JobScope {
+  return JOB_SCOPE_TABS.some((tab) => tab.value === value)
 }
 
 // Allowed `sort_by` URL values; kept in sync with JobsParams via `satisfies`.
@@ -61,6 +69,9 @@ export default function JobsClient() {
   const qc = useQueryClient()
 
   // Read filter values from URL
+  const scopeParam = searchParams.get('scope') ?? 'tracked'
+  const scope: JobScope = isJobScope(scopeParam) ? scopeParam : 'tracked'
+  const isPersonalScope = scope === 'tracked' || scope === 'hidden'
   const page = Number(searchParams.get('page') ?? '1')
   const stage = searchParams.get('stage') ?? ''
   const platform = searchParams.get('platform') ?? ''
@@ -110,6 +121,14 @@ export default function JobsClient() {
     router.replace(`/jobs?${next.toString()}`)
   }
 
+  function handleScopeChange(nextScope: JobScope) {
+    // Personal filters (stage) are meaningless in the catalog view — drop them so
+    // switching to Browse Catalog doesn't silently apply a hidden stage filter.
+    const updates: Record<string, string> = { scope: nextScope === 'tracked' ? '' : nextScope }
+    if (nextScope === 'catalog') updates.stage = ''
+    updateParams(updates)
+  }
+
   function handleSearch(val: string) {
     setInputQ(val)
     if (debounceTimer.current) clearTimeout(debounceTimer.current)
@@ -121,20 +140,23 @@ export default function JobsClient() {
   function handleClearFilters() {
     setInputQ('')
     if (debounceTimer.current) clearTimeout(debounceTimer.current)
-    router.replace('/jobs')
+    // Preserve the current scope when clearing filters.
+    router.replace(scope === 'tracked' ? '/jobs' : `/jobs?scope=${scope}`)
   }
 
-  const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
-  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  const [removeTarget, setRemoveTarget] = useState<JobListItem | null>(null)
+  const [bulkRemoveOpen, setBulkRemoveOpen] = useState(false)
   const [bulkStage, setBulkStage] = useState('')
   const [bulkPending, setBulkPending] = useState(false)
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({})
 
   const { data, isLoading } = useJobs({
+    scope,
     page,
     company_id: companyId,
     q: urlQ,
-    stage,
+    // Stage is a personal (user_job_state) filter — only apply it in personal scopes.
+    stage: isPersonalScope ? stage : '',
     platform,
     job_type: jobType,
     experience_level: experienceLevel,
@@ -145,28 +167,29 @@ export default function JobsClient() {
     sort_order: sortOrder,
     ...taxonomyJobsParams(new URLSearchParams(searchParams.toString())),
   })
-  const deleteJob = useDeleteJob()
-  const patchJob = usePatchJob()
+  const patchState = usePatchJobState()
+  const stateAction = useJobStateAction()
 
   const allRows = data?.jobs ?? []
   const allRowIds = allRows.map(j => String(j.id))
   const allSelected = allRowIds.length > 0 && allRowIds.every(id => rowSelection[id])
   const someSelected = allRowIds.some(id => rowSelection[id])
-  // Read numeric IDs directly from allRows to avoid a string→number roundtrip.
   const selectedIds = allRows.filter(j => rowSelection[String(j.id)]).map(j => j.id)
 
-  async function handleBulkDelete() {
-    // Snapshot at call time so the set of IDs is unambiguously tied to the
-    // rows visible when the user confirmed, not a stale closure value.
+  function runRowAction(id: number, action: JobStateAction) {
+    stateAction.mutate({ id, action })
+  }
+
+  async function handleBulkRemove() {
     const ids = allRows.filter(j => rowSelection[String(j.id)]).map(j => j.id)
     setBulkPending(true)
     const results = await Promise.allSettled(
-      ids.map(id => deleteJob.mutateAsync({ id, showErrorToast: false }))
+      ids.map(id => stateAction.mutateAsync({ id, action: 'remove' }))
     )
     const failed = results.filter(r => r.status === 'rejected').length
     const succeeded = results.length - failed
     setBulkPending(false)
-    setBulkDeleteOpen(false)
+    setBulkRemoveOpen(false)
     if (succeeded > 0) {
       const succeededIds = new Set(
         ids.filter((_, i) => results[i].status === 'fulfilled').map(String)
@@ -178,8 +201,8 @@ export default function JobsClient() {
       })
       qc.invalidateQueries({ queryKey: ['jobs'] })
     }
-    if (failed > 0) toast.error(`${failed} deletion${failed !== 1 ? 's' : ''} failed`)
-    else toast.success(`Deleted ${succeeded} job${succeeded !== 1 ? 's' : ''}`)
+    if (failed > 0) toast.error(`${failed} removal${failed !== 1 ? 's' : ''} failed`)
+    else toast.success(`Removed ${succeeded} job${succeeded !== 1 ? 's' : ''} from My Jobs`)
   }
 
   async function handleBulkStage() {
@@ -187,7 +210,7 @@ export default function JobsClient() {
     const ids = allRows.filter(j => rowSelection[String(j.id)]).map(j => j.id)
     setBulkPending(true)
     const results = await Promise.allSettled(
-      ids.map(id => patchJob.mutateAsync({ id, body: { interview_stage: bulkStage } }))
+      ids.map(id => patchState.mutateAsync({ id, body: { interview_stage: bulkStage } }))
     )
     const failed = results.filter(r => r.status === 'rejected').length
     const succeeded = results.length - failed
@@ -259,7 +282,14 @@ export default function JobsClient() {
     col.accessor('interviewStage', {
       id: 'stage',
       header: 'Stage',
-      cell: (info) => <StageBadge stage={info.getValue()} />,
+      cell: (info) => {
+        const row = info.row.original
+        if (!row.isTracked) {
+          return <span className="text-xs text-slate-500 italic">Not tracked</span>
+        }
+        const value = info.getValue()
+        return value ? <StageBadge stage={value} /> : <span className="text-slate-500">—</span>
+      },
     }),
     col.accessor('jobLocation', {
       id: 'location',
@@ -296,17 +326,54 @@ export default function JobsClient() {
     col.display({
       id: 'actions',
       header: '',
-      cell: (info) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-red-500 hover:text-red-700 h-7 px-2"
-          disabled={deleteJob.isPending}
-          onClick={() => setDeleteTarget(info.row.original.id)}
-        >
-          Delete
-        </Button>
-      ),
+      cell: (info) => {
+        const row = info.row.original
+        const title = row.jobTitle
+        return (
+          <div className="flex justify-end gap-1">
+            {!row.isTracked && (
+              <Button
+                variant="outline" size="sm" className="h-7 px-2 text-xs"
+                disabled={stateAction.isPending}
+                aria-label={`Save ${title} to My Jobs`}
+                onClick={() => runRowAction(row.id, 'save')}
+              >
+                Save to My Jobs
+              </Button>
+            )}
+            {row.isTracked && !row.isHidden && (
+              <Button
+                variant="outline" size="sm" className="h-7 px-2 text-xs"
+                disabled={stateAction.isPending}
+                aria-label={`Hide ${title}`}
+                onClick={() => runRowAction(row.id, 'hide')}
+              >
+                Hide
+              </Button>
+            )}
+            {row.isTracked && row.isHidden && (
+              <Button
+                variant="outline" size="sm" className="h-7 px-2 text-xs"
+                disabled={stateAction.isPending}
+                aria-label={`Unhide ${title}`}
+                onClick={() => runRowAction(row.id, 'unhide')}
+              >
+                Unhide
+              </Button>
+            )}
+            {row.isTracked && (
+              <Button
+                variant="ghost" size="sm" className="h-7 px-2 text-xs text-red-500 hover:text-red-700"
+                disabled={stateAction.isPending}
+                aria-label={`Remove ${title} from My Jobs`}
+                onClick={() => setRemoveTarget(row)}
+              >
+                Remove
+              </Button>
+            )}
+          </div>
+        )
+      },
     }),
   ]
 
@@ -324,7 +391,7 @@ export default function JobsClient() {
 
   const hasFilters = !!(
     urlQ ||
-    stage ||
+    (isPersonalScope && stage) ||
     platform ||
     jobType ||
     experienceLevel ||
@@ -333,11 +400,17 @@ export default function JobsClient() {
     EXTRA_FILTER_PARAMS.some(param => searchParams.has(param))
   )
 
+  const emptyMessage = scope === 'tracked'
+    ? 'No jobs saved yet. Switch to Browse Catalog to find postings and save them to My Jobs.'
+    : scope === 'hidden'
+      ? 'No hidden jobs.'
+      : 'No jobs found'
+
   return (
     <div className="p-8">
       <PageHeader
         title="Jobs"
-        description="Browse and manage your saved job listings"
+        description="Browse the shared catalog and manage the jobs you have saved"
         action={
           <Link
             href="/jobs/new"
@@ -348,24 +421,18 @@ export default function JobsClient() {
         }
       />
 
-      <div className="flex gap-3 mb-4 flex-wrap">
+      <div className="mb-4">
+        <ScopeTabs scope={scope} onScopeChange={handleScopeChange} />
+      </div>
+
+      {/* Catalog (posting-fact) filters — apply in every view */}
+      <div className="flex gap-3 mb-3 flex-wrap">
         <Input
           placeholder="Search by title or company…"
           className="max-w-xs"
           value={inputQ}
           onChange={(e) => handleSearch(e.target.value)}
         />
-        <select
-          value={stage}
-          onChange={(e) => updateParams({ stage: e.target.value })}
-          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-          aria-label="Filter by stage"
-        >
-          <option value="">All stages</option>
-          {interviewStageOptions.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
         <select
           value={platform}
           onChange={(e) => updateParams({ platform: e.target.value })}
@@ -419,11 +486,6 @@ export default function JobsClient() {
           <option value="true">Remote only</option>
           <option value="false">On-site only</option>
         </select>
-        {hasFilters && (
-          <Button variant="outline" size="sm" onClick={handleClearFilters}>
-            Clear filters
-          </Button>
-        )}
         <TaxonomyFilters
           searchParams={new URLSearchParams(searchParams.toString())}
           onChange={(param, value) => updateParams({ [param]: value })}
@@ -434,7 +496,30 @@ export default function JobsClient() {
             keyword_ids: '',
           })}
         />
+        {hasFilters && (
+          <Button variant="outline" size="sm" onClick={handleClearFilters}>
+            Clear filters
+          </Button>
+        )}
       </div>
+
+      {/* Personal (application-state) filters — only meaningful for tracked/hidden views */}
+      {isPersonalScope && (
+        <div className="flex items-center gap-2 mb-4 flex-wrap rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-2">
+          <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">My application</span>
+          <select
+            value={stage}
+            onChange={(e) => updateParams({ stage: e.target.value })}
+            className="h-8 rounded-md border border-input bg-background px-3 text-sm"
+            aria-label="Filter by interview stage"
+          >
+            <option value="">All stages</option>
+            {interviewStageOptions.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Bulk action toolbar */}
       {someSelected && (
@@ -470,9 +555,9 @@ export default function JobsClient() {
             variant="destructive"
             className="h-7 px-3 text-xs"
             disabled={bulkPending}
-            onClick={() => setBulkDeleteOpen(true)}
+            onClick={() => setBulkRemoveOpen(true)}
           >
-            {bulkPending ? 'Deleting…' : 'Delete'}
+            {bulkPending ? 'Removing…' : 'Remove from My Jobs'}
           </Button>
           <span className="text-slate-400">·</span>
           <Button
@@ -489,7 +574,7 @@ export default function JobsClient() {
 
       <Card>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-slate-900">
+          <table id="jobs-panel" role="tabpanel" aria-labelledby={`scope-tab-${scope}`} className="w-full text-sm text-slate-900">
             <thead>
               <tr className="border-b text-left text-slate-600 text-xs uppercase tracking-wide">
                 {table.getHeaderGroups().map((hg) =>
@@ -529,7 +614,7 @@ export default function JobsClient() {
                 ? (
                     <tr>
                       <td colSpan={columns.length} className="px-4 py-12 text-center text-slate-600">
-                        No jobs found
+                        {emptyMessage}
                       </td>
                     </tr>
                   )
@@ -574,13 +659,13 @@ export default function JobsClient() {
         </div>
       </Card>
 
-      {/* Single-row delete dialog */}
-      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+      {/* Single-row remove-from-tracker dialog */}
+      <AlertDialog open={removeTarget !== null} onOpenChange={(open) => { if (!open) setRemoveTarget(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this job?</AlertDialogTitle>
+            <AlertDialogTitle>Remove from My Jobs?</AlertDialogTitle>
             <AlertDialogDescription>
-              The listing will be soft-deleted and hidden from the default view. You can restore it later with the API.
+              {removalConfirmationText({ jobTitle: removeTarget?.jobTitle })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -588,25 +673,27 @@ export default function JobsClient() {
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700 text-white"
               onClick={() => {
-                if (deleteTarget !== null) {
-                  deleteJob.mutate(deleteTarget)
-                  setDeleteTarget(null)
+                if (removeTarget) {
+                  runRowAction(removeTarget.id, 'remove')
+                  setRemoveTarget(null)
                 }
               }}
             >
-              Delete
+              Remove from My Jobs
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Bulk delete dialog */}
-      <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+      {/* Bulk remove-from-tracker dialog */}
+      <AlertDialog open={bulkRemoveOpen} onOpenChange={setBulkRemoveOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {selectedIds.length} job{selectedIds.length !== 1 ? 's' : ''}?</AlertDialogTitle>
+            <AlertDialogTitle>Remove {selectedIds.length} job{selectedIds.length !== 1 ? 's' : ''} from My Jobs?</AlertDialogTitle>
             <AlertDialogDescription>
-              {selectedIds.length} listing{selectedIds.length !== 1 ? 's' : ''} will be soft-deleted and hidden from the default view.
+              For each selected job this permanently deletes your saved application state, any
+              private contacts you added, and your interview-stage activity history. The jobs stay
+              in the shared catalog.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -614,9 +701,9 @@ export default function JobsClient() {
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700 text-white"
               disabled={bulkPending}
-              onClick={handleBulkDelete}
+              onClick={handleBulkRemove}
             >
-              {bulkPending ? 'Deleting…' : `Delete ${selectedIds.length}`}
+              {bulkPending ? 'Removing…' : `Remove ${selectedIds.length}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

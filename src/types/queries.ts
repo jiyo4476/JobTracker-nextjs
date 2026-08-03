@@ -184,6 +184,39 @@ export type UserTaxonomyGapResponse = {
   totalPages: number
 }
 
+// API-013: the three owner-scoped views of the jobs list. `tracked` = the caller's
+// saved (non-hidden) jobs, `catalog` = the whole global catalog (tracked flag per row),
+// `hidden` = the caller's hidden jobs.
+export type JobScope = 'tracked' | 'catalog' | 'hidden'
+
+// Nested personal overlay returned by GET /api/jobs/[id] (null when the caller has no
+// user_job_state row for this job). Fields map 1:1 to user_job_state columns.
+export interface UserJobState {
+  priority: number | null
+  isHidden: boolean
+  hasApplied: boolean
+  dateApplied: string | null
+  heardBack: boolean
+  interviewStage: InterviewStage
+  referral: boolean
+  coverLetterSubmitted: boolean
+  resumeVersionId: number | null
+  rejectionReason: string | null
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+// The caller's selected resume version, embedded in GET /api/jobs/[id] when
+// userState.resumeVersionId is set and the resume belongs to the caller.
+export interface SelectedResume {
+  id: number
+  label: string
+  filePath: string | null
+  date: string | null
+  notes: string | null
+}
+
 export type JobDetail = {
   id: number
   jobTitle: string
@@ -204,26 +237,31 @@ export type JobDetail = {
   annualEquivalentMax: number | null
   salaryText: string | null
   salaryCurrency: string | null
-  hasApplied: boolean | null
-  dateApplied: string | null
-  heardBack: boolean | null
-  interviewStage: InterviewStage | null
   datePosted: string | null
   dateFound: string | null
   lastScrapedAt: string | null
   isActive: boolean | null
   applicationDeadline: string | null
   securityClearanceReq: boolean | null
-  priority: number | null
-  referral: boolean | null
-  coverLetterSubmitted: boolean | null
-  resumeVersion: string | null
-  rejectionReason: string | null
-  notes: string | null
   createdAt: string
   updatedAt: string
   companyId: number | null
   companyName: string | null
+  // ── Transitional flattened personal fields (from user_job_state; null/default when untracked) ──
+  hasApplied: boolean | null
+  dateApplied: string | null
+  heardBack: boolean | null
+  interviewStage: InterviewStage | null
+  priority: number | null
+  referral: boolean | null
+  coverLetterSubmitted: boolean | null
+  rejectionReason: string | null
+  notes: string | null
+  // ── Owner-scope markers + nested contract ──
+  isTracked: boolean
+  isHidden: boolean
+  userState: UserJobState | null
+  selectedResume: SelectedResume | null
   skills: LookupItem[]
   software: LookupItem[]
   keywords: LookupItem[]
@@ -248,17 +286,21 @@ export interface JobListItem {
   annualEquivalentMin: number | null
   annualEquivalentMax: number | null
   salaryText: string | null
-  hasApplied: boolean
-  dateApplied: string | null
-  interviewStage: InterviewStage
   datePosted: string | null
   dateFound: string
   isActive: boolean
-  priority: number | null
   securityClearanceReq: boolean | null
   companyId: number | null
   companyName: string | null
   createdAt: string
+  // ── Personal overlay (null/false when the row is untracked, e.g. in catalog scope) ──
+  isTracked: boolean
+  isHidden: boolean
+  hasApplied: boolean | null
+  dateApplied: string | null
+  heardBack: boolean | null
+  interviewStage: InterviewStage | null
+  priority: number | null
 }
 
 export type SalaryPatchResponse = Pick<
@@ -281,12 +323,14 @@ export type TagsPatchResponse = Pick<JobDetail, 'skills' | 'software' | 'keyword
 
 export interface JobsResponse {
   jobs: JobListItem[]
+  scope: JobScope
   total: number
   page: number
   totalPages: number
 }
 
 export interface JobsParams {
+  scope?: JobScope
   page?: number
   company_id?: number
   q?: string
@@ -296,6 +340,7 @@ export interface JobsParams {
   experience_level?: string
   security_clearance?: 'true' | 'false'
   is_remote?: string
+  has_applied?: 'true' | 'false'
   is_active?: string
   skill_ids?: string
   software_ids?: string
