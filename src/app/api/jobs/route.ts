@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireAuth, readJsonBody } from '@/lib/http'
+import { withUser } from '@/db/session'
+import { requireAuth, readJsonBody, privateJson } from '@/lib/http'
+import { resolveRequestUser } from '@/lib/resolved-user'
 import { manualJobSchema } from '@/lib/schemas'
 import { logger, serializeError } from '@/lib/logger'
 import { escapeLikePattern } from '@/lib/db-utils'
 import {
   jobs,
   companies,
+  userJobState,
   jobSkills,
   jobSoftware,
   jobCertifications,
@@ -18,31 +21,50 @@ import {
   sourcePlatformEnum, jobTypeEnum, experienceLevelEnum, interviewStageEnum,
 } from '@/lib/schemas'
 
+const JOB_SCOPES = ['tracked', 'catalog', 'hidden'] as const
+type JobScope = (typeof JOB_SCOPES)[number]
+
 export async function GET(req: NextRequest) {
+  // API-013: the jobs list is now owner-scoped. It joins the current user's
+  // user_job_state overlay, so it requires a resolved interactive user (service
+  // principals are rejected) and never caches per-user results.
+  const auth = await resolveRequestUser(req)
+  if (!auth.ok) return auth.response
+
   try {
-    return await listJobs(req)
+    return await listJobs(req, auth.user.id)
   } catch (err) {
     logger.error('GET /api/jobs failed', serializeError(err))
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
-async function listJobs(req: NextRequest) {
+async function listJobs(req: NextRequest, userId: number) {
   const { searchParams } = new URL(req.url)
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1'))
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '25')))
   const offset = (page - 1) * limit
 
+  const scopeParam = searchParams.get('scope') ?? 'tracked'
+  if (!(JOB_SCOPES as readonly string[]).includes(scopeParam)) {
+    return NextResponse.json(
+      { error: 'Invalid scope: expected tracked, catalog, or hidden' },
+      { status: 400 },
+    )
+  }
+  const scope = scopeParam as JobScope
+
   const sortBy = searchParams.get('sort_by') ?? 'found'
   const sortOrder = searchParams.get('sort_order') ?? 'desc'
+  // Stage and priority sorts read the owner's overlay; the rest stay on catalog tables.
   const sortColumns = {
     company: companies.name,
     role: jobs.jobTitle,
-    stage: jobs.interviewStage,
+    stage: userJobState.interviewStage,
     location: jobs.jobLocation,
     salary: jobs.annualEquivalentMin,
     found: jobs.dateFound,
-    priority: jobs.priority,
+    priority: userJobState.priority,
     clearance: jobs.securityClearanceReq,
   } as const
   if (!Object.hasOwn(sortColumns, sortBy) || !['asc', 'desc'].includes(sortOrder)) {
@@ -65,9 +87,10 @@ async function listJobs(req: NextRequest) {
     filters.push(eq(jobs.companyId, companyId))
   }
 
+  // Stage/priority/applied filters are PERSONAL — they read user_job_state.
   const stage = searchParams.get('stage')
   const stageParsed = interviewStageEnum.safeParse(stage)
-  if (stage && stageParsed.success) filters.push(eq(jobs.interviewStage, stageParsed.data))
+  if (stage && stageParsed.success) filters.push(eq(userJobState.interviewStage, stageParsed.data))
 
   const platform = searchParams.get('platform')
   const platformParsed = sourcePlatformEnum.safeParse(platform)
@@ -87,7 +110,12 @@ async function listJobs(req: NextRequest) {
   const isRemote = searchParams.get('is_remote')
   if (isRemote !== null) filters.push(eq(jobs.isRemote, isRemote === 'true'))
 
-  // Default to active-only; pass ?is_active=false to include soft-deleted jobs
+  const hasApplied = searchParams.get('has_applied')
+  if (hasApplied === 'true' || hasApplied === 'false') {
+    filters.push(eq(userJobState.hasApplied, hasApplied === 'true'))
+  }
+
+  // Default to active catalog jobs; pass ?is_active=false to include soft-deleted jobs.
   const isActive = searchParams.get('is_active')
   const activeOnly = isActive === null ? true : isActive === 'true'
   filters.push(eq(jobs.isActive, activeOnly))
@@ -105,7 +133,7 @@ async function listJobs(req: NextRequest) {
   const priorityMinVal = priorityMinRaw ? parseInt(priorityMinRaw) : NaN
   // Drizzle infers `priority` from the smallint enum column; cast needed at TS level only
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (!isNaN(priorityMinVal)) filters.push(gte(jobs.priority, priorityMinVal as any))
+  if (!isNaN(priorityMinVal)) filters.push(gte(userJobState.priority, priorityMinVal as any))
 
   const taxonomyFilters = [
     { param: taxonomyFilterParams.skills, junction: jobSkills, relationId: jobSkills.skillId },
@@ -121,8 +149,6 @@ async function listJobs(req: NextRequest) {
     }
     if (parsed.ids.length === 0) continue
 
-    // One EXISTS per populated category gives OR-within-category semantics through
-    // ANY(...), while the outer AND keeps different categories independent.
     filters.push(sql`EXISTS (
       SELECT 1 FROM ${taxonomyFilter.junction}
       WHERE ${taxonomyFilter.junction.jobId} = ${jobs.id}
@@ -132,80 +158,115 @@ async function listJobs(req: NextRequest) {
 
   const q = searchParams.get('q')?.slice(0, 200)
   if (q) {
-    // Escape LIKE special chars so user input doesn't accidentally match everything
     const escaped = escapeLikePattern(q)
     filters.push(
       or(
         ilike(jobs.jobTitle, `%${escaped}%`),
         ilike(companies.name, `%${escaped}%`),
-        // Full-text match against job_description, backed by the jobs_description_fts_idx
-        // GIN index. plainto_tsquery handles arbitrary user text safely — no LIKE-style
-        // escaping needed.
         sql`to_tsvector('english', coalesce(${jobs.jobDescription}, '')) @@ plainto_tsquery('english', ${q})`
       )
     )
   }
 
+  // Owner predicate for the state overlay: ALWAYS scoped to the resolved user, in the
+  // JOIN condition so a LEFT JOIN cannot match another user's row. Defense-in-depth on
+  // top of RLS (which withUser also sets).
+  const ownerJoin = and(eq(userJobState.jobId, jobs.id), eq(userJobState.userId, userId))
+  if (scope === 'hidden') {
+    filters.push(eq(userJobState.isHidden, true))
+  } else if (scope === 'tracked') {
+    filters.push(eq(userJobState.isHidden, false))
+  }
+
   const where = filters.length > 0 ? and(...filters) : undefined
 
   logger.debug('GET /api/jobs', {
-    page, limit, companyId: companyIdRaw, stage, platform, jobType, expLevel, clearance, isRemote,
-    hasQuery: q != null && q.length > 0,
+    scope, page, limit, companyId: companyIdRaw, stage, platform, jobType, expLevel,
+    clearance, isRemote, hasQuery: q != null && q.length > 0,
     queryLength: q != null ? q.length : undefined,
   })
 
-  const [{ total }] = await db
-    .select({ total: count() })
-    .from(jobs)
-    .leftJoin(companies, eq(jobs.companyId, companies.id))
-    .where(where)
+  return withUser(userId, async (tx) => {
+    const applyStateJoin = <T extends { leftJoin: unknown; innerJoin: unknown }>(query: T) => {
+      const anyQuery = query as unknown as {
+        leftJoin: (...args: unknown[]) => T
+        innerJoin: (...args: unknown[]) => T
+      }
+      return scope === 'catalog'
+        ? anyQuery.leftJoin(userJobState, ownerJoin)
+        : anyQuery.innerJoin(userJobState, ownerJoin)
+    }
 
-  const rows = await db
-    .select({
-      id: jobs.id,
-      jobTitle: jobs.jobTitle,
-      jobLink: jobs.jobLink,
-      jobLocation: jobs.jobLocation,
-      isRemote: jobs.isRemote,
-      sourcePlatform: jobs.sourcePlatform,
-      jobType: jobs.jobType,
-      experienceLevel: jobs.experienceLevel,
-      salaryMin: jobs.salaryMin,
-      salaryMax: jobs.salaryMax,
-      salaryType: jobs.salaryType,
-      hourlyRateMin: jobs.hourlyRateMin,
-      hourlyRateMax: jobs.hourlyRateMax,
-      annualEquivalentMin: jobs.annualEquivalentMin,
-      annualEquivalentMax: jobs.annualEquivalentMax,
-      salaryText: jobs.salaryText,
-      hasApplied: jobs.hasApplied,
-      dateApplied: jobs.dateApplied,
-      interviewStage: jobs.interviewStage,
-      datePosted: jobs.datePosted,
-      dateFound: jobs.dateFound,
-      isActive: jobs.isActive,
-      priority: jobs.priority,
-      securityClearanceReq: jobs.securityClearanceReq,
-      companyId: jobs.companyId,
-      companyName: companies.name,
-      createdAt: jobs.createdAt,
+    const countQuery = applyStateJoin(
+      tx.select({ total: count() }).from(jobs).leftJoin(companies, eq(jobs.companyId, companies.id)),
+    ).where(where)
+    const [{ total }] = await countQuery
+
+    const rowsQuery = applyStateJoin(
+      tx
+        .select({
+          id: jobs.id,
+          jobTitle: jobs.jobTitle,
+          jobLink: jobs.jobLink,
+          jobLocation: jobs.jobLocation,
+          isRemote: jobs.isRemote,
+          sourcePlatform: jobs.sourcePlatform,
+          jobType: jobs.jobType,
+          experienceLevel: jobs.experienceLevel,
+          salaryMin: jobs.salaryMin,
+          salaryMax: jobs.salaryMax,
+          salaryType: jobs.salaryType,
+          hourlyRateMin: jobs.hourlyRateMin,
+          hourlyRateMax: jobs.hourlyRateMax,
+          annualEquivalentMin: jobs.annualEquivalentMin,
+          annualEquivalentMax: jobs.annualEquivalentMax,
+          salaryText: jobs.salaryText,
+          datePosted: jobs.datePosted,
+          dateFound: jobs.dateFound,
+          isActive: jobs.isActive,
+          securityClearanceReq: jobs.securityClearanceReq,
+          companyId: jobs.companyId,
+          companyName: companies.name,
+          createdAt: jobs.createdAt,
+          // Transitional flattened personal fields (from user_job_state).
+          stateUserId: userJobState.userId,
+          priority: userJobState.priority,
+          interviewStage: userJobState.interviewStage,
+          hasApplied: userJobState.hasApplied,
+          dateApplied: userJobState.dateApplied,
+          heardBack: userJobState.heardBack,
+          isHidden: userJobState.isHidden,
+        })
+        .from(jobs)
+        .leftJoin(companies, eq(jobs.companyId, companies.id)),
+    )
+      .where(where)
+      .orderBy(sql`${sortDirection(sortColumn)} nulls last`, desc(jobs.id))
+      .limit(limit)
+      .offset(offset)
+
+    const rows = await rowsQuery
+
+    const jobsOut = rows.map(({ stateUserId, isHidden, ...rest }) => ({
+      ...rest,
+      isTracked: stateUserId !== null && stateUserId !== undefined,
+      isHidden: isHidden ?? false,
+    }))
+
+    return privateJson({
+      jobs: jobsOut,
+      scope,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
     })
-    .from(jobs)
-    .leftJoin(companies, eq(jobs.companyId, companies.id))
-    .where(where)
-    .orderBy(sql`${sortDirection(sortColumn)} nulls last`, desc(jobs.id))
-    .limit(limit)
-    .offset(offset)
-
-  return NextResponse.json({
-    jobs: rows,
-    total,
-    page,
-    totalPages: Math.ceil(total / limit),
   })
 }
 
 export async function POST(req: NextRequest) {
+  // NOTE (API-013 deferred): manual job creation still writes the global catalog.
+  // The admin-only /api/admin/jobs catalog-creation split and the private-listing
+  // decision are a follow-up PR; this route is unchanged in this slice.
   const denied = await requireAuth(req)
   if (denied) return denied
 

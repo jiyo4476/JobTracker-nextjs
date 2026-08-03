@@ -5,6 +5,16 @@ vi.mock('@/lib/auth', () => ({
   requireAuthentication: vi.fn(),
 }))
 
+// GET is owner-scoped (resolveRequestUser + withUser); PATCH/DELETE remain legacy
+// catalog mutations on the shared `db` client.
+vi.mock('@/lib/resolved-user', () => ({
+  resolveRequestUser: vi.fn(),
+}))
+
+vi.mock('@/db/session', () => ({
+  withUser: vi.fn(),
+}))
+
 vi.mock('@/db', () => ({
   db: { select: vi.fn(), update: vi.fn(), insert: vi.fn() },
 }))
@@ -21,12 +31,37 @@ vi.mock('@/db/schema', () => ({
   jobKeywords: {},
   jobCertifications: {},
   jobStatusHistory: {},
+  userJobState: {},
+  userJobContacts: {},
+  resumeVersions: {},
   contacts: {},
 }))
 
+import { NextResponse } from 'next/server'
 import { requireAuthentication } from '@/lib/auth'
+import { resolveRequestUser } from '@/lib/resolved-user'
+import { withUser } from '@/db/session'
 import { db } from '@/db'
 import { authedGet } from './helpers/authed-request'
+
+// withUser(id, fn) → fn(tx); tx.select returns [job] on the first call, [] after —
+// enough for the detail route's job/state/taxonomy/contacts reads.
+function setupResolvedUser(userId = 1) {
+  vi.mocked(resolveRequestUser).mockResolvedValue({
+    ok: true,
+    user: { id: userId, issuer: 'https://issuer/', subject: 'sub', principal: {} as never },
+  })
+}
+function setupOwnerScopedGet(firstResult: unknown[]) {
+  vi.mocked(withUser).mockImplementation(async (_id, fn) => {
+    let call = 0
+    const tx = { select: vi.fn(() => { call++; return makeChain(call === 1 ? firstResult : []) }) }
+    return fn(tx as never)
+  })
+}
+function unauthorized() {
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+}
 
 function makeChain(result: unknown) {
   const chain: Record<string, unknown> = {}
@@ -58,13 +93,14 @@ function makeReq(id: string, body?: unknown, auth = true, method = 'PATCH') {
   })
 }
 
-describe('GET /api/jobs/[id]', () => {
+describe('GET /api/jobs/[id] (owner-scoped)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    setupResolvedUser()
   })
 
-  it('returns 401 without auth (response embeds contact PII)', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(false)
+  it('returns 401 when the user cannot be resolved', async () => {
+    vi.mocked(resolveRequestUser).mockResolvedValue({ ok: false, response: unauthorized() })
     const { GET } = await import('@/app/api/jobs/[id]/route')
     const req = new NextRequest('http://localhost/api/jobs/1')
     const res = await GET(req, makeParams('1'))
@@ -72,7 +108,6 @@ describe('GET /api/jobs/[id]', () => {
   })
 
   it('returns 400 for non-numeric id', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { GET } = await import('@/app/api/jobs/[id]/route')
     const req = authedGet('http://localhost/api/jobs/abc')
     const res = await GET(req, makeParams('abc'))
@@ -80,31 +115,24 @@ describe('GET /api/jobs/[id]', () => {
   })
 
   it('returns 404 when job not found', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
-    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
-    mockDb.select.mockReturnValue(makeChain([]))
+    setupOwnerScopedGet([])
     const { GET } = await import('@/app/api/jobs/[id]/route')
     const req = authedGet('http://localhost/api/jobs/999')
     const res = await GET(req, makeParams('999'))
     expect(res.status).toBe(404)
   })
 
-  it('returns 200 with job and related arrays', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
-    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
-    let callCount = 0
-    mockDb.select.mockImplementation(() => {
-      callCount++
-      if (callCount === 1) return makeChain([mockJob])
-      return makeChain([])
-    })
-
+  it('returns 200 with catalog facts, userState:null when untracked, and private cache header', async () => {
+    setupOwnerScopedGet([mockJob])
     const { GET } = await import('@/app/api/jobs/[id]/route')
     const req = authedGet('http://localhost/api/jobs/1')
     const res = await GET(req, makeParams('1'))
     expect(res.status).toBe(200)
+    expect(res.headers.get('cache-control')).toBe('private, no-store')
     const json = await res.json()
     expect(json).toHaveProperty('jobTitle', 'Engineer')
+    expect(json).toHaveProperty('userState', null)
+    expect(json).toHaveProperty('isTracked', false)
     expect(json).toHaveProperty('skills')
     expect(json).toHaveProperty('software')
     expect(json).toHaveProperty('keywords')

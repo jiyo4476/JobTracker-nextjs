@@ -45,6 +45,21 @@ export function unauthorized(): NextResponse {
 }
 
 /**
+ * JSON response for owner-scoped/personal data. Sets `Cache-Control: private, no-store`
+ * so a user's private job state, contacts, or resume choice can never be cached by a
+ * shared proxy or served to another user (API-013). Use this for every response that
+ * contains per-user state until an owner-partitioned server cache exists.
+ */
+export function privateJson(
+  data: unknown,
+  init?: Parameters<typeof NextResponse.json>[1],
+): NextResponse {
+  const res = NextResponse.json(data, init)
+  res.headers.set('Cache-Control', 'private, no-store')
+  return res
+}
+
+/**
  * Guard a route with the same auth check every handler uses. Returns a 401
  * NextResponse to return early, or null when the caller is authorized:
  *
