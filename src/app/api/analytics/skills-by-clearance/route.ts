@@ -49,7 +49,11 @@ async function getSkillsByClearance() {
     topSkillsForClearance(false),
   ])
 
+  // API-013 (slice 2): CATALOG supply metric (skill demand across the global job
+  // catalog by clearance group). No per-user state — explicitly `catalog` scope,
+  // safe to share/cache.
   const res = NextResponse.json({
+    scope: 'catalog',
     clearance_required: clearanceRequired,
     clearance_not_required: clearanceNotRequired,
   })

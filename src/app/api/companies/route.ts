@@ -16,6 +16,10 @@ export async function GET(req?: NextRequest) {
 }
 
 async function listCompanies(req?: NextRequest) {
+  // API-013 (slice 2): this list exposes only CATALOG facts — company metadata,
+  // catalog jobCount (global job supply per company), and avg salary. It carries no
+  // per-user application counts or private notes, so it stays a global catalog read.
+  // Any owner-scoped company metric belongs on the company detail route instead.
   const { limit, offset } = parseListPagination(req)
   const rows = await db
     .select({

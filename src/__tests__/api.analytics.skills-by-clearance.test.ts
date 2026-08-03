@@ -29,6 +29,7 @@ describe('GET /api/analytics/skills-by-clearance', () => {
     const res = await GET()
     expect(res.status).toBe(200)
     const json = await res.json()
+    expect(json).toHaveProperty('scope', 'catalog')
     expect(json).toHaveProperty('clearance_required')
     expect(json).toHaveProperty('clearance_not_required')
   })

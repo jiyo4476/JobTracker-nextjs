@@ -31,6 +31,7 @@ describe('GET /api/analytics', () => {
     const res = await GET(makeRequest())
     expect(res.status).toBe(200)
     const json = await res.json()
+    expect(json).toHaveProperty('scope', 'catalog')
     expect(json).toHaveProperty('skillDemandOverTime')
     expect(json).toHaveProperty('salaryDistribution')
     expect(json).toHaveProperty('platformBreakdown')

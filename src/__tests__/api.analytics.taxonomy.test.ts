@@ -44,6 +44,7 @@ describe('GET /api/analytics/taxonomy', () => {
     const { GET } = await import('@/app/api/analytics/taxonomy/route')
     const response = await GET(makeRequest('?category=software'))
     expect(await response.json()).toEqual({
+      scope: 'catalog',
       category: 'software',
       percentage_denominator: 'all distinct job-to-value assignments in the group after filters, before limit',
       values: [],
