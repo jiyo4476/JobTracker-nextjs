@@ -82,7 +82,11 @@ export type AuthPrincipal = UserPrincipal | ServicePrincipal;
 
 export class AuthenticationError extends Error {
   constructor(
-    public readonly code: "unauthenticated" | "wrong_principal" | "missing_capability",
+    public readonly code:
+      | "unauthenticated"
+      | "wrong_principal"
+      | "missing_capability"
+      | "inactive_user",
     public readonly correlationId: string,
   ) {
     super(code);

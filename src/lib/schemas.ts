@@ -81,6 +81,47 @@ export const jobPatchSchema = z.object({
   application_deadline: patchDateString.optional(),
 }).strict()
 
+// ── Owner-scoped personal job state (API-013) ────────────────────────────────
+// Fields map 1:1 to user_job_state columns. Both schemas are `.strict()` so a
+// caller can NEVER smuggle `user_id` / `job_id` through the body — ownership comes
+// only from the resolved principal and the URL job id. No history/audit columns are
+// writable here either; `user_job_status_history` is written server-side.
+const jobStateFields = {
+  priority: z.number().int().min(1).max(5).nullable(),
+  is_hidden: z.boolean(),
+  has_applied: z.boolean(),
+  date_applied: patchDateString,
+  heard_back: z.boolean(),
+  interview_stage: interviewStageEnum,
+  referral: z.boolean(),
+  cover_letter_submitted: z.boolean(),
+  resume_version_id: z.number().int().positive().nullable(),
+  rejection_reason: z.string().max(2_000).nullable(),
+  notes: z.string().max(20_000).nullable(),
+} as const
+
+// PUT — idempotent create/replace. Every field is optional; anything omitted takes
+// the row default on create (or is left at its column default on replace).
+export const jobStatePutSchema = z.object({
+  priority: jobStateFields.priority.optional(),
+  is_hidden: jobStateFields.is_hidden.optional(),
+  has_applied: jobStateFields.has_applied.optional(),
+  date_applied: jobStateFields.date_applied.optional(),
+  heard_back: jobStateFields.heard_back.optional(),
+  interview_stage: jobStateFields.interview_stage.optional(),
+  referral: jobStateFields.referral.optional(),
+  cover_letter_submitted: jobStateFields.cover_letter_submitted.optional(),
+  resume_version_id: jobStateFields.resume_version_id.optional(),
+  rejection_reason: jobStateFields.rejection_reason.optional(),
+  notes: jobStateFields.notes.optional(),
+}).strict()
+
+// PATCH — partial update; at least one field required.
+export const jobStatePatchSchema = jobStatePutSchema.refine(
+  value => Object.keys(value).length > 0,
+  { message: 'At least one field is required' },
+)
+
 export const manualJobSchema = z.object({
   job_title: z.string().trim().min(1).max(500),
   job_link: httpUrlSchema.optional(),
