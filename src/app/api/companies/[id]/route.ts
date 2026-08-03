@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { requireAuth, readJsonBody } from '@/lib/http'
+import { withUser } from '@/db/session'
+import { requireAuth, readJsonBody, privateJson } from '@/lib/http'
+import { resolveRequestUser } from '@/lib/resolved-user'
 import { companyPatchSchema } from '@/lib/schemas'
 import { logger, serializeError } from '@/lib/logger'
-import { companies, jobs } from '@/db/schema'
+import { companies, jobs, userJobState } from '@/db/schema'
 import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import {
   buildCompanyDemandQuery,
@@ -42,6 +44,14 @@ function summarizeDemand(result: unknown) {
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // API-013 (slice 2): company detail exposes global company/catalog facts, but each
+  // listed job's interview stage and the applied/linked-tracked counts are PERSONAL —
+  // they join only the caller's user_job_state. So the route now requires a resolved
+  // interactive user and returns private/no-store.
+  const auth = await resolveRequestUser(req)
+  if (!auth.ok) return auth.response
+  const userId = auth.user.id
+
   const { id } = await params
   const companyId = parseInt(id)
   if (isNaN(companyId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
@@ -49,20 +59,52 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const [company] = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1)
   if (!company) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const [companyJobs, activeJobCountRows, skillsDemand, softwareDemand, certificationsDemand, keywordsDemand] = await Promise.all([
-    db
-      .select({
-        id: jobs.id,
-        jobTitle: jobs.jobTitle,
-        interviewStage: jobs.interviewStage,
-        salaryMin: jobs.salaryMin,
-        salaryMax: jobs.salaryMax,
-        dateFound: jobs.dateFound,
-      })
-      .from(jobs)
-      .where(and(eq(jobs.companyId, companyId), eq(jobs.isActive, true), isNull(jobs.deletedAt)))
-      .orderBy(desc(jobs.dateFound))
-      .limit(50),
+  // Owner predicate for the personal overlay: pin user_id to the caller in the JOIN
+  // condition, so this LEFT JOIN can never match another user's state row.
+  const ownerJoin = and(eq(userJobState.jobId, jobs.id), eq(userJobState.userId, userId))
+
+  const { companyJobs, trackedJobCount } = await withUser(userId, async (tx) => {
+    const [rows, [tracked]] = await Promise.all([
+      tx
+        .select({
+          id: jobs.id,
+          jobTitle: jobs.jobTitle,
+          // Interview stage is the caller's own state (null when the caller does not
+          // track this job) — never the global legacy jobs column.
+          interviewStage: userJobState.interviewStage,
+          stateUserId: userJobState.userId,
+          salaryMin: jobs.salaryMin,
+          salaryMax: jobs.salaryMax,
+          dateFound: jobs.dateFound,
+        })
+        .from(jobs)
+        .leftJoin(userJobState, and(ownerJoin, eq(userJobState.isHidden, false)))
+        .where(and(eq(jobs.companyId, companyId), eq(jobs.isActive, true), isNull(jobs.deletedAt)))
+        .orderBy(desc(jobs.dateFound))
+        .limit(50),
+      tx
+        .select({ count: sql<number>`cast(count(*) as int)` })
+        .from(userJobState)
+        .innerJoin(jobs, eq(userJobState.jobId, jobs.id))
+        .where(and(
+          eq(userJobState.userId, userId),
+          eq(userJobState.isHidden, false),
+          eq(jobs.companyId, companyId),
+          eq(jobs.isActive, true),
+          isNull(jobs.deletedAt),
+        )),
+    ])
+
+    return {
+      companyJobs: rows.map(({ stateUserId, ...rest }) => ({
+        ...rest,
+        isTracked: stateUserId !== null && stateUserId !== undefined,
+      })),
+      trackedJobCount: Number(tracked?.count ?? 0),
+    }
+  })
+
+  const [activeJobCountRows, skillsDemand, softwareDemand, certificationsDemand, keywordsDemand] = await Promise.all([
     db.execute(sql`
       SELECT CAST(COUNT(DISTINCT ${jobs.id}) AS int) AS count
       FROM ${jobs}
@@ -83,10 +125,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     keywords: summarizeDemand(keywordsDemand),
   }
 
-  return NextResponse.json({
+  return privateJson({
     ...company,
     jobs: companyJobs,
+    // PERSONAL: how many of this company's active jobs the caller currently tracks.
+    trackedJobCount,
     taxonomyDemand: {
+      // CATALOG supply metric: total active catalog jobs at this company (global).
       activeJobCount: Number(resultRows<{ count: number }>(activeJobCountRows)[0]?.count ?? 0),
       skills: demand.skills.items,
       software: demand.software.items,

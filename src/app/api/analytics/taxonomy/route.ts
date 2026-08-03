@@ -172,7 +172,9 @@ export async function GET(req: NextRequest) {
         topValuesQuery(categoryParsed.data, filters, limit, true),
         topValuesQuery(categoryParsed.data, filters, limit, false),
       ])
+      // API-013 (slice 2): CATALOG supply metric — no per-user state.
       const response = NextResponse.json({
+        scope: 'catalog',
         category: categoryParsed.data,
         percentage_denominator: denominator,
         clearance_required: clearanceRequired,
@@ -183,7 +185,9 @@ export async function GET(req: NextRequest) {
     }
 
     const values = await topValuesQuery(categoryParsed.data, filters, limit)
+    // API-013 (slice 2): CATALOG supply metric — no per-user state.
     const response = NextResponse.json({
+      scope: 'catalog',
       category: categoryParsed.data,
       percentage_denominator: denominator,
       values,

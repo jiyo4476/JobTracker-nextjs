@@ -111,7 +111,11 @@ async function getAnalytics(req: NextRequest) {
     `),
   ])
 
+  // API-013 (slice 2): every metric here is a CATALOG supply aggregate (about the
+  // global job catalog, not any user's applications). It carries no per-user state,
+  // so it is explicitly declared `catalog` scope and may be shared/cached.
   return NextResponse.json({
+    scope: 'catalog',
     skillDemandOverTime,
     salaryDistribution,
     platformBreakdown,
