@@ -22,7 +22,7 @@ export type {
   CompanyRow, CompanyDetail, CompanyTaxonomyDemand, CompanyTaxonomyDemandItem,
   Contact,
   JobDetail, JobListItem, JobsResponse, JobsParams,
-  LookupItem, StatsResponse, ResumeVersion, UserSkill,
+  LookupItem, StatsResponse, StatsCatalog, ResumeVersion, UserSkill,
   UserTaxonomyCategory, UserTaxonomyCreatePayload, UserTaxonomyCreateVariables,
   UserTaxonomyGapItem, UserTaxonomyGapResponse, UserTaxonomyItem, UserTaxonomyPatchPayload,
   UserTaxonomyPatchVariables, UserTaxonomyResponse,

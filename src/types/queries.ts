@@ -308,16 +308,31 @@ export interface JobsParams {
   sort_order?: 'asc' | 'desc'
 }
 
-export interface StatsResponse {
+/**
+ * Catalog (global) supply metrics returned by GET /api/stats under a named block.
+ * API-013 slice 2 quarantines these GLOBAL denominators away from the personal
+ * numerators above so a private count is never silently mixed with a global one.
+ * Dashboard charts sourced from this block MUST be labeled as global supply.
+ */
+export interface StatsCatalog {
   totalJobs: number
-  applied: number
-  activeInterviews: number
-  staleListings: number
   topSkills: { name: string; jobCount: number }[]
   weeklyJobCounts: { week: string; jobCount: number }[]
   remoteCount: number
   onsiteCount: number
+}
+
+export interface StatsResponse {
+  /** Marker that the top-level KPIs are the caller's personal state, not global. */
+  scope: 'personal'
+  // ── Personal application KPIs (caller's user_job_state) ──
+  trackedJobs: number
+  applied: number
+  activeInterviews: number
+  staleListings: number
   stageCounts: { stage: string | null; count: number }[]
+  // ── Catalog supply metrics (global) ──
+  catalog: StatsCatalog
 }
 
 export interface AnalyticsParams {

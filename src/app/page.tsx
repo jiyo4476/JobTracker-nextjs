@@ -13,7 +13,9 @@ import { useStats, useActivity } from '@/lib/queries'
 import { StageBadge } from '@/components/jobs/StageBadge'
 import { TaxonomyByAuthorizationChart } from '@/components/dashboard/TaxonomyByAuthorizationChart'
 
-const KPI_LABELS = ['Total Jobs', 'Applied', 'Active Interviews', 'Stale Listings'] as const
+// Personal application KPIs (caller's user_job_state) — NOT the global catalog size.
+// `Tracked Jobs` is the count of jobs the signed-in user has saved to their tracker.
+const KPI_LABELS = ['Tracked Jobs', 'Applied', 'Active Interviews', 'Stale Listings'] as const
 
 function KpiSkeleton() {
   return <Skeleton className="h-9 w-16" />
@@ -38,8 +40,10 @@ export default function DashboardPage() {
   const { data, isLoading, isError } = useStats()
   const { data: activityData, isLoading: activityLoading, isError: activityError } = useActivity()
 
+  // Top-level KPIs are personal (scope: 'personal'); catalog supply metrics live
+  // under `data.catalog.*` and are labeled as global where charted below.
   const kpiValues = data
-    ? [data.totalJobs, data.applied, data.activeInterviews, data.staleListings]
+    ? [data.trackedJobs, data.applied, data.activeInterviews, data.staleListings]
     : null
 
   return (
@@ -73,13 +77,16 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-2 gap-6 mb-8">
         <Card>
-          <CardHeader><CardTitle className="text-sm">Top 15 Skills</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-sm">Top 15 Skills</CardTitle>
+            <p className="text-xs font-normal text-slate-500">Global catalog demand across all postings</p>
+          </CardHeader>
           <CardContent>
             {isLoading ? <ChartSkeleton height="h-56" /> : isError ? (
               <p className="text-sm text-red-500">Failed to load</p>
             ) : (
               <ResponsiveContainer width="100%" height={224}>
-                <BarChart data={data!.topSkills} layout="vertical" margin={{ left: 8, right: 16 }}>
+                <BarChart data={data!.catalog.topSkills} layout="vertical" margin={{ left: 8, right: 16 }}>
                   <XAxis type="number" tick={{ fontSize: 11 }} />
                   <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11 }} />
                   <Tooltip />
@@ -91,7 +98,10 @@ export default function DashboardPage() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-sm">Application Funnel</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-sm">Application Funnel</CardTitle>
+            <p className="text-xs font-normal text-slate-500">Your tracked applications by stage</p>
+          </CardHeader>
           <CardContent>
             {isLoading ? <ChartSkeleton height="h-56" /> : isError ? (
               <p className="text-sm text-red-500">Failed to load</p>
@@ -109,14 +119,17 @@ export default function DashboardPage() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-sm">Jobs Found per Week</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-sm">Jobs Found per Week</CardTitle>
+            <p className="text-xs font-normal text-slate-500">Global catalog intake across all postings</p>
+          </CardHeader>
           <CardContent>
             {isLoading ? <ChartSkeleton height="h-40" /> : isError ? (
               <p className="text-sm text-red-500">Failed to load</p>
             ) : (
               <ResponsiveContainer width="100%" height={160}>
                 <LineChart
-                  data={data!.weeklyJobCounts.map((d) => ({
+                  data={data!.catalog.weeklyJobCounts.map((d) => ({
                     ...d,
                     label: new Date(d.week).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
                   }))}
@@ -133,7 +146,10 @@ export default function DashboardPage() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-sm">Remote vs On-site</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-sm">Remote vs On-site</CardTitle>
+            <p className="text-xs font-normal text-slate-500">Global catalog split across all postings</p>
+          </CardHeader>
           <CardContent>
             {isLoading ? <ChartSkeleton height="h-40" /> : isError ? (
               <p className="text-sm text-red-500">Failed to load</p>
@@ -142,8 +158,8 @@ export default function DashboardPage() {
                 <PieChart>
                   <Pie
                     data={[
-                      { name: 'Remote', value: data!.remoteCount },
-                      { name: 'On-site', value: data!.onsiteCount },
+                      { name: 'Remote', value: data!.catalog.remoteCount },
+                      { name: 'On-site', value: data!.catalog.onsiteCount },
                     ]}
                     dataKey="value"
                     cx="50%"

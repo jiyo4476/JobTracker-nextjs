@@ -3,6 +3,21 @@
 
 const BASE = "/api";
 
+/**
+ * Error thrown for any non-2xx API response. Carries the HTTP `status` so callers
+ * (and the React Query cache-hygiene handler in providers.tsx) can distinguish an
+ * auth-boundary failure (401 session expiry / 403 inactive account) from an
+ * ordinary error and purge personal cached data accordingly.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set("Content-Type", "application/json");
@@ -11,7 +26,9 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers,
   });
-  if (!res.ok) throw new Error(`API error ${res.status}: ${path}${await describeErrorBody(res)}`);
+  if (!res.ok) {
+    throw new ApiError(res.status, `API error ${res.status}: ${path}${await describeErrorBody(res)}`);
+  }
   return res.json() as Promise<T>;
 }
 
