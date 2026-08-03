@@ -17,6 +17,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:backfill-salary": "tsx scripts/backfill-structured-salary.ts",
+    "db:backfill-ownership": "tsx scripts/backfill-user-ownership.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
