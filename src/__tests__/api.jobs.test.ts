@@ -63,7 +63,7 @@ function setupOwnerScopedList(opts: {
   const { total = 2, rows = mockJobRows, onWhere, onOrderBy, userId = 1 } = opts
   vi.mocked(resolveRequestUser).mockResolvedValue({
     ok: true,
-    user: { id: userId, issuer: 'https://issuer/', subject: 'sub', principal: {} as never },
+    user: { id: userId, issuer: 'https://issuer/', subject: 'sub', email: null, displayName: null, principal: {} as never },
   })
   vi.mocked(withUser).mockImplementation(async (_id, fn) => {
     let call = 0
