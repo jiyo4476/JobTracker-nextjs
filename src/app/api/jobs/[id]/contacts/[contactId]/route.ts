@@ -1,14 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/db'
-import { requireAuth, readJsonBody } from '@/lib/http'
+import { withUser } from '@/db/session'
+import { readJsonBody, privateJson } from '@/lib/http'
+import { resolveRequestUser } from '@/lib/resolved-user'
 import { contactPatchSchema } from '@/lib/schemas'
 import { logger, serializeError } from '@/lib/logger'
-import { contacts } from '@/db/schema'
+import { userJobContacts } from '@/db/schema'
 import { and, eq } from 'drizzle-orm'
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string; contactId: string }> }) {
-  const denied = await requireAuth(req)
-  if (denied) return denied
+const notFound = () => NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string; contactId: string }> },
+) {
+  // API-013 slice 3: owner-scoped update. The predicate pins user_id (caller), job_id,
+  // AND contact id — so a wrong-owner or wrong-job contact id is indistinguishable
+  // from a missing one (non-disclosing 404).
+  const auth = await resolveRequestUser(req)
+  if (!auth.ok) return auth.response
+  const userId = auth.user.id
 
   const { id, contactId } = await params
   const jobId = parseInt(id)
@@ -17,49 +27,81 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const parsed = await readJsonBody(req, contactPatchSchema)
   if (!parsed.ok) return parsed.response
-
   const d = parsed.data
 
-  let result: { id: number }[]
   try {
-    result = await db.update(contacts).set({
-      ...(d.name !== undefined && { name: d.name }),
-      ...(d.title !== undefined && { title: d.title }),
-      ...(d.email !== undefined && { email: d.email }),
-      ...(d.phone !== undefined && { phone: d.phone }),
-      ...(d.linkedin_url !== undefined && { linkedinUrl: d.linkedin_url }),
-      ...(d.role !== undefined && { role: d.role }),
-      ...(d.contacted_at !== undefined && { contactedAt: d.contacted_at }),
-      ...(d.notes !== undefined && { notes: d.notes }),
-    }).where(and(eq(contacts.id, cId), eq(contacts.jobId, jobId))).returning({ id: contacts.id })
+    const result = await withUser(userId, (tx) =>
+      tx
+        .update(userJobContacts)
+        .set({
+          ...(d.name !== undefined && { name: d.name }),
+          ...(d.title !== undefined && { title: d.title }),
+          ...(d.email !== undefined && { email: d.email }),
+          ...(d.phone !== undefined && { phone: d.phone }),
+          ...(d.linkedin_url !== undefined && { linkedinUrl: d.linkedin_url }),
+          ...(d.role !== undefined && { role: d.role }),
+          ...(d.contacted_at !== undefined && { contactedAt: d.contacted_at }),
+          ...(d.notes !== undefined && { notes: d.notes }),
+        })
+        .where(
+          and(
+            eq(userJobContacts.id, cId),
+            eq(userJobContacts.userId, userId),
+            eq(userJobContacts.jobId, jobId),
+          ),
+        )
+        .returning({ id: userJobContacts.id }),
+    )
+
+    if (result.length === 0) return notFound()
+    logger.info('contact updated', { contactId: cId, jobId })
+    return privateJson({ success: true })
   } catch (err) {
-    logger.error('PATCH /api/jobs/[id]/contacts/[contactId] failed', { contactId: cId, jobId, ...serializeError(err) })
+    logger.error('PATCH /api/jobs/[id]/contacts/[contactId] failed', {
+      contactId: cId,
+      jobId,
+      ...serializeError(err),
+    })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
-
-  if (result.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  logger.info('contact updated', { contactId: cId, jobId })
-  return NextResponse.json({ success: true })
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string; contactId: string }> }) {
-  const denied = await requireAuth(req)
-  if (denied) return denied
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string; contactId: string }> },
+) {
+  const auth = await resolveRequestUser(req)
+  if (!auth.ok) return auth.response
+  const userId = auth.user.id
 
   const { id, contactId } = await params
   const jobId = parseInt(id)
   const cId = parseInt(contactId)
   if (isNaN(jobId) || isNaN(cId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
 
-  let result: { id: number }[]
   try {
-    result = await db.delete(contacts).where(and(eq(contacts.id, cId), eq(contacts.jobId, jobId))).returning({ id: contacts.id })
+    const result = await withUser(userId, (tx) =>
+      tx
+        .delete(userJobContacts)
+        .where(
+          and(
+            eq(userJobContacts.id, cId),
+            eq(userJobContacts.userId, userId),
+            eq(userJobContacts.jobId, jobId),
+          ),
+        )
+        .returning({ id: userJobContacts.id }),
+    )
+
+    if (result.length === 0) return notFound()
+    logger.info('contact deleted', { contactId: cId, jobId })
+    return privateJson({ success: true })
   } catch (err) {
-    logger.error('DELETE /api/jobs/[id]/contacts/[contactId] failed', { contactId: cId, jobId, ...serializeError(err) })
+    logger.error('DELETE /api/jobs/[id]/contacts/[contactId] failed', {
+      contactId: cId,
+      jobId,
+      ...serializeError(err),
+    })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
-
-  if (result.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  logger.info('contact deleted', { contactId: cId, jobId })
-  return NextResponse.json({ success: true })
 }
