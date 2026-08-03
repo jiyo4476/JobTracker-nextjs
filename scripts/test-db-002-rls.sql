@@ -81,6 +81,46 @@ DELETE FROM jobs WHERE job_title IN (
 );
 DELETE FROM resume_versions WHERE label IN ('DB-002 resume user-2', 'DB-002 unowned resume');
 
+-- Non-bypass resume delete: proves the column-targeted ON DELETE SET NULL (migration 0010)
+-- clears the reference under a NOBYPASSRLS role with no app.user_id set — the exact path the
+-- old BEFORE DELETE trigger failed (its RLS-guarded UPDATE matched zero rows). Setup and
+-- verification run as the (bypass) migration owner; only the DELETE runs as the app role.
+INSERT INTO jobs (job_title) VALUES ('DB-002 nonbypass delete check');
+INSERT INTO resume_versions (user_id, label)
+SELECT id, 'DB-002 nonbypass resume' FROM users WHERE issuer='db002-test' AND subject='user-1';
+INSERT INTO user_job_state (user_id, job_id, resume_version_id)
+SELECT u.id, j.id, rv.id
+FROM users u
+  JOIN jobs j ON j.job_title='DB-002 nonbypass delete check'
+  JOIN resume_versions rv ON rv.label='DB-002 nonbypass resume'
+WHERE u.issuer='db002-test' AND u.subject='user-1';
+
+GRANT SELECT, DELETE ON resume_versions TO db002_app_test;
+
+-- resume_versions is not RLS-guarded, so the app role may delete the row; the FK's
+-- referential action nulls user_job_state.resume_version_id independently of RLS/app.user_id.
+SET ROLE db002_app_test;
+DELETE FROM resume_versions WHERE label='DB-002 nonbypass resume';
+RESET ROLE;
+
+DO $$
+DECLARE state_n int; job_id_v int := (SELECT id FROM jobs WHERE job_title='DB-002 nonbypass delete check');
+BEGIN
+  IF EXISTS (SELECT 1 FROM resume_versions WHERE label='DB-002 nonbypass resume') THEN
+    RAISE EXCEPTION 'non-bypass resume delete did not remove the resume';
+  END IF;
+  SELECT count(*) INTO state_n FROM user_job_state WHERE job_id=job_id_v;
+  IF state_n <> 1 THEN
+    RAISE EXCEPTION 'non-bypass resume delete removed the referencing state row';
+  END IF;
+  IF EXISTS (SELECT 1 FROM user_job_state WHERE job_id=job_id_v AND resume_version_id IS NOT NULL) THEN
+    RAISE EXCEPTION 'non-bypass resume delete did not clear resume_version_id';
+  END IF;
+END $$;
+
+REVOKE ALL ON resume_versions FROM db002_app_test;
+DELETE FROM jobs WHERE job_title='DB-002 nonbypass delete check';
+
 INSERT INTO user_job_state (user_id, job_id, priority, notes)
 SELECT u.id, j.id, CASE u.subject WHEN 'user-1' THEN 1 ELSE 5 END,
        'private-' || u.subject
@@ -203,4 +243,4 @@ REVOKE ALL ON user_job_state, user_job_contacts, user_job_status_history FROM db
 REVOKE ALL ON users FROM db002_app_test;
 REVOKE USAGE ON SCHEMA public FROM db002_app_test;
 DROP ROLE db002_app_test;
-\echo 'DB-002 RLS, composite-parent, and owner-matched resume checks passed'
+\echo 'DB-002 RLS, composite-parent, owner-matched, and non-bypass resume-delete checks passed'

@@ -218,6 +218,12 @@ export const userJobState = pgTable(
     index("user_job_state_user_applied_idx").on(t.userId, t.hasApplied),
     index("user_job_state_user_priority_idx").on(t.userId, t.priority),
     index("user_job_state_resume_version_id_idx").on(t.resumeVersionId),
+    // In the DB this FK is `ON DELETE SET NULL (resume_version_id)` (migration 0010): a
+    // deleted resume nulls only the reference, and — being a referential action — bypasses
+    // RLS, so deletion works without route-level `app.user_id` context. Drizzle cannot
+    // express the column-targeted action (a plain `.onDelete("set null")` would also null
+    // `user_id`, which is NOT NULL / part of the PK), so it stays hand-written in SQL and
+    // invisible to `db:generate` diffing, like the triggers/RLS in 0008/0009.
     foreignKey({
       columns: [t.userId, t.resumeVersionId],
       foreignColumns: [resumeVersions.userId, resumeVersions.id],
