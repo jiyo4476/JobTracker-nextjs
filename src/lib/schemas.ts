@@ -81,6 +81,37 @@ export const jobPatchSchema = z.object({
   application_deadline: patchDateString.optional(),
 }).strict()
 
+// ── Admin catalog mutation (API-013 slice 1) ─────────────────────────────────
+// The admin-only PATCH surface for the shared job catalog. `.strict()` means any
+// personal-state field (has_applied, interview_stage, priority, notes, referral,
+// cover_letter_submitted, heard_back, date_applied, rejection_reason, resume_version)
+// is REJECTED — those live on user_job_state and are mutated via /api/jobs/[id]/state.
+// This mirror-image rejection (catalog route rejects personal fields; the /state route
+// rejects catalog fields) is what keeps a single endpoint from having role-dependent
+// field semantics.
+export const jobCatalogPatchSchema = z.object({
+  job_title: z.string().trim().min(1).max(500).optional(),
+  company_id: z.number().int().positive().nullable().optional(),
+  job_location: z.string().max(300).optional(),
+  is_remote: z.boolean().optional(),
+  job_description: z.string().max(50_000).optional(),
+  date_posted: patchDateString.optional(),
+  salary_text: z.string().max(200).optional(),
+  salary_type: salaryTypeEnum.optional(),
+  salary_min: z.number().int().optional(),
+  salary_max: z.number().int().optional(),
+  hourly_rate_min: z.number().optional(),
+  hourly_rate_max: z.number().optional(),
+  job_type: jobTypeEnum.nullable().optional(),
+  experience_level: experienceLevelEnum.nullable().optional(),
+  security_clearance_req: z.boolean().optional(),
+  is_active: z.boolean().optional(),
+  application_deadline: patchDateString.optional(),
+}).strict().refine(
+  value => Object.keys(value).length > 0,
+  { message: 'At least one field is required' },
+)
+
 // ── Owner-scoped personal job state (API-013) ────────────────────────────────
 // Fields map 1:1 to user_job_state columns. Both schemas are `.strict()` so a
 // caller can NEVER smuggle `user_id` / `job_id` through the body — ownership comes

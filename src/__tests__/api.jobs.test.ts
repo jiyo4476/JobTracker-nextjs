@@ -3,14 +3,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { PgDialect } from 'drizzle-orm/pg-core'
 import type { SQL } from 'drizzle-orm'
 
-// POST still uses requireAuthentication (legacy catalog create); GET uses the new
-// resolveRequestUser + withUser owner-scoping composition.
-vi.mock('@/lib/auth', () => ({
-  requireAuthentication: vi.fn(),
-}))
-
+// GET uses the resolveRequestUser + withUser owner-scoping composition. POST is now an
+// admin-only catalog create (API-013 slice 1), gated by resolveAdminUser.
 vi.mock('@/lib/resolved-user', () => ({
   resolveRequestUser: vi.fn(),
+}))
+
+vi.mock('@/lib/admin', () => ({
+  resolveAdminUser: vi.fn(),
 }))
 
 vi.mock('@/db/session', () => ({
@@ -23,10 +23,13 @@ vi.mock('@/db', () => ({
   },
 }))
 
-import { requireAuthentication } from '@/lib/auth'
 import { resolveRequestUser } from '@/lib/resolved-user'
+import { resolveAdminUser } from '@/lib/admin'
 import { withUser } from '@/db/session'
 import { db } from '@/db'
+
+const adminOk = { ok: true as const, user: { id: 1, issuer: 'https://issuer/', subject: 'admin', principal: {} as never } }
+function forbidden() { return NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
 
 function sqlText(query: unknown): string {
   return new PgDialect().sqlToQuery(query as SQL).sql.replace(/\s+/g, ' ')
@@ -228,25 +231,36 @@ describe('POST /api/jobs', () => {
   const validBody = { job_title: 'Engineer', company_id: 1 }
 
   it('returns 401 without auth', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(false)
+    vi.mocked(resolveAdminUser).mockResolvedValue({ ok: false, response: NextResponse401() })
     const { POST } = await import('@/app/api/jobs/route')
     const res = await POST(makeReq(validBody))
     expect(res.status).toBe(401)
   })
 
+  it('returns 403 (non-disclosing) for a non-admin user', async () => {
+    vi.mocked(resolveAdminUser).mockResolvedValue({ ok: false, response: forbidden() })
+    const { POST } = await import('@/app/api/jobs/route')
+    const res = await POST(makeReq(validBody))
+    expect(res.status).toBe(403)
+    expect(await res.json()).toEqual({ error: 'Forbidden' })
+  })
+
   it('returns 400 for invalid body', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    vi.mocked(resolveAdminUser).mockResolvedValue(adminOk)
     const { POST } = await import('@/app/api/jobs/route')
     const res = await POST(makeReq({ not_job_title: 'bad' }))
     expect(res.status).toBe(400)
   })
 
-  it('returns 201 with job_id on success', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
+  it('returns 201 with job_id on success (admin), with a deprecation header', async () => {
+    vi.mocked(resolveAdminUser).mockResolvedValue(adminOk)
     const { POST } = await import('@/app/api/jobs/route')
     const res = await POST(makeReq(validBody))
     expect(res.status).toBe(201)
     expect(await res.json()).toHaveProperty('job_id', 99)
+    // Legacy path is a deprecated alias of /api/admin/jobs.
+    expect(res.headers.get('deprecation')).toBe('true')
+    expect(res.headers.get('link')).toContain('/api/admin/jobs')
   })
 })
 

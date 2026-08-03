@@ -22,9 +22,11 @@ const principal = {
   issuer: 'https://issuer/',
   subject: 'sub-123',
   scopes: [],
+  groups: [],
   method: 'bearer' as const,
   identityKey: 'https://issuer/#sub-123',
   correlationId: 'corr-1',
+  isAdmin: false,
 }
 
 beforeEach(() => vi.clearAllMocks())

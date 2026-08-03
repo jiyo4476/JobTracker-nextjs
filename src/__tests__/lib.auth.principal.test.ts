@@ -28,6 +28,11 @@ describe('verified application principal context', () => {
     delete process.env.AUTH_DEV_ALLOW_SAME_ORIGIN
     delete process.env.AUTH_DEV_ISSUER
     delete process.env.AUTH_DEV_SUBJECT
+    delete process.env.AUTH_DEV_ADMIN
+    delete process.env.OIDC_ADMIN_GROUPS
+    delete process.env.OIDC_ADMIN_SCOPES
+    delete process.env.AUTHENTIK_ADMIN_GROUPS
+    delete process.env.AUTHENTIK_ADMIN_SCOPES
   })
 
   afterEach(() => {
@@ -36,6 +41,11 @@ describe('verified application principal context', () => {
     delete process.env.AUTH_DEV_ALLOW_SAME_ORIGIN
     delete process.env.AUTH_DEV_ISSUER
     delete process.env.AUTH_DEV_SUBJECT
+    delete process.env.AUTH_DEV_ADMIN
+    delete process.env.OIDC_ADMIN_GROUPS
+    delete process.env.OIDC_ADMIN_SCOPES
+    delete process.env.AUTHENTIK_ADMIN_GROUPS
+    delete process.env.AUTHENTIK_ADMIN_SCOPES
     vi.restoreAllMocks()
   })
 
@@ -203,3 +213,66 @@ function bearerRequest(token: string): NextRequest {
     headers: { authorization: `Bearer ${token}` },
   })
 }
+
+describe('catalog-admin claim derivation (API-013 slice 1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    process.env.AUTHENTIK_ISSUER = ISSUER
+    process.env.AUTHENTIK_AUDIENCE = 'job-tracker'
+    process.env.AUTHENTIK_JWKS_URI = `${ISSUER}jwks/`
+    delete process.env.OIDC_ADMIN_GROUPS
+    delete process.env.OIDC_ADMIN_SCOPES
+  })
+  afterEach(() => {
+    delete process.env.OIDC_ADMIN_GROUPS
+    delete process.env.OIDC_ADMIN_SCOPES
+    vi.restoreAllMocks()
+  })
+
+  function mockToken(payload: Record<string, unknown>) {
+    vi.mocked(jwtVerify).mockResolvedValue({
+      payload: { iss: ISSUER, sub: 'user-1', ...payload },
+      protectedHeader: { alg: 'RS256' },
+    } as never)
+  }
+
+  it('fails closed: no admin group/scope configured means no user is admin', async () => {
+    mockToken({ groups: ['catalog-admins'], scope: 'openid catalog:admin' })
+    const principal = await requireUser(bearerRequest('t'))
+    expect(principal.kind).toBe('user')
+    if (principal.kind === 'user') expect(principal.isAdmin).toBe(false)
+  })
+
+  it('grants admin from a verified group claim matching OIDC_ADMIN_GROUPS', async () => {
+    process.env.OIDC_ADMIN_GROUPS = 'catalog-admins'
+    mockToken({ groups: ['staff', 'catalog-admins'] })
+    const principal = await requireUser(bearerRequest('t'))
+    if (principal.kind === 'user') expect(principal.isAdmin).toBe(true)
+    else throw new Error('expected user principal')
+  })
+
+  it('grants admin from a verified scope claim matching OIDC_ADMIN_SCOPES', async () => {
+    process.env.OIDC_ADMIN_SCOPES = 'catalog:admin'
+    mockToken({ scope: 'openid profile catalog:admin' })
+    const principal = await requireUser(bearerRequest('t'))
+    if (principal.kind === 'user') expect(principal.isAdmin).toBe(true)
+    else throw new Error('expected user principal')
+  })
+
+  it('denies admin when the verified groups/scopes do not include the configured admin claim', async () => {
+    process.env.OIDC_ADMIN_GROUPS = 'catalog-admins'
+    process.env.OIDC_ADMIN_SCOPES = 'catalog:admin'
+    mockToken({ groups: ['staff'], scope: 'openid profile' })
+    const principal = await requireUser(bearerRequest('t'))
+    if (principal.kind === 'user') expect(principal.isAdmin).toBe(false)
+    else throw new Error('expected user principal')
+  })
+
+  it('ignores a malformed (non-array) groups claim without granting admin', async () => {
+    process.env.OIDC_ADMIN_GROUPS = 'catalog-admins'
+    mockToken({ groups: 'catalog-admins' })
+    const principal = await requireUser(bearerRequest('t'))
+    if (principal.kind === 'user') expect(principal.isAdmin).toBe(false)
+    else throw new Error('expected user principal')
+  })
+})

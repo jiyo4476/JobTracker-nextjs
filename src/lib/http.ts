@@ -132,6 +132,26 @@ export async function readJsonBody<T extends z.ZodTypeAny>(
  * declares (0-arg, `(req)`, or `(req, ctx)`), so both static and dynamic route
  * handlers type-check and Next.js route-type validation is unaffected.
  */
+/**
+ * Wrap a handler as a DEPRECATED alias of a canonical route. Forwards every argument to
+ * the inner handler and annotates its response with the standard deprecation signals
+ * (RFC 8594 `Deprecation` + a `Link rel="successor-version"` to the canonical path) so a
+ * client can discover the replacement without breaking. Used to keep the legacy
+ * `/api/jobs[/id]` catalog-mutation paths working as admin-only aliases of the new
+ * `/api/admin/jobs[/id]` namespace during the API-013 cutover.
+ */
+export function deprecatedAlias<Args extends unknown[]>(
+  handler: (...args: Args) => Promise<NextResponse>,
+  successorPath: string,
+): (...args: Args) => Promise<NextResponse> {
+  return async (...args: Args): Promise<NextResponse> => {
+    const res = await handler(...args)
+    res.headers.set('Deprecation', 'true')
+    res.headers.set('Link', `<${successorPath}>; rel="successor-version"`)
+    return res
+  }
+}
+
 export function withErrorHandling<Args extends unknown[]>(
   routeName: string,
   handler: (...args: Args) => Promise<NextResponse>,

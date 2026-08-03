@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/db'
 import { withUser } from '@/db/session'
-import { requireAuth, readJsonBody, privateJson } from '@/lib/http'
+import { privateJson, deprecatedAlias } from '@/lib/http'
 import { resolveRequestUser } from '@/lib/resolved-user'
-import { manualJobSchema } from '@/lib/schemas'
+import { createCatalogJob } from '@/lib/admin-catalog-handlers'
 import { logger, serializeError } from '@/lib/logger'
 import { escapeLikePattern } from '@/lib/db-utils'
 import {
@@ -263,39 +262,8 @@ async function listJobs(req: NextRequest, userId: number) {
   })
 }
 
-export async function POST(req: NextRequest) {
-  // NOTE (API-013 deferred): manual job creation still writes the global catalog.
-  // The admin-only /api/admin/jobs catalog-creation split and the private-listing
-  // decision are a follow-up PR; this route is unchanged in this slice.
-  const denied = await requireAuth(req)
-  if (denied) return denied
-
-  const parsed = await readJsonBody(req, manualJobSchema)
-  if (!parsed.ok) return parsed.response
-
-  const b = parsed.data
-  try {
-    const [newJob] = await db
-      .insert(jobs)
-      .values({
-        jobTitle: b.job_title,
-        jobLink: b.job_link,
-        jobLocation: b.job_location,
-        isRemote: b.is_remote,
-        companyId: b.company_id,
-        notes: b.notes,
-        jobType: b.job_type,
-        experienceLevel: b.experience_level,
-        priority: b.priority,
-        salaryText: b.salary_text,
-        dateFound: new Date().toISOString().slice(0, 10),
-      })
-      .returning({ id: jobs.id })
-
-    logger.info('job created manually', { jobId: newJob.id, title: b.job_title })
-    return NextResponse.json({ job_id: newJob.id }, { status: 201 })
-  } catch (err) {
-    logger.error('POST /api/jobs failed', serializeError(err))
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-  }
-}
+// API-013 slice 1: catalog creation is now admin-only. This legacy path is a DEPRECATED
+// admin-gated alias of the canonical `POST /api/admin/jobs`. Ordinary users no longer
+// create catalog jobs here; they add an existing catalog job to their tracker via
+// `PUT /api/jobs/[id]/state`.
+export const POST = deprecatedAlias(createCatalogJob, '/api/admin/jobs')

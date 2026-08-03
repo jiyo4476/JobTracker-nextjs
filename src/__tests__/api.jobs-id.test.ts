@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
-vi.mock('@/lib/auth', () => ({
-  requireAuthentication: vi.fn(),
-}))
-
-// GET is owner-scoped (resolveRequestUser + withUser); PATCH/DELETE remain legacy
-// catalog mutations on the shared `db` client.
+// GET is owner-scoped (resolveRequestUser + withUser); PATCH/DELETE are now admin-only
+// catalog mutations (API-013 slice 1) gated by resolveAdminUser, on the shared `db` client.
 vi.mock('@/lib/resolved-user', () => ({
   resolveRequestUser: vi.fn(),
+}))
+
+vi.mock('@/lib/admin', () => ({
+  resolveAdminUser: vi.fn(),
 }))
 
 vi.mock('@/db/session', () => ({
@@ -38,11 +38,14 @@ vi.mock('@/db/schema', () => ({
 }))
 
 import { NextResponse } from 'next/server'
-import { requireAuthentication } from '@/lib/auth'
 import { resolveRequestUser } from '@/lib/resolved-user'
+import { resolveAdminUser } from '@/lib/admin'
 import { withUser } from '@/db/session'
 import { db } from '@/db'
 import { authedGet } from './helpers/authed-request'
+
+const adminOk = { ok: true as const, user: { id: 1, issuer: 'https://issuer/', subject: 'admin', principal: {} as never } }
+function forbidden() { return NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
 
 // withUser(id, fn) → fn(tx); tx.select returns [job] on the first call, [] after —
 // enough for the detail route's job/state/taxonomy/contacts reads.
@@ -141,50 +144,71 @@ describe('GET /api/jobs/[id] (owner-scoped)', () => {
   })
 })
 
-describe('PATCH /api/jobs/[id]', () => {
+describe('PATCH /api/jobs/[id] (deprecated admin alias, catalog-only)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(resolveAdminUser).mockResolvedValue(adminOk)
   })
 
   it('returns 401 without auth', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(false)
+    vi.mocked(resolveAdminUser).mockResolvedValue({ ok: false, response: unauthorized() })
     const { PATCH } = await import('@/app/api/jobs/[id]/route')
     const res = await PATCH(makeReq('1', {}, false), makeParams('1'))
     expect(res.status).toBe(401)
   })
 
+  it('returns 403 (non-disclosing) for a non-admin user', async () => {
+    vi.mocked(resolveAdminUser).mockResolvedValue({ ok: false, response: forbidden() })
+    const { PATCH } = await import('@/app/api/jobs/[id]/route')
+    const res = await PATCH(makeReq('1', { job_title: 'X' }), makeParams('1'))
+    expect(res.status).toBe(403)
+    expect(await res.json()).toEqual({ error: 'Forbidden' })
+  })
+
   it('returns 400 for non-numeric id', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { PATCH } = await import('@/app/api/jobs/[id]/route')
     const res = await PATCH(makeReq('bad', { job_title: 'X' }), makeParams('bad'))
     expect(res.status).toBe(400)
   })
 
-  it('returns 400 for invalid body', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
+  it('rejects a personal-state field (interview_stage) as an unknown catalog key', async () => {
     const { PATCH } = await import('@/app/api/jobs/[id]/route')
-    const res = await PATCH(makeReq('1', { interview_stage: 'invalid_stage_value' }), makeParams('1'))
+    const res = await PATCH(makeReq('1', { interview_stage: 'phone_screen' }), makeParams('1'))
     expect(res.status).toBe(400)
   })
 
-  it('returns 200 on success', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
+  it('rejects personal-state fields priority/notes/has_applied', async () => {
+    const { PATCH } = await import('@/app/api/jobs/[id]/route')
+    for (const body of [{ priority: 3 }, { notes: 'mine' }, { has_applied: true }]) {
+      const res = await PATCH(makeReq('1', body), makeParams('1'))
+      expect(res.status).toBe(400)
+    }
+  })
+
+  it('returns 200 on success with a deprecation header', async () => {
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
-    // select is called to read current stage for history tracking
-    mockDb.select.mockReturnValue(makeChain([{ interviewStage: 'not_applied' }]))
-    mockDb.update.mockReturnValue(makeChain(undefined))
+    mockDb.update.mockReturnValue(makeChain([{ id: 1 }]))
 
     const { PATCH } = await import('@/app/api/jobs/[id]/route')
     const res = await PATCH(makeReq('1', { job_title: 'New Title' }), makeParams('1'))
     expect(res.status).toBe(200)
-    const json = await res.json()
-    expect(json).toHaveProperty('success', true)
+    expect(await res.json()).toHaveProperty('success', true)
+    expect(res.headers.get('deprecation')).toBe('true')
+    expect(res.headers.get('link')).toContain('/api/admin/jobs/[id]')
+  })
+
+  it('returns 404 when the catalog job does not exist', async () => {
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+    mockDb.update.mockReturnValue(makeChain([]))
+
+    const { PATCH } = await import('@/app/api/jobs/[id]/route')
+    const res = await PATCH(makeReq('999', { job_title: 'New Title' }), makeParams('999'))
+    expect(res.status).toBe(404)
   })
 
   it('updates the company relationship when company_id is provided', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
-    const updateChain = makeChain(undefined)
+    const updateChain = makeChain([{ id: 1 }])
     mockDb.update.mockReturnValue(updateChain)
 
     const { PATCH } = await import('@/app/api/jobs/[id]/route')
@@ -197,9 +221,8 @@ describe('PATCH /api/jobs/[id]', () => {
   })
 
   it('clears the deletion marker when a job is restored', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
-    const updateChain = makeChain(undefined)
+    const updateChain = makeChain([{ id: 1 }])
     mockDb.update.mockReturnValue(updateChain)
 
     const { PATCH } = await import('@/app/api/jobs/[id]/route')
@@ -212,9 +235,8 @@ describe('PATCH /api/jobs/[id]', () => {
   })
 
   it('clears optional classification fields when null is provided', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
-    const updateChain = makeChain(undefined)
+    const updateChain = makeChain([{ id: 1 }])
     mockDb.update.mockReturnValue(updateChain)
 
     const { PATCH } = await import('@/app/api/jobs/[id]/route')
@@ -228,48 +250,18 @@ describe('PATCH /api/jobs/[id]', () => {
       expect.objectContaining({ jobType: null, experienceLevel: null }),
     )
   })
-
-  it('clears priority when null is provided', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
-    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
-    const updateChain = makeChain(undefined)
-    mockDb.update.mockReturnValue(updateChain)
-
-    const { PATCH } = await import('@/app/api/jobs/[id]/route')
-    const res = await PATCH(makeReq('1', { priority: null }), makeParams('1'))
-
-    expect(res.status).toBe(200)
-    expect(updateChain.set).toHaveBeenCalledWith(
-      expect.objectContaining({ priority: null }),
-    )
-  })
-
-  it('inserts stage history row when interview_stage changes', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
-    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
-    // current stage is applied; we're changing to phone_screen
-    mockDb.select.mockReturnValue(makeChain([{ interviewStage: 'applied' }]))
-    mockDb.update.mockReturnValue(makeChain(undefined))
-    mockDb.insert.mockReturnValue(makeChain([]))
-
-    const { PATCH } = await import('@/app/api/jobs/[id]/route')
-    const res = await PATCH(makeReq('1', { interview_stage: 'phone_screen' }), makeParams('1'))
-    expect(res.status).toBe(200)
-    expect(mockDb.insert).toHaveBeenCalled()
-  })
 })
 
 describe('PATCH /api/jobs/[id] — salary recomputation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    vi.mocked(resolveAdminUser).mockResolvedValue(adminOk)
   })
 
   it('reads salary_type from DB and computes annualEquivalentMin when only hourly_rate_min is patched', async () => {
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
-    // DB returns existing salary_type = 'hourly'; no stage change so only one select
     mockDb.select.mockReturnValue(makeChain([{ salaryType: 'hourly' }]))
-    const updateChain = makeChain(undefined)
+    const updateChain = makeChain([{ id: 1 }])
     mockDb.update.mockReturnValue(updateChain)
 
     const { PATCH } = await import('@/app/api/jobs/[id]/route')
@@ -284,8 +276,7 @@ describe('PATCH /api/jobs/[id] — salary recomputation', () => {
 
   it('does not set annualEquivalentMin or annualEquivalentMax when no salary fields are in the patch', async () => {
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
-    // No salary fields → salaryFieldsChanged is false → no salary DB read, no annual equivalent update
-    const updateChain = makeChain(undefined)
+    const updateChain = makeChain([{ id: 1 }])
     mockDb.update.mockReturnValue(updateChain)
 
     const { PATCH } = await import('@/app/api/jobs/[id]/route')
@@ -300,9 +291,8 @@ describe('PATCH /api/jobs/[id] — salary recomputation', () => {
 
   it('computes annualEquivalentMin from salary_min when salary_type from DB is annual', async () => {
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
-    // Patching salary_min only — salary_type must be read from DB
     mockDb.select.mockReturnValue(makeChain([{ salaryType: 'annual' }]))
-    const updateChain = makeChain(undefined)
+    const updateChain = makeChain([{ id: 1 }])
     mockDb.update.mockReturnValue(updateChain)
 
     const { PATCH } = await import('@/app/api/jobs/[id]/route')
@@ -316,21 +306,29 @@ describe('PATCH /api/jobs/[id] — salary recomputation', () => {
   })
 })
 
-describe('DELETE /api/jobs/[id]', () => {
+describe('DELETE /api/jobs/[id] (deprecated admin alias)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(resolveAdminUser).mockResolvedValue(adminOk)
   })
 
   it('returns 401 without auth', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(false)
+    vi.mocked(resolveAdminUser).mockResolvedValue({ ok: false, response: unauthorized() })
     const { DELETE } = await import('@/app/api/jobs/[id]/route')
     const req = new NextRequest('http://localhost/api/jobs/1', { method: 'DELETE' })
     const res = await DELETE(req, makeParams('1'))
     expect(res.status).toBe(401)
   })
 
-  it('returns 200 on soft delete', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
+  it('returns 403 (non-disclosing) for a non-admin user', async () => {
+    vi.mocked(resolveAdminUser).mockResolvedValue({ ok: false, response: forbidden() })
+    const { DELETE } = await import('@/app/api/jobs/[id]/route')
+    const req = new NextRequest('http://localhost/api/jobs/1', { method: 'DELETE', headers: { authorization: 'Bearer x' } })
+    const res = await DELETE(req, makeParams('1'))
+    expect(res.status).toBe(403)
+  })
+
+  it('returns 200 on soft delete with a deprecation header', async () => {
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.update.mockReturnValue(makeChain([{ id: 1 }]))
 
@@ -343,10 +341,10 @@ describe('DELETE /api/jobs/[id]', () => {
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json).toHaveProperty('success', true)
+    expect(res.headers.get('deprecation')).toBe('true')
   })
 
   it('returns 404 when job is not found', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.update.mockReturnValue(makeChain([]))
 
@@ -360,7 +358,6 @@ describe('DELETE /api/jobs/[id]', () => {
   })
 
   it('returns 400 for non-numeric id', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const { DELETE } = await import('@/app/api/jobs/[id]/route')
     const req = new NextRequest('http://localhost/api/jobs/abc', {
       method: 'DELETE',
@@ -371,7 +368,6 @@ describe('DELETE /api/jobs/[id]', () => {
   })
 
   it('calls db.update (soft delete, not hard delete)', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
     const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
     mockDb.update.mockReturnValue(makeChain([{ id: 1 }]))
 
