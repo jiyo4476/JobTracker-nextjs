@@ -44,7 +44,7 @@ import { withUser } from '@/db/session'
 import { db } from '@/db'
 import { authedGet } from './helpers/authed-request'
 
-const adminOk = { ok: true as const, user: { id: 1, issuer: 'https://issuer/', subject: 'admin', principal: {} as never } }
+const adminOk = { ok: true as const, user: { id: 1, issuer: 'https://issuer/', subject: 'admin', email: null, displayName: null, principal: {} as never } }
 function forbidden() { return NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
 
 // withUser(id, fn) → fn(tx); tx.select returns [job] on the first call, [] after —
