@@ -7,6 +7,10 @@ import {
   userJobContacts,
   userJobState,
   userJobStatusHistory,
+  userSkills,
+  userSoftware,
+  userCertifications,
+  userKeywords,
 } from "@/db/schema";
 
 describe("DB-002 owner-scoped job state schema", () => {
@@ -71,5 +75,21 @@ describe("DB-002 owner-scoped job state schema", () => {
             "user_id,id",
       ),
     ).toBe(true);
+  });
+
+  it("uses required owner-first keys for every personal profile association", () => {
+    for (const table of [userSkills, userSoftware, userCertifications, userKeywords]) {
+      const config = getTableConfig(table);
+      const owner = config.columns.find((column) => column.name === "user_id");
+      expect(owner?.notNull).toBe(true);
+      expect(config.primaryKeys[0]?.columns[0]?.name).toBe("user_id");
+    }
+    expect(getTableConfig(resumeVersions).columns.find((column) => column.name === "user_id")?.notNull)
+      .toBe(true);
+    expect(getTableConfig(resumeVersions).indexes.some((index) =>
+      index.config.unique &&
+      index.config.columns.map((column) => "name" in column ? column.name : null).join(",") ===
+        "user_id,label",
+    )).toBe(true);
   });
 });

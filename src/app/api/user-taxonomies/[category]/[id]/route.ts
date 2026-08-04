@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { db } from '@/db'
 import {
   certifications,
@@ -11,7 +11,9 @@ import {
   userSkills,
   userSoftware,
 } from '@/db/schema'
-import { requireAuth, readJsonBody } from '@/lib/http'
+import { privateJson, readJsonBody } from '@/lib/http'
+import { resolveRequestUser } from '@/lib/resolved-user'
+import { withUser } from '@/db/session'
 import { logger, serializeError } from '@/lib/logger'
 import {
   parsePositiveProfileId,
@@ -30,29 +32,30 @@ type CertificationPatch = {
   credential_url?: string | null
 }
 type KeywordPatch = { preference: 'interest' | 'exclusion' }
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
-async function readProfileItem(category: ProfileCategory, taxonomyId: number) {
+async function readProfileItem(tx: DbTransaction, userId: number, category: ProfileCategory, taxonomyId: number) {
   switch (category) {
     case 'skills': {
-      const [item] = await db.select({
+      const [item] = await tx.select({
         taxonomyId: userSkills.skillId,
         name: skills.name,
         hasSkill: userSkills.hasSkill,
       }).from(userSkills).innerJoin(skills, eq(userSkills.skillId, skills.id))
-        .where(eq(userSkills.skillId, taxonomyId)).limit(1)
+        .where(and(eq(userSkills.userId, userId), eq(userSkills.skillId, taxonomyId))).limit(1)
       return item ?? null
     }
     case 'software': {
-      const [item] = await db.select({
+      const [item] = await tx.select({
         taxonomyId: userSoftware.softwareId,
         name: software.name,
         familiarity: userSoftware.familiarity,
       }).from(userSoftware).innerJoin(software, eq(userSoftware.softwareId, software.id))
-        .where(eq(userSoftware.softwareId, taxonomyId)).limit(1)
+        .where(and(eq(userSoftware.userId, userId), eq(userSoftware.softwareId, taxonomyId))).limit(1)
       return item ?? null
     }
     case 'certifications': {
-      const [item] = await db.select({
+      const [item] = await tx.select({
         taxonomyId: userCertifications.certificationId,
         name: certifications.name,
         issuer: userCertifications.issuer,
@@ -61,16 +64,16 @@ async function readProfileItem(category: ProfileCategory, taxonomyId: number) {
         credentialUrl: userCertifications.credentialUrl,
       }).from(userCertifications)
         .innerJoin(certifications, eq(userCertifications.certificationId, certifications.id))
-        .where(eq(userCertifications.certificationId, taxonomyId)).limit(1)
+        .where(and(eq(userCertifications.userId, userId), eq(userCertifications.certificationId, taxonomyId))).limit(1)
       return item ?? null
     }
     case 'keywords': {
-      const [item] = await db.select({
+      const [item] = await tx.select({
         taxonomyId: userKeywords.keywordId,
         name: keywords.name,
         preference: userKeywords.preference,
       }).from(userKeywords).innerJoin(keywords, eq(userKeywords.keywordId, keywords.id))
-        .where(eq(userKeywords.keywordId, taxonomyId)).limit(1)
+        .where(and(eq(userKeywords.userId, userId), eq(userKeywords.keywordId, taxonomyId))).limit(1)
       return item ?? null
     }
   }
@@ -84,8 +87,8 @@ async function parseTarget(context: Context) {
 }
 
 export async function PATCH(req: NextRequest, context: Context) {
-  const denied = await requireAuth(req)
-  if (denied) return denied
+  const auth = await resolveRequestUser(req)
+  if (!auth.ok) return auth.response
   const { parsedCategory, taxonomyId } = await parseTarget(context)
   if (!parsedCategory.success) {
     return NextResponse.json(
@@ -101,17 +104,17 @@ export async function PATCH(req: NextRequest, context: Context) {
   if (!parsed.ok) return parsed.response
 
   try {
-    const existing = await readProfileItem(parsedCategory.data, taxonomyId)
-    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-    switch (parsedCategory.data) {
+    const result = await withUser(auth.user.id, async (tx) => {
+      const existing = await readProfileItem(tx, auth.user.id, parsedCategory.data, taxonomyId)
+      if (!existing) return null
+      switch (parsedCategory.data) {
       case 'skills':
-        await db.update(userSkills).set({ hasSkill: (parsed.data as SkillPatch).has_skill })
-          .where(eq(userSkills.skillId, taxonomyId))
+        await tx.update(userSkills).set({ hasSkill: (parsed.data as SkillPatch).has_skill })
+          .where(and(eq(userSkills.userId, auth.user.id), eq(userSkills.skillId, taxonomyId)))
         break
       case 'software':
-        await db.update(userSoftware).set({ familiarity: (parsed.data as SoftwarePatch).familiarity })
-          .where(eq(userSoftware.softwareId, taxonomyId))
+        await tx.update(userSoftware).set({ familiarity: (parsed.data as SoftwarePatch).familiarity })
+          .where(and(eq(userSoftware.userId, auth.user.id), eq(userSoftware.softwareId, taxonomyId)))
         break
       case 'certifications': {
         const data = parsed.data as CertificationPatch
@@ -119,28 +122,30 @@ export async function PATCH(req: NextRequest, context: Context) {
         const earnedDate = data.earned_date === undefined ? existing.earnedDate : data.earned_date
         const expiresAt = data.expires_at === undefined ? existing.expiresAt : data.expires_at
         if (earnedDate && expiresAt && expiresAt < earnedDate) {
-          return NextResponse.json(
+          return privateJson(
             { error: { formErrors: [], fieldErrors: { expires_at: ['Expiration date must not precede earned date'] } } },
             { status: 400 },
           )
         }
-        await db.update(userCertifications).set({
+        await tx.update(userCertifications).set({
           issuer: data.issuer,
           earnedDate: data.earned_date,
           expiresAt: data.expires_at,
           credentialUrl: data.credential_url,
-        }).where(eq(userCertifications.certificationId, taxonomyId))
+        }).where(and(eq(userCertifications.userId, auth.user.id), eq(userCertifications.certificationId, taxonomyId)))
         break
       }
       case 'keywords':
-        await db.update(userKeywords).set({ preference: (parsed.data as KeywordPatch).preference })
-          .where(eq(userKeywords.keywordId, taxonomyId))
+        await tx.update(userKeywords).set({ preference: (parsed.data as KeywordPatch).preference })
+          .where(and(eq(userKeywords.userId, auth.user.id), eq(userKeywords.keywordId, taxonomyId)))
         break
-    }
-
-    const item = await readProfileItem(parsedCategory.data, taxonomyId)
+      }
+      return readProfileItem(tx, auth.user.id, parsedCategory.data, taxonomyId)
+    })
+    if (!result) return privateJson({ error: 'Not found' }, { status: 404 })
+    if (result instanceof NextResponse) return result
     logger.info('user taxonomy profile item updated', { category: parsedCategory.data, taxonomyId })
-    return NextResponse.json({ category: parsedCategory.data, item })
+    return privateJson({ category: parsedCategory.data, item: result })
   } catch (error) {
     logger.error('user taxonomy profile update failed', {
       category: parsedCategory.data,
@@ -152,8 +157,8 @@ export async function PATCH(req: NextRequest, context: Context) {
 }
 
 export async function DELETE(req: NextRequest, context: Context) {
-  const denied = await requireAuth(req)
-  if (denied) return denied
+  const auth = await resolveRequestUser(req)
+  if (!auth.ok) return auth.response
   const { parsedCategory, taxonomyId } = await parseTarget(context)
   if (!parsedCategory.success) {
     return NextResponse.json(
@@ -169,23 +174,23 @@ export async function DELETE(req: NextRequest, context: Context) {
     let deleted: unknown[]
     switch (parsedCategory.data) {
       case 'skills':
-        deleted = await db.delete(userSkills).where(eq(userSkills.skillId, taxonomyId)).returning()
+        deleted = await withUser(auth.user.id, (tx) => tx.delete(userSkills).where(and(eq(userSkills.userId, auth.user.id), eq(userSkills.skillId, taxonomyId))).returning())
         break
       case 'software':
-        deleted = await db.delete(userSoftware).where(eq(userSoftware.softwareId, taxonomyId)).returning()
+        deleted = await withUser(auth.user.id, (tx) => tx.delete(userSoftware).where(and(eq(userSoftware.userId, auth.user.id), eq(userSoftware.softwareId, taxonomyId))).returning())
         break
       case 'certifications':
-        deleted = await db.delete(userCertifications)
-          .where(eq(userCertifications.certificationId, taxonomyId)).returning()
+        deleted = await withUser(auth.user.id, (tx) => tx.delete(userCertifications)
+          .where(and(eq(userCertifications.userId, auth.user.id), eq(userCertifications.certificationId, taxonomyId))).returning())
         break
       case 'keywords':
-        deleted = await db.delete(userKeywords).where(eq(userKeywords.keywordId, taxonomyId)).returning()
+        deleted = await withUser(auth.user.id, (tx) => tx.delete(userKeywords).where(and(eq(userKeywords.userId, auth.user.id), eq(userKeywords.keywordId, taxonomyId))).returning())
         break
     }
     if (deleted.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     logger.info('user taxonomy profile item removed', { category: parsedCategory.data, taxonomyId })
-    return NextResponse.json({ category: parsedCategory.data, taxonomyId, success: true })
+    return privateJson({ category: parsedCategory.data, taxonomyId, success: true })
   } catch (error) {
     logger.error('user taxonomy profile removal failed', {
       category: parsedCategory.data,

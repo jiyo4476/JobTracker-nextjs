@@ -78,6 +78,13 @@
       "when": 1785717100000,
       "tag": "0010_resume_delete_set_null",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785772800000,
+      "tag": "0011_api_014_personal_profile_contract",
+      "breakpoints": true
     }
   ]
 }

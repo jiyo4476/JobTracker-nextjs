@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { db } from '@/db'
 import {
   certifications,
@@ -11,7 +11,9 @@ import {
   userSkills,
   userSoftware,
 } from '@/db/schema'
-import { requireAuth, readJsonBody } from '@/lib/http'
+import { privateJson, readJsonBody } from '@/lib/http'
+import { resolveRequestUser } from '@/lib/resolved-user'
+import { withUser } from '@/db/session'
 import { logger, serializeError } from '@/lib/logger'
 import {
   profileCategorySchema,
@@ -102,22 +104,24 @@ async function resolveCatalogItem(
   return rows<CatalogItem>(raced)[0] ?? null
 }
 
-async function listProfile(category: ProfileCategory) {
+async function listProfile(tx: DbTransaction, userId: number, category: ProfileCategory) {
   switch (category) {
     case 'skills':
-      return db.select({
+      return tx.select({
         taxonomyId: userSkills.skillId,
         name: skills.name,
         hasSkill: userSkills.hasSkill,
-      }).from(userSkills).innerJoin(skills, sql`${userSkills.skillId} = ${skills.id}`).orderBy(skills.name)
+      }).from(userSkills).innerJoin(skills, sql`${userSkills.skillId} = ${skills.id}`)
+        .where(eq(userSkills.userId, userId)).orderBy(skills.name)
     case 'software':
-      return db.select({
+      return tx.select({
         taxonomyId: userSoftware.softwareId,
         name: software.name,
         familiarity: userSoftware.familiarity,
-      }).from(userSoftware).innerJoin(software, sql`${userSoftware.softwareId} = ${software.id}`).orderBy(software.name)
+      }).from(userSoftware).innerJoin(software, sql`${userSoftware.softwareId} = ${software.id}`)
+        .where(eq(userSoftware.userId, userId)).orderBy(software.name)
     case 'certifications':
-      return db.select({
+      return tx.select({
         taxonomyId: userCertifications.certificationId,
         name: certifications.name,
         issuer: userCertifications.issuer,
@@ -126,24 +130,26 @@ async function listProfile(category: ProfileCategory) {
         credentialUrl: userCertifications.credentialUrl,
       }).from(userCertifications)
         .innerJoin(certifications, sql`${userCertifications.certificationId} = ${certifications.id}`)
+        .where(eq(userCertifications.userId, userId))
         .orderBy(certifications.name)
     case 'keywords':
-      return db.select({
+      return tx.select({
         taxonomyId: userKeywords.keywordId,
         name: keywords.name,
         preference: userKeywords.preference,
-      }).from(userKeywords).innerJoin(keywords, sql`${userKeywords.keywordId} = ${keywords.id}`).orderBy(keywords.name)
+      }).from(userKeywords).innerJoin(keywords, sql`${userKeywords.keywordId} = ${keywords.id}`)
+        .where(eq(userKeywords.userId, userId)).orderBy(keywords.name)
   }
 }
 
-async function getProfileItem(category: ProfileCategory, taxonomyId: number) {
-  const items = await listProfile(category)
+async function getProfileItem(tx: DbTransaction, userId: number, category: ProfileCategory, taxonomyId: number) {
+  const items = await listProfile(tx, userId, category)
   return items.find((item) => item.taxonomyId === taxonomyId) ?? null
 }
 
 export async function GET(req: NextRequest, context: Context) {
-  const denied = await requireAuth(req)
-  if (denied) return denied
+  const auth = await resolveRequestUser(req)
+  if (!auth.ok) return auth.response
   const category = await parseCategory(context)
   if (!category.success) {
     return NextResponse.json(
@@ -153,7 +159,8 @@ export async function GET(req: NextRequest, context: Context) {
   }
 
   try {
-    return NextResponse.json({ category: category.data, items: await listProfile(category.data) })
+    const items = await withUser(auth.user.id, (tx) => listProfile(tx, auth.user.id, category.data))
+    return privateJson({ category: category.data, items })
   } catch (error) {
     logger.error('user taxonomy profile list failed', { category: category.data, ...serializeError(error) })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -161,8 +168,8 @@ export async function GET(req: NextRequest, context: Context) {
 }
 
 export async function POST(req: NextRequest, context: Context) {
-  const denied = await requireAuth(req)
-  if (denied) return denied
+  const auth = await resolveRequestUser(req)
+  if (!auth.ok) return auth.response
   const category = await parseCategory(context)
   if (!category.success) {
     return NextResponse.json(
@@ -175,7 +182,7 @@ export async function POST(req: NextRequest, context: Context) {
   if (!parsed.ok) return parsed.response
 
   try {
-    const outcome = await db.transaction(async (tx) => {
+    const outcome = await withUser(auth.user.id, async (tx) => {
       const catalogItem = await resolveCatalogItem(tx, category.data, parsed.data as CreateTarget)
       if (!catalogItem) return null
 
@@ -184,54 +191,58 @@ export async function POST(req: NextRequest, context: Context) {
         case 'skills': {
           const data = parsed.data as SkillCreate
           inserted = await tx.insert(userSkills).values({
+            userId: auth.user.id,
             skillId: catalogItem.taxonomyId,
             hasSkill: data.has_skill,
-          }).onConflictDoNothing().returning()
+          }).onConflictDoNothing({ target: [userSkills.userId, userSkills.skillId] }).returning()
           break
         }
         case 'software': {
           const data = parsed.data as SoftwareCreate
           inserted = await tx.insert(userSoftware).values({
+            userId: auth.user.id,
             softwareId: catalogItem.taxonomyId,
             familiarity: data.familiarity,
-          }).onConflictDoNothing().returning()
+          }).onConflictDoNothing({ target: [userSoftware.userId, userSoftware.softwareId] }).returning()
           break
         }
         case 'certifications': {
           const data = parsed.data as CertificationCreate
           inserted = await tx.insert(userCertifications).values({
+            userId: auth.user.id,
             certificationId: catalogItem.taxonomyId,
             issuer: data.issuer,
             earnedDate: data.earned_date,
             expiresAt: data.expires_at,
             credentialUrl: data.credential_url,
-          }).onConflictDoNothing().returning()
+          }).onConflictDoNothing({ target: [userCertifications.userId, userCertifications.certificationId] }).returning()
           break
         }
         case 'keywords': {
           const data = parsed.data as KeywordCreate
           inserted = await tx.insert(userKeywords).values({
+            userId: auth.user.id,
             keywordId: catalogItem.taxonomyId,
             preference: data.preference,
-          }).onConflictDoNothing().returning()
+          }).onConflictDoNothing({ target: [userKeywords.userId, userKeywords.keywordId] }).returning()
           break
         }
       }
-      return { catalogItem, created: inserted.length > 0 }
+      const item = await getProfileItem(tx, auth.user.id, category.data, catalogItem.taxonomyId)
+      return { catalogItem, created: inserted.length > 0, item }
     })
     if (!outcome) {
       return NextResponse.json({ error: `${category.data} value not found` }, { status: 404 })
     }
 
-    const item = await getProfileItem(category.data, outcome.catalogItem.taxonomyId)
-    if (!item) throw new Error('Profile association could not be read after insert')
+    if (!outcome.item) throw new Error('Profile association could not be read after insert')
     logger.info('user taxonomy profile item added', {
       category: category.data,
       taxonomyId: outcome.catalogItem.taxonomyId,
       created: outcome.created,
     })
-    return NextResponse.json(
-      { category: category.data, item, created: outcome.created },
+    return privateJson(
+      { category: category.data, item: outcome.item, created: outcome.created },
       { status: outcome.created ? 201 : 200 },
     )
   } catch (error) {

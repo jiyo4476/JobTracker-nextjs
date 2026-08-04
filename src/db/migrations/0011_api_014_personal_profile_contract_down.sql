@@ -1,0 +1,15 @@
+ALTER TABLE "user_keywords" DROP CONSTRAINT "user_keywords_user_id_keyword_id_pk";
+ALTER TABLE "user_keywords" ADD CONSTRAINT "user_keywords_keyword_id_pk" PRIMARY KEY("keyword_id");
+ALTER TABLE "user_certifications" DROP CONSTRAINT "user_certifications_user_id_certification_id_pk";
+ALTER TABLE "user_certifications" ADD CONSTRAINT "user_certifications_certification_id_pk" PRIMARY KEY("certification_id");
+ALTER TABLE "user_software" DROP CONSTRAINT "user_software_user_id_software_id_pk";
+ALTER TABLE "user_software" ADD CONSTRAINT "user_software_software_id_pk" PRIMARY KEY("software_id");
+ALTER TABLE "user_skills" DROP CONSTRAINT "user_skills_user_id_skill_id_pk";
+ALTER TABLE "user_skills" ADD CONSTRAINT "user_skills_skill_id_pk" PRIMARY KEY("skill_id");
+DROP INDEX "resume_versions_user_id_label_uq";
+ALTER TABLE "resume_versions" ADD CONSTRAINT "resume_versions_label_unique" UNIQUE("label");
+ALTER TABLE "user_keywords" ALTER COLUMN "user_id" DROP NOT NULL;
+ALTER TABLE "user_certifications" ALTER COLUMN "user_id" DROP NOT NULL;
+ALTER TABLE "user_software" ALTER COLUMN "user_id" DROP NOT NULL;
+ALTER TABLE "user_skills" ALTER COLUMN "user_id" DROP NOT NULL;
+ALTER TABLE "resume_versions" ALTER COLUMN "user_id" DROP NOT NULL;
