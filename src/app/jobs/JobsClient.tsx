@@ -174,14 +174,18 @@ export default function JobsClient() {
   const allRowIds = allRows.map(j => String(j.id))
   const allSelected = allRowIds.length > 0 && allRowIds.every(id => rowSelection[id])
   const someSelected = allRowIds.some(id => rowSelection[id])
-  const selectedIds = allRows.filter(j => rowSelection[String(j.id)]).map(j => j.id)
+  const selectedRows = allRows.filter(j => rowSelection[String(j.id)])
+  const selectedIds = selectedRows.map(j => j.id)
+  const selectedTrackedIds = selectedRows.filter(j => j.isTracked).map(j => j.id)
+  const selectedUntrackedCount = selectedIds.length - selectedTrackedIds.length
 
   function runRowAction(id: number, action: JobStateAction) {
     stateAction.mutate({ id, action })
   }
 
   async function handleBulkRemove() {
-    const ids = allRows.filter(j => rowSelection[String(j.id)]).map(j => j.id)
+    const ids = selectedTrackedIds
+    if (ids.length === 0) return
     setBulkPending(true)
     const results = await Promise.allSettled(
       ids.map(id => stateAction.mutateAsync({ id, action: 'remove' }))
@@ -207,7 +211,8 @@ export default function JobsClient() {
 
   async function handleBulkStage() {
     if (!bulkStage) return
-    const ids = allRows.filter(j => rowSelection[String(j.id)]).map(j => j.id)
+    const ids = selectedTrackedIds
+    if (ids.length === 0) return
     setBulkPending(true)
     const results = await Promise.allSettled(
       ids.map(id => patchState.mutateAsync({ id, body: { interview_stage: bulkStage } }))
@@ -525,40 +530,49 @@ export default function JobsClient() {
       {someSelected && (
         <div className="flex items-center gap-3 mb-3 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm">
           <span className="font-medium">{selectedIds.length} selected</span>
-          <span className="text-slate-400">·</span>
-          <select
-            value={bulkStage}
-            onChange={(e) => setBulkStage(e.target.value)}
-            className="h-7 rounded border border-slate-600 bg-slate-800 px-2 text-xs text-white"
-            disabled={bulkPending}
-            aria-label="Change stage for selected jobs"
-          >
-            <option value="">Change stage…</option>
-            {interviewStageOptions.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-          {bulkStage && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 px-3 text-xs bg-slate-700 border-slate-600 text-white hover:bg-slate-600"
-              disabled={bulkPending}
-              onClick={handleBulkStage}
-            >
-              {bulkPending ? 'Applying…' : 'Apply'}
-            </Button>
+          {selectedUntrackedCount > 0 && (
+            <span className="text-xs text-slate-300">
+              {selectedUntrackedCount} not tracked — save {selectedUntrackedCount === 1 ? 'it' : 'them'} to My Jobs first
+            </span>
           )}
-          <span className="text-slate-400">·</span>
-          <Button
-            size="sm"
-            variant="destructive"
-            className="h-7 px-3 text-xs"
-            disabled={bulkPending}
-            onClick={() => setBulkRemoveOpen(true)}
-          >
-            {bulkPending ? 'Removing…' : 'Remove from My Jobs'}
-          </Button>
+          {selectedTrackedIds.length > 0 && (
+            <>
+              <span className="text-slate-400">·</span>
+              <select
+                value={bulkStage}
+                onChange={(e) => setBulkStage(e.target.value)}
+                className="h-7 rounded border border-slate-600 bg-slate-800 px-2 text-xs text-white"
+                disabled={bulkPending}
+                aria-label={`Change stage for ${selectedTrackedIds.length} tracked selected job${selectedTrackedIds.length !== 1 ? 's' : ''}`}
+              >
+                <option value="">Change stage…</option>
+                {interviewStageOptions.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              {bulkStage && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-3 text-xs bg-slate-700 border-slate-600 text-white hover:bg-slate-600"
+                  disabled={bulkPending}
+                  onClick={handleBulkStage}
+                >
+                  {bulkPending ? 'Applying…' : 'Apply'}
+                </Button>
+              )}
+              <span className="text-slate-400">·</span>
+              <Button
+                size="sm"
+                variant="destructive"
+                className="h-7 px-3 text-xs"
+                disabled={bulkPending}
+                onClick={() => setBulkRemoveOpen(true)}
+              >
+                {bulkPending ? 'Removing…' : `Remove ${selectedTrackedIds.length} from My Jobs`}
+              </Button>
+            </>
+          )}
           <span className="text-slate-400">·</span>
           <Button
             size="sm"
@@ -689,7 +703,7 @@ export default function JobsClient() {
       <AlertDialog open={bulkRemoveOpen} onOpenChange={setBulkRemoveOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove {selectedIds.length} job{selectedIds.length !== 1 ? 's' : ''} from My Jobs?</AlertDialogTitle>
+            <AlertDialogTitle>Remove {selectedTrackedIds.length} job{selectedTrackedIds.length !== 1 ? 's' : ''} from My Jobs?</AlertDialogTitle>
             <AlertDialogDescription>
               For each selected job this permanently deletes your saved application state, any
               private contacts you added, and your interview-stage activity history. The jobs stay
@@ -703,7 +717,7 @@ export default function JobsClient() {
               disabled={bulkPending}
               onClick={handleBulkRemove}
             >
-              {bulkPending ? 'Removing…' : `Remove ${selectedIds.length}`}
+              {bulkPending ? 'Removing…' : `Remove ${selectedTrackedIds.length}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

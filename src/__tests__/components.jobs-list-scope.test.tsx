@@ -1,11 +1,17 @@
+// @vitest-environment happy-dom
+
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JobListItem, JobsResponse } from '@/types/queries'
 
 const mocks = vi.hoisted(() => ({
   useJobs: vi.fn(),
   searchParams: new URLSearchParams(),
+  patchState: { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false },
+  stateAction: { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false },
 }))
 
 vi.mock('next/navigation', () => ({
@@ -21,8 +27,8 @@ vi.mock('@/components/jobs/TaxonomyFilters', () => ({ TaxonomyFilters: () => <di
 vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: vi.fn() }) }))
 vi.mock('@/lib/queries', () => ({
   useJobs: mocks.useJobs,
-  usePatchJobState: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
-  useJobStateAction: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  usePatchJobState: () => mocks.patchState,
+  useJobStateAction: () => mocks.stateAction,
 }))
 
 import JobsClient from '@/app/jobs/JobsClient'
@@ -76,5 +82,60 @@ describe('JobsClient — owner-scoped views', () => {
     const html = renderToStaticMarkup(<JobsClient />)
     expect(html).toContain('aria-label="Hide Engineer"')
     expect(html).toContain('aria-label="Remove Engineer from My Jobs"')
+  })
+
+  it('requires catalog-only selections to be saved before personal bulk actions', async () => {
+    const user = userEvent.setup()
+    mocks.searchParams = new URLSearchParams('scope=catalog')
+    mocks.useJobs.mockReturnValue({
+      data: response([makeItem({ id: 9, isTracked: false })], 'catalog'),
+      isLoading: false,
+    })
+
+    render(<JobsClient />)
+    await user.click(screen.getByRole('checkbox', { name: 'Select row' }))
+
+    expect(screen.getByText('1 not tracked — save it to My Jobs first')).toBeTruthy()
+    expect(screen.queryByRole('combobox', { name: /Change stage/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Remove .* from My Jobs/ })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Save Engineer to My Jobs' })).toBeTruthy()
+  })
+
+  it('limits mixed catalog personal bulk actions to tracked selected rows', async () => {
+    const user = userEvent.setup()
+    mocks.stateAction.mutateAsync.mockResolvedValue({})
+    mocks.searchParams = new URLSearchParams('scope=catalog')
+    mocks.useJobs.mockReturnValue({
+      data: response([
+        makeItem({ id: 3, jobTitle: 'Tracked Engineer', isTracked: true }),
+        makeItem({ id: 9, jobTitle: 'Catalog Engineer', isTracked: false }),
+      ], 'catalog'),
+      isLoading: false,
+    })
+
+    render(<JobsClient />)
+    const table = screen.getByRole('tabpanel')
+    await user.click(within(table).getByRole('checkbox', { name: 'Select all' }))
+
+    expect(screen.getByText('2 selected')).toBeTruthy()
+    expect(screen.getByText('1 not tracked — save it to My Jobs first')).toBeTruthy()
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Change stage for 1 tracked selected job' }),
+      'applied'
+    )
+    await user.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(mocks.patchState.mutateAsync).toHaveBeenCalledTimes(1)
+    expect(mocks.patchState.mutateAsync).toHaveBeenCalledWith({
+      id: 3,
+      body: { interview_stage: 'applied' },
+    })
+
+    // Re-select the tracked row after a successful bulk stage update clears it.
+    await user.click(within(table).getAllByRole('checkbox', { name: 'Select row' })[0])
+    await user.click(screen.getByRole('button', { name: 'Remove 1 from My Jobs' }))
+    await user.click(screen.getByRole('button', { name: 'Remove 1' }))
+
+    expect(mocks.stateAction.mutateAsync).toHaveBeenCalledTimes(1)
+    expect(mocks.stateAction.mutateAsync).toHaveBeenCalledWith({ id: 3, action: 'remove' })
   })
 })
