@@ -62,6 +62,10 @@ type VerifiedIdentity = {
   issuer: string;
   subject: string;
   scopes: string[];
+  // Verified group memberships from the token's `groups` claim (empty when the
+  // provider does not emit one, or for opaque/introspection tokens). Together with
+  // `scopes` this is the ONLY source of the admin decision — never a body/header/query.
+  groups: string[];
   method: "bearer" | "forward-auth" | "development";
 };
 
@@ -69,6 +73,9 @@ export type UserPrincipal = VerifiedIdentity & {
   kind: "user";
   identityKey: string;
   correlationId: string;
+  // Catalog-admin authorization, derived at verification time from the verified
+  // groups/scopes only (see identityIsAdmin). Gates the /api/admin/jobs namespace.
+  isAdmin: boolean;
 };
 
 export type ServicePrincipal = VerifiedIdentity & {
@@ -86,7 +93,8 @@ export class AuthenticationError extends Error {
       | "unauthenticated"
       | "wrong_principal"
       | "missing_capability"
-      | "inactive_user",
+      | "inactive_user"
+      | "not_admin",
     public readonly correlationId: string,
   ) {
     super(code);
@@ -157,7 +165,7 @@ export async function authenticateRequest(
       const subject = process.env.AUTH_DEV_SUBJECT;
       if (issuer && subject) {
         return toPrincipal(
-          { issuer: normalizeIssuer(issuer), subject, scopes: [], method: "development" },
+          { issuer: normalizeIssuer(issuer), subject, scopes: [], groups: [], method: "development" },
           correlationId,
           false,
         );
@@ -419,6 +427,8 @@ async function verifyTokenByIntrospection(
       issuer: normalizeIssuer(data.iss),
       subject: data.sub,
       scopes,
+      // RFC 7662 introspection has no standard group claim; admin via scopes only here.
+      groups: [],
       method: "bearer",
     };
   } catch {
@@ -440,8 +450,18 @@ function identityFromPayload(
     issuer: normalizeIssuer(payload.iss),
     subject: payload.sub,
     scopes,
+    groups: extractGroups(payload),
     method,
   };
+}
+
+// A verified `groups` claim, when present, is an array of strings (Authentik, Keycloak,
+// Okta, …). Anything else (missing, scalar, non-string members) yields an empty list so
+// a malformed claim can never widen authorization.
+function extractGroups(payload: JWTPayload): string[] {
+  const raw = (payload as { groups?: unknown }).groups;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((value): value is string => typeof value === "string" && value.trim() !== "");
 }
 
 function toPrincipal(
@@ -453,7 +473,31 @@ function toPrincipal(
   const service = allowService ? getServicePrincipal(identity) : null;
   return service
     ? { ...identity, ...service, kind: "service", identityKey, correlationId }
-    : { ...identity, kind: "user", identityKey, correlationId };
+    : { ...identity, kind: "user", identityKey, correlationId, isAdmin: identityIsAdmin(identity) };
+}
+
+// Catalog-admin authorization. Decided ONLY from the verified token (or the explicit
+// non-production dev switch) — never from a request body, header, query, or URL, and
+// never from a service principal (services never reach here). Fails CLOSED: if no admin
+// group/scope is configured, no interactive user is admin.
+export function getAdminClaimConfig(): { groups: string[]; scopes: string[] } {
+  return {
+    groups: splitEnvList(envAny("OIDC_ADMIN_GROUPS", "AUTHENTIK_ADMIN_GROUPS")),
+    scopes: splitEnvList(envAny("OIDC_ADMIN_SCOPES", "AUTHENTIK_ADMIN_SCOPES")),
+  };
+}
+
+function identityIsAdmin(identity: VerifiedIdentity): boolean {
+  // Local-only affordance: the same-origin dev principal (never reachable in production —
+  // see the NODE_ENV guard on the dev branch) is admin when AUTH_DEV_ADMIN=true.
+  if (identity.method === "development") {
+    return process.env.NODE_ENV !== "production" && process.env.AUTH_DEV_ADMIN === "true";
+  }
+  const { groups, scopes } = getAdminClaimConfig();
+  if (groups.length === 0 && scopes.length === 0) return false;
+  const inAdminGroup = groups.some((group) => identity.groups.includes(group));
+  const inAdminScope = scopes.some((scope) => identity.scopes.includes(scope));
+  return inAdminGroup || inAdminScope;
 }
 
 function getServicePrincipal(

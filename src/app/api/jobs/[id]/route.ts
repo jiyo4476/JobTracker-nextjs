@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/db'
 import { withUser } from '@/db/session'
-import { requireAuth, readJsonBody, privateJson } from '@/lib/http'
+import { privateJson, deprecatedAlias } from '@/lib/http'
 import { resolveRequestUser } from '@/lib/resolved-user'
-import { jobPatchSchema } from '@/lib/schemas'
-import { logger, serializeError } from '@/lib/logger'
-import { hourlyToAnnualEquivalentCents } from '@/lib/salary-format'
+import { patchCatalogJob, deleteCatalogJob } from '@/lib/admin-catalog-handlers'
 import {
   jobs, companies, skills, software as softwareTable, keywords, certifications,
-  jobSkills, jobSoftware, jobKeywords, jobCertifications, jobStatusHistory,
+  jobSkills, jobSoftware, jobKeywords, jobCertifications,
   userJobState, userJobContacts, resumeVersions,
 } from '@/db/schema'
 import { eq, and, asc } from 'drizzle-orm'
@@ -154,130 +151,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   })
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const authError = await requireAuth(req)
-  if (authError) return authError
-
-  const { id } = await params
-  const jobId = parseInt(id)
-  if (isNaN(jobId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
-
-  const parsed = await readJsonBody(req, jobPatchSchema)
-  if (!parsed.ok) return parsed.response
-
-  const d = parsed.data
-
-  // Track stage change for activity feed
-  if (d.interview_stage !== undefined) {
-    const [current] = await db
-      .select({ interviewStage: jobs.interviewStage })
-      .from(jobs)
-      .where(eq(jobs.id, jobId))
-      .limit(1)
-    if (current && current.interviewStage !== d.interview_stage) {
-      await db.insert(jobStatusHistory).values({
-        jobId,
-        fromStage: current.interviewStage,
-        toStage: d.interview_stage,
-      })
-    }
-  }
-
-  // Recompute annual equivalents when salary fields change.
-  // If salary_type isn't in the patch, read it from the DB so we don't
-  // corrupt annual_equivalent_* when only a rate field is updated.
-  let annualEquivalentMin: number | undefined
-  let annualEquivalentMax: number | undefined
-  const salaryFieldsChanged =
-    d.salary_type !== undefined ||
-    d.hourly_rate_min !== undefined ||
-    d.hourly_rate_max !== undefined ||
-    d.salary_min !== undefined ||
-    d.salary_max !== undefined
-
-  if (salaryFieldsChanged) {
-    let salaryType = d.salary_type
-    if (salaryType === undefined) {
-      const [cur] = await db
-        .select({ salaryType: jobs.salaryType })
-        .from(jobs)
-        .where(eq(jobs.id, jobId))
-        .limit(1)
-      salaryType = cur?.salaryType ?? undefined
-    }
-    if (salaryType === 'hourly') {
-      if (d.hourly_rate_min !== undefined) annualEquivalentMin = hourlyToAnnualEquivalentCents(d.hourly_rate_min)
-      if (d.hourly_rate_max !== undefined) annualEquivalentMax = hourlyToAnnualEquivalentCents(d.hourly_rate_max)
-    } else if (salaryType === 'annual') {
-      if (d.salary_min !== undefined) annualEquivalentMin = d.salary_min
-      if (d.salary_max !== undefined) annualEquivalentMax = d.salary_max
-    }
-  }
-
-  try {
-  await db.update(jobs).set({
-    ...(d.job_title !== undefined && { jobTitle: d.job_title }),
-    ...(d.company_id !== undefined && { companyId: d.company_id }),
-    ...(d.job_location !== undefined && { jobLocation: d.job_location }),
-    ...(d.is_remote !== undefined && { isRemote: d.is_remote }),
-    ...(d.job_description !== undefined && { jobDescription: d.job_description }),
-    ...(d.date_posted !== undefined && { datePosted: d.date_posted || null }),
-    ...(d.salary_text !== undefined && { salaryText: d.salary_text }),
-    ...(d.salary_type !== undefined && { salaryType: d.salary_type }),
-    ...(d.salary_min !== undefined && { salaryMin: d.salary_min }),
-    ...(d.salary_max !== undefined && { salaryMax: d.salary_max }),
-    ...(d.hourly_rate_min !== undefined && { hourlyRateMin: d.hourly_rate_min.toString() }),
-    ...(d.hourly_rate_max !== undefined && { hourlyRateMax: d.hourly_rate_max.toString() }),
-    ...(d.job_type !== undefined && { jobType: d.job_type }),
-    ...(d.experience_level !== undefined && { experienceLevel: d.experience_level }),
-    ...(d.security_clearance_req !== undefined && { securityClearanceReq: d.security_clearance_req }),
-    ...(d.has_applied !== undefined && { hasApplied: d.has_applied }),
-    ...(d.date_applied !== undefined && { dateApplied: d.date_applied || null }),
-    ...(d.heard_back !== undefined && { heardBack: d.heard_back }),
-    ...(d.interview_stage !== undefined && { interviewStage: d.interview_stage }),
-    ...(d.is_active !== undefined && { isActive: d.is_active }),
-    ...(d.is_active === true && { deletedAt: null }),
-    ...(d.priority !== undefined && { priority: d.priority }),
-    ...(d.notes !== undefined && { notes: d.notes }),
-    ...(d.resume_version !== undefined && { resumeVersion: d.resume_version }),
-    ...(d.rejection_reason !== undefined && { rejectionReason: d.rejection_reason }),
-    ...(d.referral !== undefined && { referral: d.referral }),
-    ...(d.cover_letter_submitted !== undefined && { coverLetterSubmitted: d.cover_letter_submitted }),
-    ...(d.application_deadline !== undefined && { applicationDeadline: d.application_deadline || null }),
-    ...(annualEquivalentMin !== undefined && { annualEquivalentMin }),
-    ...(annualEquivalentMax !== undefined && { annualEquivalentMax }),
-    updatedAt: new Date(),
-  }).where(eq(jobs.id, jobId))
-  } catch (err) {
-    logger.error('PATCH /api/jobs/[id] failed', { jobId, ...serializeError(err) })
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-  }
-
-  logger.info('job updated', { jobId, fields: Object.keys(d) })
-  return NextResponse.json({ success: true })
-}
-
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const authError = await requireAuth(req)
-  if (authError) return authError
-
-  const { id } = await params
-  const jobId = parseInt(id)
-  if (isNaN(jobId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
-
-  let result: { id: number }[]
-  try {
-    result = await db
-      .update(jobs)
-      .set({ isActive: false, deletedAt: new Date(), updatedAt: new Date() })
-      .where(eq(jobs.id, jobId))
-      .returning({ id: jobs.id })
-  } catch (err) {
-    logger.error('DELETE /api/jobs/[id] failed', { jobId, ...serializeError(err) })
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-  }
-
-  if (result.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  logger.info('job soft-deleted', { jobId })
-  return NextResponse.json({ success: true })
-}
+// API-013 slice 1: catalog mutation is now admin-only and catalog-field-only. Personal
+// state (stage, priority, applied/heard-back, notes, resume choice, …) moved to
+// `PATCH /api/jobs/[id]/state`. These legacy paths are DEPRECATED admin-gated aliases of
+// the canonical `/api/admin/jobs/[id]` and reject personal-state fields.
+export const PATCH = deprecatedAlias(patchCatalogJob, '/api/admin/jobs/[id]')
+export const DELETE = deprecatedAlias(deleteCatalogJob, '/api/admin/jobs/[id]')
