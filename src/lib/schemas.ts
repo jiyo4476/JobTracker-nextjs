@@ -200,6 +200,7 @@ export const userSkillCreateSchema = z
     skill_id: z.number().int().positive().optional(),
     name: z.string().min(1).optional(),
   })
+  .strict()
   .refine((d) => d.skill_id !== undefined || d.name !== undefined, {
     message: 'Either skill_id or name must be provided',
   })

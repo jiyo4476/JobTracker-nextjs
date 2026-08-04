@@ -152,6 +152,22 @@ describe('POST /api/user-skills', () => {
     const res = await POST(req)
     expect(res.status).toBe(400)
   })
+
+  it('rejects caller-supplied user_id without inserting', async () => {
+    setAuth(true)
+    const mockDb = db as unknown as Record<string, ReturnType<typeof vi.fn>>
+
+    const { POST } = await import('@/app/api/user-skills/route')
+    const req = new NextRequest('http://localhost/api/user-skills', {
+      method: 'POST',
+      body: JSON.stringify({ skill_id: 3, user_id: 1 }),
+      headers: { 'content-type': 'application/json', authorization: 'Bearer test-key' },
+    })
+    const res = await POST(req)
+
+    expect(res.status).toBe(400)
+    expect(mockDb.insert).not.toHaveBeenCalled()
+  })
 })
 
 describe('DELETE /api/user-skills/[id]', () => {
