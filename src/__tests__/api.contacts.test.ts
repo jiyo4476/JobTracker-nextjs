@@ -41,7 +41,7 @@ function makeParams(id: string, contactId?: string) {
 function resolveAs(userId: number) {
   vi.mocked(resolveRequestUser).mockResolvedValue({
     ok: true,
-    user: { id: userId, issuer: 'https://issuer/', subject: `sub-${userId}`, principal: {} as never },
+    user: { id: userId, issuer: 'https://issuer/', subject: `sub-${userId}`, email: null, displayName: null, principal: {} as never },
   })
 }
 function resolveDenied() {

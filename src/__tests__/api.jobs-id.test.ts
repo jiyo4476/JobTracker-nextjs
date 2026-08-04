@@ -52,7 +52,7 @@ function forbidden() { return NextResponse.json({ error: 'Forbidden' }, { status
 function setupResolvedUser(userId = 1) {
   vi.mocked(resolveRequestUser).mockResolvedValue({
     ok: true,
-    user: { id: userId, issuer: 'https://issuer/', subject: 'sub', principal: {} as never },
+    user: { id: userId, issuer: 'https://issuer/', subject: 'sub', email: null, displayName: null, principal: {} as never },
   })
 }
 function setupOwnerScopedGet(firstResult: unknown[]) {

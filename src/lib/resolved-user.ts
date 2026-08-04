@@ -31,6 +31,14 @@ export type ResolvedRequestUser = {
   id: number;
   issuer: string;
   subject: string;
+  /**
+   * Presentation metadata mirrored from the resolved row. These are NOT identity
+   * keys (see `resolveUser`) — they are optional, mutable display fields safe to
+   * surface to the authenticated owner (e.g. `/api/me`). Never use them to look up,
+   * match, or authorize a user.
+   */
+  email: string | null;
+  displayName: string | null;
   /** The verified principal, for correlationId / scopes / logging. */
   principal: UserPrincipal;
 };
@@ -66,6 +74,8 @@ export async function requireResolvedUser(req: NextRequest): Promise<ResolvedReq
     id: resolved.id,
     issuer: resolved.issuer,
     subject: resolved.subject,
+    email: resolved.email,
+    displayName: resolved.displayName,
     principal,
   };
 }
