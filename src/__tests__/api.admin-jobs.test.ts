@@ -134,6 +134,23 @@ describe('POST /api/admin/jobs (catalog create)', () => {
     expect(res.status).toBe(201)
     expect(await res.json()).toHaveProperty('job_id', 42)
   })
+
+  it.each([
+    { notes: 'private notes' },
+    { priority: 5 },
+    { has_applied: true },
+    { interview_stage: 'phone_screen' },
+  ])('400 — catalog create rejects the personal-state field %j', async (personalState) => {
+    resolveAs(true)
+    const { POST } = await import('@/app/api/admin/jobs/route')
+    const res = await POST(makeReq(
+      '/api/admin/jobs',
+      { job_title: 'Engineer', ...personalState },
+      'POST',
+    ))
+    expect(res.status).toBe(400)
+    expect(db.insert).not.toHaveBeenCalled()
+  })
 })
 
 describe('PATCH /api/admin/jobs/[id] (catalog update)', () => {
@@ -176,6 +193,17 @@ describe('PATCH /api/admin/jobs/[id] (catalog update)', () => {
     const res = await PATCH(makeReq('/api/admin/jobs/1', body), makeParams('1'))
     expect(res.status).toBe(400)
   })
+
+  it.each(['1abc', '1.5', '1e2', '0', '-1', '9007199254740992'])(
+    '400 — rejects malformed or unsafe job id %j without querying the database',
+    async (id) => {
+      resolveAs(true)
+      const { PATCH } = await import('@/app/api/admin/jobs/[id]/route')
+      const res = await PATCH(makeReq(`/api/admin/jobs/${id}`, { job_title: 'New' }), makeParams(id))
+      expect(res.status).toBe(400)
+      expect(db.update).not.toHaveBeenCalled()
+    },
+  )
 })
 
 describe('DELETE /api/admin/jobs/[id] (global soft-delete)', () => {
@@ -204,6 +232,17 @@ describe('DELETE /api/admin/jobs/[id] (global soft-delete)', () => {
     const res = await DELETE(makeReq('/api/admin/jobs/999', undefined, 'DELETE'), makeParams('999'))
     expect(res.status).toBe(404)
   })
+
+  it.each(['1abc', '1.5', '1e2'])(
+    '400 — rejects malformed job id %j without mutating the database',
+    async (id) => {
+      resolveAs(true)
+      const { DELETE } = await import('@/app/api/admin/jobs/[id]/route')
+      const res = await DELETE(makeReq(`/api/admin/jobs/${id}`, undefined, 'DELETE'), makeParams(id))
+      expect(res.status).toBe(400)
+      expect(db.update).not.toHaveBeenCalled()
+    },
+  )
 })
 
 describe('PATCH /api/admin/jobs/[id]/salary', () => {
@@ -228,6 +267,17 @@ describe('PATCH /api/admin/jobs/[id]/salary', () => {
     )
     expect(res.status).toBe(200)
   })
+
+  it('400 for a malformed job id without mutating the database', async () => {
+    resolveAs(true)
+    const { PATCH } = await import('@/app/api/admin/jobs/[id]/salary/route')
+    const res = await PATCH(
+      makeReq('/api/admin/jobs/1abc/salary', { salary_type: 'annual', salary_min: 8000000, salary_max: 12000000 }),
+      makeParams('1abc'),
+    )
+    expect(res.status).toBe(400)
+    expect(db.update).not.toHaveBeenCalled()
+  })
 })
 
 describe('PATCH /api/admin/jobs/[id]/tags', () => {
@@ -236,5 +286,16 @@ describe('PATCH /api/admin/jobs/[id]/tags', () => {
     const { PATCH } = await import('@/app/api/admin/jobs/[id]/tags/route')
     const res = await PATCH(makeReq('/api/admin/jobs/1/tags', { skills: ['Python'] }), makeParams('1'))
     expect(res.status).toBe(403)
+  })
+
+  it('400 for a malformed job id without querying the database', async () => {
+    resolveAs(true)
+    const { PATCH } = await import('@/app/api/admin/jobs/[id]/tags/route')
+    const res = await PATCH(
+      makeReq('/api/admin/jobs/1abc/tags', { skills: ['Python'] }),
+      makeParams('1abc'),
+    )
+    expect(res.status).toBe(400)
+    expect(db.select).not.toHaveBeenCalled()
   })
 })

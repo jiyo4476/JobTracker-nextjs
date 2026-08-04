@@ -166,6 +166,19 @@ export const manualJobSchema = z.object({
   salary_text: z.string().max(200).optional(),
 }).strict()
 
+// Admin creation publishes directly to the shared catalog, so it deliberately
+// excludes the personal-state fields accepted by the legacy manual-entry form.
+export const jobCatalogCreateSchema = z.object({
+  job_title: z.string().trim().min(1).max(500),
+  job_link: httpUrlSchema.optional(),
+  job_location: z.string().max(300).optional(),
+  is_remote: z.boolean().optional(),
+  company_id: z.number().int().positive().optional(),
+  job_type: jobTypeEnum.optional(),
+  experience_level: experienceLevelEnum.optional(),
+  salary_text: z.string().max(200).optional(),
+}).strict()
+
 export const contactCreateSchema = z.object({
   name: z.string().min(1).max(300),
   title: z.string().max(300).optional(),

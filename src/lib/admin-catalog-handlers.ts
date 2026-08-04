@@ -6,7 +6,7 @@ import { resolveAdminUser } from '@/lib/admin'
 import { upsertLookupIds } from '@/lib/db-utils'
 import { hourlyToAnnualEquivalentCents } from '@/lib/salary-format'
 import {
-  manualJobSchema,
+  jobCatalogCreateSchema,
   jobCatalogPatchSchema,
   jobSalaryPatchSchema,
   jobTagsPatchSchema,
@@ -40,8 +40,9 @@ import { eq } from 'drizzle-orm'
 type IdContext = { params: Promise<{ id: string }> }
 
 function parseJobId(id: string): number | null {
-  const jobId = parseInt(id)
-  return Number.isNaN(jobId) ? null : jobId
+  if (!/^[1-9]\d*$/.test(id)) return null
+  const jobId = Number(id)
+  return Number.isSafeInteger(jobId) ? jobId : null
 }
 
 const invalidId = () => NextResponse.json({ error: 'Invalid id' }, { status: 400 })
@@ -51,7 +52,7 @@ export async function createCatalogJob(req: NextRequest): Promise<NextResponse> 
   const auth = await resolveAdminUser(req)
   if (!auth.ok) return auth.response
 
-  const parsed = await readJsonBody(req, manualJobSchema)
+  const parsed = await readJsonBody(req, jobCatalogCreateSchema)
   if (!parsed.ok) return parsed.response
 
   const b = parsed.data
@@ -64,10 +65,8 @@ export async function createCatalogJob(req: NextRequest): Promise<NextResponse> 
         jobLocation: b.job_location,
         isRemote: b.is_remote,
         companyId: b.company_id,
-        notes: b.notes,
         jobType: b.job_type,
         experienceLevel: b.experience_level,
-        priority: b.priority,
         salaryText: b.salary_text,
         dateFound: new Date().toISOString().slice(0, 10),
       })
