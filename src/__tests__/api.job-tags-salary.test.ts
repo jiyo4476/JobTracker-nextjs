@@ -20,7 +20,7 @@ vi.mock('@/db', () => ({
 import { resolveAdminUser } from '@/lib/admin'
 import { db } from '@/db'
 
-const adminOk = { ok: true as const, user: { id: 1, issuer: 'https://issuer/', subject: 'admin', principal: {} as never } }
+const adminOk = { ok: true as const, user: { id: 1, issuer: 'https://issuer/', subject: 'admin', email: null, displayName: null, principal: {} as never } }
 function unauthorized() { return NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
 function forbidden() { return NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
 
