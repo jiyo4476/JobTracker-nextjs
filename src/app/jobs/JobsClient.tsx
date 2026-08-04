@@ -122,9 +122,16 @@ export default function JobsClient() {
   }
 
   function handleScopeChange(nextScope: JobScope) {
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current)
+      debounceTimer.current = null
+    }
     // Personal filters (stage) are meaningless in the catalog view — drop them so
     // switching to Browse Catalog doesn't silently apply a hidden stage filter.
-    const updates: Record<string, string> = { scope: nextScope === 'tracked' ? '' : nextScope }
+    const updates: Record<string, string> = {
+      scope: nextScope === 'tracked' ? '' : nextScope,
+      q: inputQ,
+    }
     if (nextScope === 'catalog') updates.stage = ''
     updateParams(updates)
   }
@@ -133,13 +140,17 @@ export default function JobsClient() {
     setInputQ(val)
     if (debounceTimer.current) clearTimeout(debounceTimer.current)
     debounceTimer.current = setTimeout(() => {
+      debounceTimer.current = null
       updateParams({ q: val })
     }, 300)
   }
 
   function handleClearFilters() {
     setInputQ('')
-    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current)
+      debounceTimer.current = null
+    }
     // Preserve the current scope when clearing filters.
     router.replace(scope === 'tracked' ? '/jobs' : `/jobs?scope=${scope}`)
   }

@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JobListItem, JobsResponse } from '@/types/queries'
@@ -10,13 +10,14 @@ import type { JobListItem, JobsResponse } from '@/types/queries'
 const mocks = vi.hoisted(() => ({
   useJobs: vi.fn(),
   searchParams: new URLSearchParams(),
+  routerReplace: vi.fn(),
   patchState: { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false },
   stateAction: { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false },
 }))
 
 vi.mock('next/navigation', () => ({
   useSearchParams: () => mocks.searchParams,
-  useRouter: () => ({ replace: vi.fn() }),
+  useRouter: () => ({ replace: mocks.routerReplace }),
 }))
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
@@ -82,6 +83,27 @@ describe('JobsClient — owner-scoped views', () => {
     const html = renderToStaticMarkup(<JobsClient />)
     expect(html).toContain('aria-label="Hide Engineer"')
     expect(html).toContain('aria-label="Remove Engineer from My Jobs"')
+  })
+
+  it('does not let a pending debounced search restore the previous scope', () => {
+    vi.useFakeTimers()
+    mocks.searchParams = new URLSearchParams('q=engineer')
+    mocks.useJobs.mockReturnValue({ data: response([], 'tracked'), isLoading: false })
+
+    const { unmount } = render(<JobsClient />)
+    fireEvent.change(screen.getByPlaceholderText('Search by title or company…'), {
+      target: { value: 'developer' },
+    })
+    fireEvent.click(screen.getByRole('tab', { name: 'Browse Catalog' }))
+
+    expect(mocks.routerReplace).toHaveBeenCalledOnce()
+    expect(mocks.routerReplace).toHaveBeenCalledWith('/jobs?q=developer&scope=catalog')
+
+    vi.advanceTimersByTime(300)
+    expect(mocks.routerReplace).toHaveBeenCalledOnce()
+
+    unmount()
+    vi.useRealTimers()
   })
 
   it('requires catalog-only selections to be saved before personal bulk actions', async () => {
