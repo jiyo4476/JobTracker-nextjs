@@ -19,9 +19,9 @@ ALTER TABLE "resume_versions" DROP CONSTRAINT "resume_versions_label_unique";-->
 CREATE UNIQUE INDEX "resume_versions_user_id_label_uq" ON "resume_versions" USING btree ("user_id","label");--> statement-breakpoint
 ALTER TABLE "user_skills" DROP CONSTRAINT "user_skills_skill_id_pk";--> statement-breakpoint
 ALTER TABLE "user_skills" ADD CONSTRAINT "user_skills_user_id_skill_id_pk" PRIMARY KEY("user_id","skill_id");--> statement-breakpoint
-ALTER TABLE "user_software" DROP CONSTRAINT "user_software_software_id_pk";--> statement-breakpoint
+ALTER TABLE "user_software" DROP CONSTRAINT "user_software_pkey";--> statement-breakpoint
 ALTER TABLE "user_software" ADD CONSTRAINT "user_software_user_id_software_id_pk" PRIMARY KEY("user_id","software_id");--> statement-breakpoint
-ALTER TABLE "user_certifications" DROP CONSTRAINT "user_certifications_certification_id_pk";--> statement-breakpoint
+ALTER TABLE "user_certifications" DROP CONSTRAINT "user_certifications_pkey";--> statement-breakpoint
 ALTER TABLE "user_certifications" ADD CONSTRAINT "user_certifications_user_id_certification_id_pk" PRIMARY KEY("user_id","certification_id");--> statement-breakpoint
-ALTER TABLE "user_keywords" DROP CONSTRAINT "user_keywords_keyword_id_pk";--> statement-breakpoint
+ALTER TABLE "user_keywords" DROP CONSTRAINT "user_keywords_pkey";--> statement-breakpoint
 ALTER TABLE "user_keywords" ADD CONSTRAINT "user_keywords_user_id_keyword_id_pk" PRIMARY KEY("user_id","keyword_id");
