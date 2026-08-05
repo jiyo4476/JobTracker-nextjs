@@ -288,8 +288,8 @@ export const resumeVersions = pgTable(
   "resume_versions",
   {
     id: serial("id").primaryKey(),
-    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
-    label: text("label").unique().notNull(),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
     filePath: text("file_path"),
     date: date("date"),
     notes: text("notes"),
@@ -298,6 +298,7 @@ export const resumeVersions = pgTable(
   (t) => [
     index("resume_versions_user_id_idx").on(t.userId),
     uniqueIndex("resume_versions_user_id_id_uq").on(t.userId, t.id),
+    uniqueIndex("resume_versions_user_id_label_uq").on(t.userId, t.label),
   ],
 );
 
@@ -387,17 +388,15 @@ export const jobCertifications = pgTable(
 export const userSkills = pgTable(
   "user_skills",
   {
-    // DB-002 expand phase: nullable owner FK added additively. Existing single-user
-    // routes keep working (they insert with a NULL owner) until the backfill assigns
-    // the legacy owner and the documented CONTRACT phase makes this NOT NULL and
-    // swaps the PK to (user_id, skill_id). See DB-002 task note.
-    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    // API-014 CONTRACT phase: the legacy-owner backfill must complete before this
+    // owner column becomes required and the key becomes (user_id, skill_id).
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     skillId: integer("skill_id")
       .notNull()
       .references(() => skills.id, { onDelete: "cascade" }),
     hasSkill: boolean("has_skill").default(false).notNull(),
   },
-  (t) => [primaryKey({ columns: [t.skillId] }), index("user_skills_user_id_idx").on(t.userId)]
+  (t) => [primaryKey({ columns: [t.userId, t.skillId] }), index("user_skills_user_id_idx").on(t.userId)]
 );
 
 export const softwareFamiliarityEnum = pgEnum(
@@ -410,25 +409,23 @@ export const keywordPreferenceEnum = pgEnum("keyword_preference_enum", keywordPr
 export const userSoftware = pgTable(
   "user_software",
   {
-    // DB-002 expand phase — see the note on userSkills.userId. CONTRACT phase makes
-    // this NOT NULL and swaps to a (user_id, software_id) composite PK.
-    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    // API-014 CONTRACT phase — see the note on userSkills.userId.
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     softwareId: integer("software_id")
-      .primaryKey()
+      .notNull()
       .references(() => software.id, { onDelete: "cascade" }),
     familiarity: softwareFamiliarityEnum("familiarity"),
   },
-  (t) => [index("user_software_user_id_idx").on(t.userId)],
+  (t) => [primaryKey({ columns: [t.userId, t.softwareId] }), index("user_software_user_id_idx").on(t.userId)],
 );
 
 export const userCertifications = pgTable(
   "user_certifications",
   {
-    // DB-002 expand phase — see the note on userSkills.userId. CONTRACT phase makes
-    // this NOT NULL and swaps to a (user_id, certification_id) composite PK.
-    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    // API-014 CONTRACT phase — see the note on userSkills.userId.
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     certificationId: integer("certification_id")
-      .primaryKey()
+      .notNull()
       .references(() => certifications.id, { onDelete: "cascade" }),
     issuer: text("issuer"),
     earnedDate: date("earned_date"),
@@ -441,21 +438,21 @@ export const userCertifications = pgTable(
       sql`${t.earnedDate} IS NULL OR ${t.expiresAt} IS NULL OR ${t.expiresAt} >= ${t.earnedDate}`,
     ),
     index("user_certifications_user_id_idx").on(t.userId),
+    primaryKey({ columns: [t.userId, t.certificationId] }),
   ],
 );
 
 export const userKeywords = pgTable(
   "user_keywords",
   {
-    // DB-002 expand phase — see the note on userSkills.userId. CONTRACT phase makes
-    // this NOT NULL and swaps to a (user_id, keyword_id) composite PK.
-    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    // API-014 CONTRACT phase — see the note on userSkills.userId.
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     keywordId: integer("keyword_id")
-      .primaryKey()
+      .notNull()
       .references(() => keywords.id, { onDelete: "cascade" }),
     preference: keywordPreferenceEnum("preference").default("interest").notNull(),
   },
-  (t) => [index("user_keywords_user_id_idx").on(t.userId)],
+  (t) => [primaryKey({ columns: [t.userId, t.keywordId] }), index("user_keywords_user_id_idx").on(t.userId)],
 );
 
 // ── job_status_history ────────────────────────────────────────────────────────

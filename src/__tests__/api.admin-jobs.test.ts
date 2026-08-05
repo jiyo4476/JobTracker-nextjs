@@ -52,6 +52,8 @@ function resolveAs(isAdmin: boolean) {
     id: 1,
     issuer: 'https://issuer/',
     subject: 'sub',
+    email: null,
+    displayName: null,
     principal: {
       kind: 'user',
       issuer: 'https://issuer/',

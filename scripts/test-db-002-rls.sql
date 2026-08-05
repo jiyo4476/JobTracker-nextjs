@@ -1,6 +1,26 @@
 \set ON_ERROR_STOP on
 
 -- Run against a disposable, migrated PostgreSQL database as its migration owner.
+--
+-- NOTE: this script is NOT wrapped in a single transaction -- it deliberately uses
+-- SET ROLE plus inner BEGIN/ROLLBACK blocks to exercise RLS as a non-bypass role,
+-- and psql cannot nest those inside an outer transaction. A failure therefore aborts
+-- part-way and leaves its fixture rows behind. The idempotent pre-clean below removes
+-- any residue from a previous aborted run so the script is safely re-runnable; the
+-- matching teardown at the end removes it on the success path.
+--
+-- Pre-clean: drop residue from any earlier aborted run.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'db002_app_test') THEN
+    EXECUTE 'REVOKE ALL ON ALL TABLES IN SCHEMA public FROM db002_app_test';
+    EXECUTE 'REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM db002_app_test';
+    EXECUTE 'REVOKE ALL ON SCHEMA public FROM db002_app_test';
+  END IF;
+END $$;
+DELETE FROM resume_versions WHERE label LIKE 'DB-002 %';
+DELETE FROM users WHERE issuer = 'db002-test';
+DELETE FROM jobs WHERE job_title LIKE 'DB-002 %';
+
 DROP ROLE IF EXISTS db002_app_test;
 CREATE ROLE db002_app_test NOSUPERUSER NOBYPASSRLS NOLOGIN;
 GRANT USAGE ON SCHEMA public TO db002_app_test;
@@ -14,13 +34,18 @@ INSERT INTO jobs (job_title) VALUES
   ('DB-002 shared job'),
   ('DB-002 parent check'),
   ('DB-002 resume insert check'),
-  ('DB-002 resume update check'),
-  ('DB-002 unowned resume check');
+  ('DB-002 resume update check');
 
 INSERT INTO resume_versions (user_id, label)
 SELECT id, 'DB-002 resume ' || subject
 FROM users WHERE issuer = 'db002-test';
-INSERT INTO resume_versions (label) VALUES ('DB-002 unowned resume');
+
+-- The former "unowned legacy resume" case is intentionally gone. It inserted a
+-- resume_versions row with a NULL user_id to prove the composite FK rejected
+-- associating an ownerless resume to a user's state. Migration 0011 (API-014)
+-- made resume_versions.user_id NOT NULL, so that row can no longer be created --
+-- the schema now makes the state unrepresentable rather than merely rejected,
+-- which is a strictly stronger guarantee. Keeping the case would fail at INSERT.
 
 -- Run as the migration owner so this proves the FK invariant independently of RLS.
 DO $$
@@ -30,10 +55,8 @@ DECLARE
                             WHERE u.issuer='db002-test' AND u.subject='user-2');
   user_1_resume_id int := (SELECT rv.id FROM resume_versions rv JOIN users u ON u.id=rv.user_id
                             WHERE u.issuer='db002-test' AND u.subject='user-1');
-  unowned_resume_id int := (SELECT id FROM resume_versions WHERE label='DB-002 unowned resume');
   insert_job_id int := (SELECT id FROM jobs WHERE job_title='DB-002 resume insert check');
   update_job_id int := (SELECT id FROM jobs WHERE job_title='DB-002 resume update check');
-  unowned_job_id int := (SELECT id FROM jobs WHERE job_title='DB-002 unowned resume check');
 BEGIN
   INSERT INTO user_job_state (user_id, job_id, resume_version_id)
   VALUES (user_1_id, insert_job_id, user_1_resume_id);
@@ -57,13 +80,6 @@ BEGIN
   EXCEPTION WHEN foreign_key_violation THEN NULL;
   END;
 
-  BEGIN
-    INSERT INTO user_job_state (user_id, job_id, resume_version_id)
-    VALUES (user_1_id, unowned_job_id, unowned_resume_id);
-    RAISE EXCEPTION 'unowned legacy resume association was accepted';
-  EXCEPTION WHEN foreign_key_violation THEN NULL;
-  END;
-
   DELETE FROM resume_versions WHERE id=user_1_resume_id;
   IF (SELECT count(*) FROM user_job_state
       WHERE user_id=user_1_id AND job_id IN (insert_job_id, update_job_id)) <> 2 THEN
@@ -77,9 +93,9 @@ BEGIN
 END $$;
 
 DELETE FROM jobs WHERE job_title IN (
-  'DB-002 resume insert check', 'DB-002 resume update check', 'DB-002 unowned resume check'
+  'DB-002 resume insert check', 'DB-002 resume update check'
 );
-DELETE FROM resume_versions WHERE label IN ('DB-002 resume user-2', 'DB-002 unowned resume');
+DELETE FROM resume_versions WHERE label = 'DB-002 resume user-2';
 
 -- Non-bypass resume delete: proves the column-targeted ON DELETE SET NULL (migration 0010)
 -- clears the reference under a NOBYPASSRLS role with no app.user_id set — the exact path the

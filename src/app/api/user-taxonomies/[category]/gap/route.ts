@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sql } from 'drizzle-orm'
-import { db } from '@/db'
 import {
   certifications,
   jobCertifications,
@@ -15,7 +14,9 @@ import {
   userSkills,
   userSoftware,
 } from '@/db/schema'
-import { requireAuth } from '@/lib/http'
+import { privateJson } from '@/lib/http'
+import { resolveRequestUser } from '@/lib/resolved-user'
+import { withUser } from '@/db/session'
 import { escapeLikePattern } from '@/lib/db-utils'
 import { logger, serializeError } from '@/lib/logger'
 import { profileCategorySchema } from '@/lib/user-taxonomy-profile'
@@ -90,8 +91,8 @@ function parsePageParam(value: string | null, fallback: number, max?: number) {
 }
 
 export async function GET(req: NextRequest, context: Context) {
-  const denied = await requireAuth(req)
-  if (denied) return denied
+  const auth = await resolveRequestUser(req)
+  if (!auth.ok) return auth.response
   const { category: rawCategory } = await context.params
   const category = profileCategorySchema.safeParse(rawCategory)
   if (!category.success) {
@@ -129,15 +130,17 @@ export async function GET(req: NextRequest, context: Context) {
       WHERE ${config.name} ILIKE ${searchPattern} ESCAPE '\\'
       GROUP BY ${config.catalogId}, ${config.name}
     `
-    const countResult = await db.execute(sql`
+    const { countResult, itemResult } = await withUser(auth.user.id, async (tx) => {
+      const countResult = await tx.execute(sql`
       WITH demand AS (${demand}), scoped AS (
         SELECT demand.taxonomy_id,
                ${config.matched} AS matched,
                ${config.excluded} AS excluded
         FROM demand
         LEFT JOIN ${config.profile} ON ${config.profileId} = demand.taxonomy_id
+          AND ${config.profile.userId} = ${auth.user.id}
       )
-      SELECT CAST((SELECT COUNT(*) FROM ${config.profile}) AS int) AS "profile",
+      SELECT CAST((SELECT COUNT(*) FROM ${config.profile} WHERE ${config.profile.userId} = ${auth.user.id}) AS int) AS "profile",
              CAST(COUNT(*) AS int) AS "demanded",
              CAST(COUNT(*) FILTER (WHERE matched) AS int) AS "matched",
              CAST(COUNT(*) FILTER (WHERE excluded) AS int) AS "excluded",
@@ -146,7 +149,7 @@ export async function GET(req: NextRequest, context: Context) {
              ) AS int) AS "gaps"
       FROM scoped
     `)
-    const itemResult = await db.execute(sql`
+      const itemResult = await tx.execute(sql`
       WITH demand AS (${demand})
       SELECT demand.taxonomy_id AS "taxonomyId",
              demand.name AS "name",
@@ -159,9 +162,12 @@ export async function GET(req: NextRequest, context: Context) {
              END AS "matchState"
       FROM demand
       LEFT JOIN ${config.profile} ON ${config.profileId} = demand.taxonomy_id
+        AND ${config.profile.userId} = ${auth.user.id}
       ORDER BY demand.job_count DESC, demand.name ASC
       LIMIT ${limit} OFFSET ${offset}
-    `)
+      `)
+      return { countResult, itemResult }
+    })
     const counts = rows<{
       profile: number
       demanded: number
@@ -170,7 +176,7 @@ export async function GET(req: NextRequest, context: Context) {
       gaps: number
     }>(countResult)[0] ?? { profile: 0, demanded: 0, matched: 0, excluded: 0, gaps: 0 }
 
-    return NextResponse.json({
+    return privateJson({
       category: category.data,
       counts,
       items: rows(itemResult),

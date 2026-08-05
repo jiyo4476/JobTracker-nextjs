@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { PgDialect } from 'drizzle-orm/pg-core'
+import type { SQL } from 'drizzle-orm'
 
 vi.mock('@/lib/auth', () => ({ requireAuthentication: vi.fn() }))
+vi.mock('@/lib/resolved-user', () => ({ resolveRequestUser: vi.fn() }))
+vi.mock('@/db/session', () => ({
+  withUser: vi.fn((_userId: number, callback: (tx: unknown) => unknown) => callback(mockDb)),
+}))
 vi.mock('@/db', () => ({
   db: {
     execute: vi.fn(),
@@ -15,6 +21,7 @@ vi.mock('@/db', () => ({
 
 import { db } from '@/db'
 import { requireAuthentication } from '@/lib/auth'
+import { resolveRequestUser } from '@/lib/resolved-user'
 import { profileCreateSchemas, profilePatchSchemas } from '@/lib/user-taxonomy-profile'
 
 type MockDb = Record<
@@ -23,6 +30,14 @@ type MockDb = Record<
 >
 const mockDb = db as unknown as MockDb
 
+function setAuth(authenticated: boolean, userId = 2) {
+  vi.mocked(requireAuthentication).mockResolvedValue(authenticated)
+  vi.mocked(resolveRequestUser).mockResolvedValue(authenticated
+    ? { ok: true, user: { id: userId } as never }
+    : { ok: false, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) })
+}
+
+let lastWhere: unknown
 function chain(result: unknown) {
   const value: Record<string, unknown> = {}
   const terminal = Promise.resolve(result)
@@ -32,10 +47,12 @@ function chain(result: unknown) {
   ]) {
     value[method] = vi.fn(() => value)
   }
+  value.where = vi.fn((query: unknown) => { lastWhere = query; return value })
   value.then = terminal.then.bind(terminal)
   value.catch = terminal.catch.bind(terminal)
   return value
 }
+const renderParams = (query: unknown) => new PgDialect().sqlToQuery(query as SQL).params
 
 function context(category: string): { params: Promise<{ category: string }> }
 function context(category: string, id: string): { params: Promise<{ category: string; id: string }> }
@@ -80,12 +97,12 @@ describe('user taxonomy profile schemas', () => {
 describe('GET and POST /api/user-taxonomies/[category]', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    setAuth(true)
     mockDb.transaction.mockImplementation((callback) => callback(mockDb))
   })
 
   it('authenticates profile reads', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(false)
+    setAuth(false)
     const { GET } = await import('@/app/api/user-taxonomies/[category]/route')
     const response = await GET(request('/api/user-taxonomies/skills'), context('skills'))
     expect(response.status).toBe(401)
@@ -102,7 +119,7 @@ describe('GET and POST /api/user-taxonomies/[category]', () => {
   })
 
   it('authenticates profile writes', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(false)
+    setAuth(false)
     const { POST } = await import('@/app/api/user-taxonomies/[category]/route')
     const response = await POST(
       request('/api/user-taxonomies/skills', 'POST', { taxonomy_id: 1 }),
@@ -209,7 +226,7 @@ describe('GET and POST /api/user-taxonomies/[category]', () => {
 describe('PATCH and DELETE /api/user-taxonomies/[category]/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    setAuth(true)
   })
 
   it('rejects malformed IDs', async () => {
@@ -223,7 +240,7 @@ describe('PATCH and DELETE /api/user-taxonomies/[category]/[id]', () => {
   })
 
   it('authenticates updates and removals', async () => {
-    vi.mocked(requireAuthentication).mockResolvedValue(false)
+    setAuth(false)
     const { PATCH, DELETE } = await import('@/app/api/user-taxonomies/[category]/[id]/route')
     expect((await PATCH(
       request('/api/user-taxonomies/skills/1', 'PATCH', { has_skill: true }),
@@ -346,7 +363,7 @@ describe('PATCH and DELETE /api/user-taxonomies/[category]/[id]', () => {
 describe('GET /api/user-taxonomies/[category]/gap', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    setAuth(true)
   })
 
   it('returns taxonomy-scoped counts and preference-aware match states', async () => {
@@ -382,9 +399,9 @@ describe('GET /api/user-taxonomies/[category]/gap', () => {
 
   it('authenticates gap reads and validates pagination before querying', async () => {
     const { GET } = await import('@/app/api/user-taxonomies/[category]/gap/route')
-    vi.mocked(requireAuthentication).mockResolvedValue(false)
+    setAuth(false)
     expect((await GET(request('/api/user-taxonomies/skills/gap'), context('skills'))).status).toBe(401)
-    vi.mocked(requireAuthentication).mockResolvedValue(true)
+    setAuth(true)
     expect((await GET(
       request('/api/user-taxonomies/skills/gap?limit=101'),
       context('skills'),
@@ -401,4 +418,29 @@ describe('GET /api/user-taxonomies/[category]/gap', () => {
     )).status).toBe(400)
     expect(mockDb.execute).not.toHaveBeenCalled()
   })
+})
+
+describe('two-user adversarial taxonomy isolation', () => {
+  it.each(['skills', 'software', 'certifications', 'keywords'] as const)(
+    'user B cannot update or delete user A %s association',
+    async (category) => {
+      setAuth(true, 2)
+      mockDb.select.mockReturnValue(chain([]))
+      const { PATCH, DELETE } = await import('@/app/api/user-taxonomies/[category]/[id]/route')
+      const bodies = {
+        skills: { has_skill: true }, software: { familiarity: 'expert' },
+        certifications: { issuer: 'blocked' }, keywords: { preference: 'exclusion' },
+      } as const
+      const patchResponse = await PATCH(request(`/api/user-taxonomies/${category}/31`, 'PATCH', bodies[category]), context(category, '31'))
+      expect(patchResponse.status).toBe(404)
+      expect(renderParams(lastWhere)).toEqual(expect.arrayContaining([2, 31]))
+      expect(renderParams(lastWhere)).not.toContain(1)
+
+      mockDb.delete.mockReturnValue(chain([]))
+      const deleteResponse = await DELETE(request(`/api/user-taxonomies/${category}/31`, 'DELETE'), context(category, '31'))
+      expect(deleteResponse.status).toBe(404)
+      expect(await deleteResponse.json()).toEqual({ error: 'Not found' })
+      expect(renderParams(lastWhere)).toEqual(expect.arrayContaining([2, 31]))
+    },
+  )
 })
