@@ -18,6 +18,7 @@
     "db:studio": "drizzle-kit studio",
     "db:backfill-salary": "tsx scripts/backfill-structured-salary.ts",
     "db:backfill-ownership": "tsx scripts/backfill-user-ownership.ts",
+    "bench:routes": "tsx scripts/bench-owner-scoped-routes.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
