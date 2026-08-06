@@ -47,6 +47,7 @@ const company: CompanyDetail = {
   glassdoorUrl: null,
   linkedinUrl: 'https://linkedin.com/company/acme',
   jobs: [],
+  trackedJobCount: 0,
   taxonomyDemand: {
     activeJobCount: 0,
     skills: [],

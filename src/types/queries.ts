@@ -22,14 +22,21 @@ export type CompanyDetail = CompanyRow & {
   notes: string | null
   glassdoorUrl: string | null
   linkedinUrl: string | null
+  // Active CATALOG postings at this company (global supply), each carrying the caller's
+  // OWN overlay only: `isTracked` and `interviewStage` come from a user_job_state join
+  // pinned to the resolved caller, so they are null/false for postings the caller does
+  // not track and never reflect any other user's state.
   jobs: Array<{
     id: number
     jobTitle: string
-    interviewStage: string
+    interviewStage: string | null
+    isTracked: boolean
     salaryMin: number | null
     salaryMax: number | null
     dateFound: string
   }>
+  /** PERSONAL: how many of this company's active postings the caller currently tracks. */
+  trackedJobCount: number
   taxonomyDemand: CompanyTaxonomyDemand
 }
 

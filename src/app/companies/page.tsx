@@ -5,6 +5,7 @@ import { ExternalLink } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { DatasetScopeNote } from '@/components/layout/DatasetScope'
 import { useCompanies } from '@/lib/queries'
 import { formatSalaryShort } from '@/lib/salary-format'
 
@@ -13,13 +14,23 @@ export default function CompaniesPage() {
 
   return (
     <div className="p-8">
-      <PageHeader title="Companies" description="All tracked companies with job counts" />
+      <PageHeader
+        title="Companies"
+        description="Companies in the shared job catalog"
+      />
+      <DatasetScopeNote scope="catalog">
+        These are <strong>global catalog</strong> figures: every company that has a posting
+        in the shared catalog, with the total number of catalog postings and their average
+        advertised salary. Nothing here counts your applications, and no other user&apos;s
+        tracked jobs, notes, or contacts are included. Open a company to see how many of its
+        postings <em>you</em> track.
+      </DatasetScopeNote>
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-slate-500 text-xs uppercase tracking-wide">
-                {['Company', 'Industry', 'HQ', 'Jobs Found', 'Avg Salary Max', 'Website'].map(h => (
+                {['Company', 'Industry', 'HQ', 'Catalog postings', 'Avg advertised salary', 'Website'].map(h => (
                   <th key={h} className="px-4 py-3 font-medium">{h}</th>
                 ))}
               </tr>
