@@ -44,7 +44,9 @@ export {
   isPersonalKeyFor, isUserScopedKey, USER_SCOPE_SEGMENT,
 } from '@/lib/queries/keys'
 export type { UserScopeId } from '@/lib/queries/keys'
-export { useIdentity, useIsAdmin, useMe, useUserScope } from '@/lib/identity-scope'
+export {
+  useIdentity, useIdentityIsStale, useIsAdmin, useMe, useUserScope,
+} from '@/lib/identity-scope'
 
 // ── Identity (PAGE-017) ──────────────────────────────────────────────────────
 // `GET /api/me` is the ONLY source of the client-visible `users.id`. Every personal

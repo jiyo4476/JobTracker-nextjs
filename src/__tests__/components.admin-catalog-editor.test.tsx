@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   useJob: vi.fn(),
   useMe: vi.fn(),
   useIdentity: vi.fn(),
+  useIdentityIsStale: vi.fn(() => false),
   useIsAdmin: vi.fn(() => false),
   patchCatalog: vi.fn(),
   deleteJob: vi.fn(),
@@ -42,6 +43,7 @@ vi.mock('@/lib/queries', () => ({
   useJob: mocks.useJob,
   useMe: mocks.useMe,
   useIdentity: mocks.useIdentity,
+  useIdentityIsStale: mocks.useIdentityIsStale,
   useIsAdmin: mocks.useIsAdmin,
   useCompanies: () => ({ data: [{ id: 3, name: 'Acme' }] }),
   usePatchCatalogJob: () => ({ mutate: mocks.patchCatalog, isPending: false, isError: false }),
@@ -105,6 +107,35 @@ describe('admin catalog editor guard', () => {
 
     expect(html).toContain('Sign-in required')
     expect(html).not.toContain('Catalog editing is restricted')
+  })
+
+  // A transport failure is not a sign-out. The identity survived it, so the editor must
+  // stay usable and only warn, instead of claiming the session is gone.
+  it('keeps a validated admin editing when /api/me fails transiently', () => {
+    mocks.useMe.mockReturnValue({ isError: true })
+    mocks.useIdentity.mockReturnValue({ user_id: 9, is_admin: true })
+    mocks.useIdentityIsStale.mockReturnValue(true)
+
+    const html = renderToStaticMarkup(<AdminEditCatalogJobPage />)
+
+    expect(html).toContain('Save catalog posting')
+    expect(html).toContain('could not be re-checked')
+    expect(html).not.toContain('Sign-in required')
+
+    mocks.useIdentityIsStale.mockReturnValue(false)
+  })
+
+  it('reports an unreachable server rather than sign-in required before any identity resolves', () => {
+    mocks.useMe.mockReturnValue({ isError: true })
+    mocks.useIdentity.mockReturnValue(undefined)
+    mocks.useIdentityIsStale.mockReturnValue(true)
+
+    const html = renderToStaticMarkup(<AdminEditCatalogJobPage />)
+
+    expect(html).toContain('reach the server')
+    expect(html).not.toContain('Sign-in required')
+
+    mocks.useIdentityIsStale.mockReturnValue(false)
   })
 
   it('renders the catalog form for a verified admin', () => {
