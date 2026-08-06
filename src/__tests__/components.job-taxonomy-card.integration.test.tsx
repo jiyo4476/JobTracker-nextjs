@@ -128,7 +128,7 @@ describe('JobTaxonomyCard integration', () => {
       throw new Error(`Unexpected GET ${path}`)
     })
     mocks.patch.mockImplementation(async (path: string, body: Record<string, string[]>) => {
-      if (path !== '/jobs/7/tags') throw new Error(`Unexpected PATCH ${path}`)
+      if (path !== '/admin/jobs/7/tags') throw new Error(`Unexpected PATCH ${path}`)
       serverJob = makeJob({
         skills: body.skills.map((name, index) => ({ id: 100 + index, name })),
         software: body.software.map((name, index) => ({ id: 200 + index, name })),

@@ -44,7 +44,7 @@ export {
   isPersonalKeyFor, isUserScopedKey, USER_SCOPE_SEGMENT,
 } from '@/lib/queries/keys'
 export type { UserScopeId } from '@/lib/queries/keys'
-export { useIsAdmin, useMe, useUserScope } from '@/lib/identity-scope'
+export { useIdentity, useIsAdmin, useMe, useUserScope } from '@/lib/identity-scope'
 
 // ── Identity (PAGE-017) ──────────────────────────────────────────────────────
 // `GET /api/me` is the ONLY source of the client-visible `users.id`. Every personal
@@ -71,15 +71,42 @@ export function useCompany(id: number) {
   })
 }
 
-export function useCreateJob() {
+// ── Admin catalog mutations (PAGE-017 / API-013 `/api/admin/jobs`) ───────────
+// These are the ONLY hooks that write shared catalog facts. They target the canonical
+// admin namespace rather than the deprecated `/api/jobs[/id]` aliases.
+//
+// `useIsAdmin()` (from GET /api/me) only decides whether the UI renders the controls.
+// It is a presentation hint: every call below is independently re-authorized server-side
+// by `resolveAdminUser` (401 unauthenticated, 403 non-admin/inactive), so a tampered
+// client that forces the request still cannot mutate the catalog.
+export function useCreateCatalogJob() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: Record<string, unknown>) => api.post('/jobs', body),
+    mutationFn: (body: Record<string, unknown>) =>
+      api.post<{ job_id: number }>('/admin/jobs', body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['jobs'] })
+      qc.invalidateQueries({ queryKey: personalRoots.jobs() })
+      qc.invalidateQueries({ queryKey: catalogKeys.companies() })
     },
     onError: () => {
-      toast.error('Failed to create job')
+      toast.error('Failed to create catalog job')
+    },
+  })
+}
+
+export function usePatchCatalogJob() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string | number; body: Record<string, unknown> }) =>
+      api.patch(`/admin/jobs/${id}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: personalRoots.job() })
+      qc.invalidateQueries({ queryKey: personalRoots.jobs() })
+      qc.invalidateQueries({ queryKey: personalRoots.companies() })
+      toast.success('Catalog posting updated')
+    },
+    onError: () => {
+      toast.error('Failed to update catalog posting')
     },
   })
 }
@@ -105,21 +132,6 @@ export function useJob(id: string) {
     queryKey: personalKeys.job(userId as UserScopeId, id),
     queryFn: () => api.get<JobDetail>(`/jobs/${id}`),
     enabled: userId !== undefined && !!id,
-  })
-}
-
-export function usePatchJob() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ id, body }: { id: string | number; body: Record<string, unknown> }) =>
-      api.patch(`/jobs/${id}`, body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: personalRoots.job() })
-      qc.invalidateQueries({ queryKey: ['jobs'] })
-    },
-    onError: () => {
-      toast.error('Failed to save job changes')
-    },
   })
 }
 
@@ -200,11 +212,12 @@ export function useTagLookupByIds(type: TagLookupType, ids: readonly number[]) {
   })
 }
 
+// Admin-only catalog tag mutation (see the admin-namespace note above).
 export function usePatchJobTags() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, body }: { id: string | number; body: Record<string, string[]> }) =>
-      api.patch<TagsPatchResponse>(`/jobs/${id}/tags`, body),
+      api.patch<TagsPatchResponse>(`/admin/jobs/${id}/tags`, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: personalRoots.job() })
       qc.invalidateQueries({ queryKey: ['jobs'] })
@@ -216,11 +229,12 @@ export function usePatchJobTags() {
   })
 }
 
+// Admin-only catalog salary mutation (see the admin-namespace note above).
 export function usePatchJobSalary() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, body }: { id: string | number; body: Record<string, unknown> }) =>
-      api.patch<SalaryPatchResponse>(`/jobs/${id}/salary`, body),
+      api.patch<SalaryPatchResponse>(`/admin/jobs/${id}/salary`, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: personalRoots.job() })
       qc.invalidateQueries({ queryKey: ['jobs'] })
@@ -264,12 +278,14 @@ function shouldShowDeleteErrorToast(variables: unknown) {
     variables.showErrorToast === false)
 }
 
+// Admin-only GLOBAL soft delete of a catalog posting (see the admin-namespace note
+// above). This is NOT "remove from my tracker" — that is `useJobStateAction('remove')`.
 export function useDeleteJob() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (variables: DeleteJobVariables) => {
       const id = getDeleteJobId(variables)
-      return api.delete(`/jobs/${id}`)
+      return api.delete(`/admin/jobs/${id}`)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['jobs'] })

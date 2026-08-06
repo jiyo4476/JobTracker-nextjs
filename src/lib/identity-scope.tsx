@@ -66,6 +66,15 @@ export function IdentityScopeProvider({ children }: { children: React.ReactNode 
   return <IdentityScopeContext.Provider value={value}>{children}</IdentityScopeContext.Provider>
 }
 
+/**
+ * The full validated identity, or `undefined` while `/api/me` has not yet produced one
+ * (initial load) or after it failed / changed user. Callers that must distinguish
+ * "still resolving" from "resolved, not an admin" pair this with `useMe().isError`.
+ */
+export function useIdentity(): ValidatedIdentity | undefined {
+  return useContext(IdentityScopeContext)
+}
+
 export function useUserScope(): UserScopeId | undefined {
   return useContext(IdentityScopeContext)?.user_id
 }

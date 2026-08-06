@@ -41,7 +41,7 @@ import {
   useCompanies,
   useCompany,
   useCreateContact,
-  useCreateJob,
+  useCreateCatalogJob,
   useCreateResumeVersion,
   useCreateUserSkill,
   useDeleteContact,
@@ -52,7 +52,7 @@ import {
   useJobs,
   usePatchCompany,
   usePatchContact,
-  usePatchJob,
+  usePatchCatalogJob,
   usePatchJobSalary,
   usePatchJobTags,
   usePatchResumeVersion,
@@ -318,17 +318,17 @@ describe('query hooks', () => {
     await mutation.mutationFn({ id: 42 })
     mutation.onSuccess(undefined, { id: 42 })
 
-    expect(api.delete).toHaveBeenCalledWith('/jobs/42')
+    expect(api.delete).toHaveBeenCalledWith('/admin/jobs/42')
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['jobs'] })
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['job'] })
   })
 
   it.each([
-    ['useCreateJob', () => useCreateJob(), { title: 'Engineer' }, 'post', '/jobs', { title: 'Engineer' }, [['jobs']]],
+    ['useCreateCatalogJob', () => useCreateCatalogJob(), { job_title: 'Engineer' }, 'post', '/admin/jobs', { job_title: 'Engineer' }, [['jobs'], ['companies']]],
     ['usePatchCompany', () => usePatchCompany(), { id: 7, name: 'Acme' }, 'patch', '/companies/7', { name: 'Acme' }, [['companies'], ['companies', 7]]],
-    ['usePatchJob', () => usePatchJob(), { id: 42, body: { job_title: 'Senior Engineer' } }, 'patch', '/jobs/42', { job_title: 'Senior Engineer' }, [['job'], ['jobs']]],
-    ['usePatchJobTags', () => usePatchJobTags(), { id: 42, body: { skills: ['TypeScript'] } }, 'patch', '/jobs/42/tags', { skills: ['TypeScript'] }, [['job'], ['jobs']]],
-    ['usePatchJobSalary', () => usePatchJobSalary(), { id: 42, body: { salary_min: 90000 } }, 'patch', '/jobs/42/salary', { salary_min: 90000 }, [['job'], ['jobs']]],
+    ['usePatchCatalogJob', () => usePatchCatalogJob(), { id: 42, body: { job_title: 'Senior Engineer' } }, 'patch', '/admin/jobs/42', { job_title: 'Senior Engineer' }, [['job'], ['jobs'], ['companies']]],
+    ['usePatchJobTags', () => usePatchJobTags(), { id: 42, body: { skills: ['TypeScript'] } }, 'patch', '/admin/jobs/42/tags', { skills: ['TypeScript'] }, [['job'], ['jobs']]],
+    ['usePatchJobSalary', () => usePatchJobSalary(), { id: 42, body: { salary_min: 90000 } }, 'patch', '/admin/jobs/42/salary', { salary_min: 90000 }, [['job'], ['jobs']]],
     ['useCreateContact', () => useCreateContact(), { jobId: 42, body: { name: 'Ada' } }, 'post', '/jobs/42/contacts', { name: 'Ada' }, [['job']]],
     ['usePatchContact', () => usePatchContact(), { jobId: 42, contactId: 3, body: { title: 'Recruiter' } }, 'patch', '/jobs/42/contacts/3', { title: 'Recruiter' }, [['job']]],
     ['useDeleteContact', () => useDeleteContact(), { jobId: 42, contactId: 3 }, 'delete', '/jobs/42/contacts/3', undefined, [['job']]],

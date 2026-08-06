@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils'
 import { formatSalary } from '@/lib/salary-format'
 import { JobDescriptionMarkdown } from '@/components/jobs/JobDescriptionMarkdown'
 import {
+  useIsAdmin,
   useJob,
   usePatchJobState,
   useJobStateAction,
@@ -154,6 +155,7 @@ export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const { data: job, isLoading } = useJob(id)
+  const isAdmin = useIsAdmin()
   const patchState = usePatchJobState()
   const stateAction = useJobStateAction()
   const { data: resumeVersions = [] } = useResumeVersions()
@@ -316,6 +318,16 @@ export default function JobDetailPage() {
             >
               Open Posting
             </a>
+          )}
+          {/* Catalog mutation affordance — verified admins only. Hidden for everyone
+              else; the /api/admin/* routes re-authorize regardless. */}
+          {isAdmin && (
+            <Link
+              href={`/admin/jobs/${id}/edit`}
+              className="inline-flex items-center justify-center h-9 px-3 text-sm rounded-md border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-medium transition-colors"
+            >
+              Edit catalog posting
+            </Link>
           )}
         </div>
       </div>
