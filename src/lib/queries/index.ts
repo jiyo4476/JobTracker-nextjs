@@ -9,7 +9,7 @@ import type {
   JobDetail, JobsResponse, JobsParams,
   LookupItem, StatsResponse, ResumeVersion, UserSkill,
   TagLookupType,
-  UserTaxonomyCategory, UserTaxonomyCreateVariables, UserTaxonomyGapResponse,
+  UserTaxonomyCategory, UserTaxonomyCreateVariables, UserTaxonomyGapParams, UserTaxonomyGapResponse,
   UserTaxonomyPatchVariables, UserTaxonomyResponse,
   AnalyticsParams, AnalyticsResponse,
   TaxonomyAnalyticsParams, TaxonomyAnalyticsResponse,
@@ -30,7 +30,7 @@ export type {
   LookupItem, MeResponse, StatsResponse, StatsCatalog, ResumeVersion, UserSkill,
   TagLookupType,
   UserTaxonomyCategory, UserTaxonomyCreatePayload, UserTaxonomyCreateVariables,
-  UserTaxonomyGapItem, UserTaxonomyGapResponse, UserTaxonomyItem, UserTaxonomyPatchPayload,
+  UserTaxonomyGapItem, UserTaxonomyGapParams, UserTaxonomyGapResponse, UserTaxonomyItem, UserTaxonomyPatchPayload,
   UserTaxonomyPatchVariables, UserTaxonomyResponse,
   AnalyticsParams, AnalyticsResponse,
   TaxonomyCategory, TaxonomyAnalyticsParams, TaxonomyAnalyticsResponse, TaxonomyAnalyticsRow,
@@ -565,11 +565,21 @@ export function useUserTaxonomies(category: UserTaxonomyCategory) {
   })
 }
 
-export function useUserTaxonomyGap(category: UserTaxonomyCategory) {
+export function useUserTaxonomyGap(
+  category: UserTaxonomyCategory,
+  params: UserTaxonomyGapParams = {},
+) {
   const userId = useUserScope()
+  const jobTitle = params.jobTitle?.trim() ?? ''
+  const searchParams = new URLSearchParams({ limit: '100' })
+  if (jobTitle) searchParams.set('job_title', jobTitle)
   return useQuery<UserTaxonomyGapResponse>({
-    queryKey: personalKeys.userTaxonomyGap(userId as UserScopeId, category),
-    queryFn: () => api.get<UserTaxonomyGapResponse>(`/user-taxonomies/${category}/gap?limit=100`),
+    // PAGE-017 owner scoping + API-015 title scoping: the key carries BOTH, so neither
+    // two identities nor two titles can ever share a cache entry.
+    queryKey: personalKeys.userTaxonomyGap(userId as UserScopeId, category, jobTitle),
+    queryFn: () => api.get<UserTaxonomyGapResponse>(
+      `/user-taxonomies/${category}/gap?${searchParams.toString()}`,
+    ),
     enabled: userId !== undefined,
   })
 }

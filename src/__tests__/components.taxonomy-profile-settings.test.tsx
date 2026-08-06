@@ -77,9 +77,13 @@ describe('TaxonomyProfileSettings', () => {
         : [],
       isError: false,
     }))
-    mocks.useUserTaxonomyGap.mockImplementation((category: UserTaxonomyCategory) => ({
+    mocks.useUserTaxonomyGap.mockImplementation((
+      category: UserTaxonomyCategory,
+      params: { jobTitle?: string } = {},
+    ) => ({
       data: {
         category,
+        jobTitle: params.jobTitle?.trim() || null,
         counts: { profile: 1, demanded: 3, matched: 1, excluded: 0, gaps: 2 },
         items: [{ taxonomyId: 90, name: `${category} gap`, jobCount: 3, profileStatus: null, matchState: 'gap' }],
         page: 1,
@@ -229,7 +233,129 @@ describe('TaxonomyProfileSettings', () => {
     await user.keyboard('{ArrowRight}')
     expect(screen.getByRole('tab', { name: 'Software Experience' }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByRole('tabpanel').textContent).toContain('software gap')
-    expect(mocks.useUserTaxonomyGap).toHaveBeenLastCalledWith('software')
+    expect(mocks.useUserTaxonomyGap).toHaveBeenLastCalledWith('software', { jobTitle: '' })
+  })
+
+  it('applies and clears a posting-title demand scope independently of category', async () => {
+    const user = userEvent.setup()
+    render(<TaxonomyProfileAndGapSettings />)
+
+    const title = screen.getByRole('textbox', { name: 'Target posting title' })
+    await user.type(title, '  Data Engineer  ')
+    await user.click(screen.getByRole('button', { name: 'Apply title' }))
+
+    expect(mocks.useUserTaxonomyGap).toHaveBeenLastCalledWith('skills', { jobTitle: 'Data Engineer' })
+    expect(screen.getByText('Demand confirmed for posting titles containing “Data Engineer”.')).toBeTruthy()
+
+    await user.click(screen.getByRole('tab', { name: 'Software Experience' }))
+    expect(mocks.useUserTaxonomyGap).toHaveBeenLastCalledWith('software', { jobTitle: 'Data Engineer' })
+
+    await user.click(screen.getByRole('button', { name: 'Clear title' }))
+    expect(mocks.useUserTaxonomyGap).toHaveBeenLastCalledWith('software', { jobTitle: '' })
+    expect((title as HTMLInputElement).value).toBe('')
+  })
+
+  it('never announces a requested title as confirmed while loading or after failure', async () => {
+    const user = userEvent.setup()
+    let fail = false
+    mocks.useUserTaxonomyGap.mockImplementation((category: UserTaxonomyCategory) => ({
+      data: undefined,
+      isLoading: !fail,
+      isError: fail,
+      refetch: mocks.refetch,
+      category,
+    }))
+    const view = render(<TaxonomyProfileAndGapSettings />)
+
+    expect(screen.getByText('Loading demand across all tracked job titles…')).toBeTruthy()
+    const title = screen.getByRole('textbox', { name: 'Target posting title' })
+    await user.type(title, 'Data Engineer')
+    await user.click(screen.getByRole('button', { name: 'Apply title' }))
+
+    expect(screen.getByText(
+      'Loading demand for posting titles containing “Data Engineer”…',
+    )).toBeTruthy()
+    expect(screen.queryByText(/Demand confirmed for posting titles containing/)).toBeNull()
+
+    fail = true
+    view.rerender(<TaxonomyProfileAndGapSettings />)
+    expect(screen.getByText(
+      'Could not confirm demand scope for posting titles containing “Data Engineer”.',
+    )).toBeTruthy()
+    expect(screen.queryByText(/Demand confirmed for posting titles containing/)).toBeNull()
+    expect(screen.getByRole('alert').textContent).toContain('Could not load my skills gap analysis')
+  })
+
+  it.each([
+    ['requested title missing from response', 'Data Engineer', null],
+    ['unexpected title returned for unscoped request', '', 'Data Engineer'],
+  ])('hides analysis when %s', async (_case, requestedTitle, echoedTitle) => {
+    const user = userEvent.setup()
+    mocks.useUserTaxonomyGap.mockImplementation((category: UserTaxonomyCategory) => ({
+      data: {
+        category,
+        jobTitle: echoedTitle,
+        counts: { profile: 1, demanded: 3, matched: 1, excluded: 0, gaps: 2 },
+        items: [{
+          taxonomyId: 90,
+          name: 'Must not render',
+          jobCount: 3,
+          profileStatus: null,
+          matchState: 'gap',
+        }],
+        page: 1,
+        totalPages: 1,
+      },
+      isLoading: false,
+      isError: false,
+      refetch: mocks.refetch,
+    }))
+    render(<TaxonomyProfileAndGapSettings />)
+
+    if (requestedTitle) {
+      await user.type(screen.getByRole('textbox', { name: 'Target posting title' }), requestedTitle)
+      await user.click(screen.getByRole('button', { name: 'Apply title' }))
+    }
+
+    const alert = screen.getByRole('alert')
+    expect(alert.textContent).toContain('different posting-title scope')
+    expect(screen.queryByText('Demanded')).toBeNull()
+    expect(screen.queryByText('Must not render')).toBeNull()
+    // The alert is the single explanation — the status line must not repeat it.
+    expect(screen.queryByText(/Demand confirmed/)).toBeNull()
+    const status = screen.getAllByRole('status').find(node => node.tagName === 'P')
+    expect(status?.textContent?.trim()).toBe('')
+    await user.click(within(alert).getByRole('button', { name: 'Retry' }))
+    expect(mocks.refetch).toHaveBeenCalled()
+  })
+
+  it('treats a response with no jobTitle field as unscoped rather than a mismatch', () => {
+    mocks.useUserTaxonomyGap.mockImplementation((category: UserTaxonomyCategory) => ({
+      // Older build / rolled-back deploy / stale cached 200: no `jobTitle` key at all.
+      data: {
+        category,
+        counts: { profile: 1, demanded: 3, matched: 1, excluded: 0, gaps: 2 },
+        items: [{
+          taxonomyId: 90,
+          name: 'Renders normally',
+          jobCount: 3,
+          profileStatus: null,
+          matchState: 'gap',
+        }],
+        page: 1,
+        totalPages: 1,
+      },
+      isLoading: false,
+      isError: false,
+      refetch: mocks.refetch,
+    }))
+    const { container } = render(<TaxonomyProfileAndGapSettings />)
+
+    expect(screen.queryByText(/different posting-title scope/)).toBeNull()
+    expect(screen.getByText('Demanded')).toBeTruthy()
+    expect(screen.getByText('Renders normally')).toBeTruthy()
+    expect(screen.getByText('Demand confirmed across all tracked job titles.')).toBeTruthy()
+    expect(container.textContent).not.toContain('undefined')
   })
 
   it('renders gap loading, failure/retry, excluded-keyword, and no-demand states', async () => {
@@ -249,6 +375,7 @@ describe('TaxonomyProfileSettings', () => {
       return {
         data: {
           category,
+          jobTitle: null,
           counts: {
             profile: 1,
             demanded: category === 'keywords' ? 1 : 0,
@@ -286,6 +413,7 @@ describe('TaxonomyProfileSettings', () => {
     mocks.useUserTaxonomyGap.mockReturnValue({
       data: {
         category: 'skills',
+        jobTitle: null,
         counts: { profile: 100, demanded: 102, matched: 100, excluded: 0, gaps: 2 },
         items: [{
           taxonomyId: 1,

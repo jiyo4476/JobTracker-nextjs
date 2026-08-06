@@ -179,6 +179,8 @@ export type UserTaxonomyGapItem = {
 
 export type UserTaxonomyGapResponse = {
   category: UserTaxonomyCategory
+  /** Applied scraped-posting title filter; null means all tracked job titles. */
+  jobTitle: string | null
   counts: {
     profile: number
     demanded: number
@@ -189,6 +191,11 @@ export type UserTaxonomyGapResponse = {
   items: UserTaxonomyGapItem[]
   page: number
   totalPages: number
+}
+
+export type UserTaxonomyGapParams = {
+  /** Narrows the tracked-job demand corpus; independent from taxonomy-name `q`. */
+  jobTitle?: string
 }
 
 // AUTH-003 / PAGE-017: the client-readable identity returned by GET /api/me. `user_id`

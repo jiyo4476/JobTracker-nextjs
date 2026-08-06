@@ -94,8 +94,17 @@ export const personalKeys = {
   userSkills: (userId: UserScopeId) => ['user-skills', USER_SCOPE_SEGMENT, userId] as const,
   userTaxonomies: (userId: UserScopeId, category: UserTaxonomyCategory) =>
     ['user-taxonomies', USER_SCOPE_SEGMENT, userId, category] as const,
-  userTaxonomyGap: (userId: UserScopeId, category: UserTaxonomyCategory) =>
-    ['user-taxonomies', USER_SCOPE_SEGMENT, userId, category, 'gap'] as const,
+  /**
+   * API-015: the gap read is additionally scoped by the applied `job_title` filter so two
+   * titles never share a cache entry. The title is the LAST segment, after the `'gap'`
+   * discriminator, so every broader prefix — `['user-taxonomies']`,
+   * `[…, userId, category]`, `[…, category, 'gap']` — still matches and still clears
+   * every title for that owner. Unscoped ("all tracked job titles") is the empty string:
+   * a stable literal, unlike `undefined`, which `JSON.stringify` serializes to `null`
+   * inside the hashed key and which would read as just another title.
+   */
+  userTaxonomyGap: (userId: UserScopeId, category: UserTaxonomyCategory, jobTitle = '') =>
+    ['user-taxonomies', USER_SCOPE_SEGMENT, userId, category, 'gap', jobTitle] as const,
 } as const
 
 /**

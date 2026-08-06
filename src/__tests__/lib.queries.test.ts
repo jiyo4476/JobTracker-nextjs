@@ -158,7 +158,7 @@ describe('query hooks', () => {
     ['resume versions', () => useResumeVersions(), ['resume-versions', '__user__', 27]],
     ['user skills', () => useUserSkills(), ['user-skills', '__user__', 27]],
     ['user taxonomy', () => useUserTaxonomies('skills'), ['user-taxonomies', '__user__', 27, 'skills']],
-    ['user taxonomy gap', () => useUserTaxonomyGap('skills'), ['user-taxonomies', '__user__', 27, 'skills', 'gap']],
+    ['user taxonomy gap', () => useUserTaxonomyGap('skills'), ['user-taxonomies', '__user__', 27, 'skills', 'gap', '']],
   ])('scopes %s cache data to the resolved user', (_name, makeQuery, expectedKey) => {
     const query = asQueryConfig(makeQuery())
 
@@ -236,6 +236,35 @@ describe('query hooks', () => {
 
     expect(query.queryKey).toEqual(['tags', 'skills', 'ids', '4,99'])
     expect(api.get).toHaveBeenCalledWith('/tags?type=skills&ids=4%2C99')
+  })
+
+  it('keys and encodes job-title gap scope independently of taxonomy search', async () => {
+    const query = asQueryConfig(useUserTaxonomyGap('skills', { jobTitle: '  Data & AI  ' }))
+
+    await query.queryFn()
+
+    // Owner segment (PAGE-017) AND applied job title (API-015) both key the entry.
+    expect(query.queryKey).toEqual([
+      'user-taxonomies', '__user__', 27, 'skills', 'gap', 'Data & AI',
+    ])
+    expect(query.enabled).toBe(true)
+    expect(api.get).toHaveBeenCalledWith(
+      '/user-taxonomies/skills/gap?limit=100&job_title=Data+%26+AI',
+    )
+  })
+
+  it('separates gap cache entries per job title while the broad root still matches', () => {
+    const unscoped = asQueryConfig(useUserTaxonomyGap('skills')).queryKey as unknown[]
+    const scoped = asQueryConfig(
+      useUserTaxonomyGap('skills', { jobTitle: 'Data Engineer' }),
+    ).queryKey as unknown[]
+
+    expect(scoped).not.toEqual(unscoped)
+    // Every broad prefix invalidation still clears both titles for this owner.
+    for (const key of [unscoped, scoped]) {
+      expect(key.slice(0, 1)).toEqual(['user-taxonomies'])
+      expect(key.slice(0, 5)).toEqual(['user-taxonomies', '__user__', 27, 'skills', 'gap'])
+    }
   })
 
   it('writes profile metadata through category-owned routes and refreshes profile and gap data', async () => {
