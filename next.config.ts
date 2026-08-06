@@ -4,6 +4,14 @@ const nextConfig: NextConfig = {
   output: "standalone",
 
   /**
+   * Build output directory. Defaults to `.next` — production builds and the Dockerfile
+   * are unaffected. The override exists so the PAGE-017 e2e harness can run several dev
+   * servers (one per simulated identity) side by side without them fighting over one
+   * `.next` directory.
+   */
+  distDir: process.env.NEXT_DIST_DIR || ".next",
+
+  /**
    * PAGE-017 — deep-link map for the catalog/personal split.
    *
    * The full map (including the routes whose PATH is unchanged but whose capability

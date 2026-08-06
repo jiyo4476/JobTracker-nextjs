@@ -15,6 +15,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // PAGE-017 e2e harness build output (one dev-server dist dir per simulated
+    // identity — see playwright.config.ts). Never source.
+    ".next-e2e-*/**",
+    "playwright-report/**",
+    "test-results/**",
   ]),
 ]);
 
