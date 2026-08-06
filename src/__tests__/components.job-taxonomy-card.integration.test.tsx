@@ -162,7 +162,7 @@ describe('JobTaxonomyCard integration', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['jobs'] })
     expect(screen.getByRole('button', { name: 'Remove TypeScript from Skills' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Remove Python from Skills' })).toBeNull()
-    expect(queryClient.getQueryData<JobDetail>(['job', 'u', 27, '7'])?.skills).toEqual([
+    expect(queryClient.getQueryData<JobDetail>(['job', '__user__', 27, '7'])?.skills).toEqual([
       { id: 100, name: 'TypeScript' },
     ])
   })

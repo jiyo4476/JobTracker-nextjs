@@ -150,15 +150,15 @@ describe('query hooks', () => {
   })
 
   it.each([
-    ['jobs', () => useJobs({ scope: 'tracked' }), ['jobs', 'u', 27, { scope: 'tracked' }]],
-    ['job detail', () => useJob('42'), ['job', 'u', 27, '42']],
-    ['stats', () => useStats(), ['stats', 'u', 27]],
-    ['activity', () => useActivity(), ['activity', 'u', 27]],
-    ['company detail', () => useCompany(7), ['companies', 'u', 27, 7]],
-    ['resume versions', () => useResumeVersions(), ['resume-versions', 'u', 27]],
-    ['user skills', () => useUserSkills(), ['user-skills', 'u', 27]],
-    ['user taxonomy', () => useUserTaxonomies('skills'), ['user-taxonomies', 'u', 27, 'skills']],
-    ['user taxonomy gap', () => useUserTaxonomyGap('skills'), ['user-taxonomies', 'u', 27, 'skills', 'gap']],
+    ['jobs', () => useJobs({ scope: 'tracked' }), ['jobs', '__user__', 27, { scope: 'tracked' }]],
+    ['job detail', () => useJob('42'), ['job', '__user__', 27, '42']],
+    ['stats', () => useStats(), ['stats', '__user__', 27]],
+    ['activity', () => useActivity(), ['activity', '__user__', 27]],
+    ['company detail', () => useCompany(7), ['companies', '__user__', 27, 7]],
+    ['resume versions', () => useResumeVersions(), ['resume-versions', '__user__', 27]],
+    ['user skills', () => useUserSkills(), ['user-skills', '__user__', 27]],
+    ['user taxonomy', () => useUserTaxonomies('skills'), ['user-taxonomies', '__user__', 27, 'skills']],
+    ['user taxonomy gap', () => useUserTaxonomyGap('skills'), ['user-taxonomies', '__user__', 27, 'skills', 'gap']],
   ])('scopes %s cache data to the resolved user', (_name, makeQuery, expectedKey) => {
     const query = asQueryConfig(makeQuery())
 
@@ -170,7 +170,7 @@ describe('query hooks', () => {
     mocks.userScope.mockReturnValue(undefined)
     const query = asQueryConfig(useJobs())
 
-    expect(query.queryKey).toEqual(['jobs', 'u', undefined, {}])
+    expect(query.queryKey).toEqual(['jobs', '__user__', undefined, {}])
     expect(query.enabled).toBe(false)
   })
 

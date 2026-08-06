@@ -14,8 +14,8 @@
  *
  * ## The two families
  *
- * **Personal (user-scoped).** Key shape is `[root, 'u', userId, …rest]`. The root stays
- * first so every existing broad invalidation (`{ queryKey: ['jobs'] }`,
+ * **Personal (user-scoped).** Key shape is `[root, USER_SCOPE_SEGMENT, userId, …rest]`.
+ * The root stays first so every existing broad invalidation (`{ queryKey: ['jobs'] }`,
  * `{ queryKey: ['companies'] }`, …) still matches by prefix — React Query matches keys
  * left-to-right — while the cached *value* can never be shared across identities.
  * Personal queries are `enabled` only once `/api/me` has resolved a `user_id`.
@@ -46,8 +46,17 @@ import type { TagLookupType } from '@/types/queries'
 /** The server-resolved `users.id`, or `undefined` while `/api/me` is still pending. */
 export type UserScopeId = number
 
-/** Marker segment separating a query root from the owner it belongs to. */
-export const USER_SCOPE_SEGMENT = 'u' as const
+/**
+ * Marker segment separating a query root from the owner it belongs to.
+ *
+ * Deliberately not a bare `'u'`: the owner checks below are positional, so any catalog
+ * key whose second segment happened to equal the sentinel (with a number third) would be
+ * misread as personal. No current `TagLookupType` collides, but a distinctive literal
+ * removes the latent hazard. It stays a STRING because React Query hashes keys with
+ * `JSON.stringify`, which serializes a `Symbol` inside an array to `null` — a symbol
+ * sentinel would silently collapse into any key carrying a literal `null` there.
+ */
+export const USER_SCOPE_SEGMENT = '__user__' as const
 
 /**
  * Catalog-global keys. Identical for every identity — intentionally NOT user-scoped.
@@ -68,8 +77,8 @@ export const catalogKeys = {
 } as const
 
 /**
- * Personal keys. Shape: `[root, 'u', userId, …rest]` — root first so broad prefix
- * invalidations keep working, owner second so no two identities ever collide.
+ * Personal keys. Shape: `[root, USER_SCOPE_SEGMENT, userId, …rest]` — root first so
+ * broad prefix invalidations keep working, owner second so no two identities collide.
  */
 export const personalKeys = {
   jobs: (userId: UserScopeId, params: JobsParams) =>
