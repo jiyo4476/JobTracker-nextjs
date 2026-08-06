@@ -113,4 +113,22 @@ describe('DashboardPage — API-013 personal/catalog stats contract', () => {
     mocks.useStats.mockReturnValue({ data: undefined, isLoading: true, isError: false })
     expect(() => renderToStaticMarkup(<DashboardPage />)).not.toThrow()
   })
+
+  it('renders the pending state while identity validation keeps stats disabled', () => {
+    mocks.useStats.mockReturnValue({ data: undefined, isLoading: false, isError: false })
+    const html = renderToStaticMarkup(<DashboardPage />)
+
+    expect(html).toContain('Tracked Jobs')
+    expect(html).not.toContain('data-chart="bar"')
+  })
+
+  it('keeps activity pending while identity validation disables its query', () => {
+    mocks.useStats.mockReturnValue({ data: stats, isLoading: false, isError: false })
+    mocks.useActivity.mockReturnValue({ data: undefined, isLoading: false, isError: false })
+    const html = renderToStaticMarkup(<DashboardPage />)
+
+    expect(html).toContain('Recent Activity')
+    expect(html).toContain('h-10 w-full')
+    expect(html).not.toContain('No stage changes recorded yet.')
+  })
 })

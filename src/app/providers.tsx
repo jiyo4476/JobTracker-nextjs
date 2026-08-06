@@ -3,6 +3,7 @@
 import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { ApiError } from "@/lib/api";
+import { IdentityScopeProvider } from "@/lib/identity-scope";
 
 /**
  * API-013: every personal read (/api/stats, /api/jobs, /api/activity, …) is scoped
@@ -32,6 +33,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return client;
   });
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <IdentityScopeProvider>{children}</IdentityScopeProvider>
+    </QueryClientProvider>
   );
 }

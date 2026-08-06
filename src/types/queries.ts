@@ -184,6 +184,20 @@ export type UserTaxonomyGapResponse = {
   totalPages: number
 }
 
+// AUTH-003 / PAGE-017: the client-readable identity returned by GET /api/me. `user_id`
+// is the server-resolved `users.id` and is the owner segment of every personal React
+// Query key. `is_admin` is a presentation hint only — catalog mutations are re-authorized
+// server-side on every /api/admin/* call.
+export interface MeResponse {
+  user_id: number
+  email: string | null
+  display_name: string | null
+  is_admin: boolean
+}
+
+// The four global lookup catalogs behind GET /api/tags.
+export type TagLookupType = 'skills' | 'software' | 'keywords' | 'certifications'
+
 // API-013: the three owner-scoped views of the jobs list. `tracked` = the caller's
 // saved (non-hidden) jobs, `catalog` = the whole global catalog (tracked flag per row),
 // `hidden` = the caller's hidden jobs.
