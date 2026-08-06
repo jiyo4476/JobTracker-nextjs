@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useId, useState } from 'react'
+import Link from 'next/link'
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -12,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { DatasetScopeBadge, DatasetScopeNote } from '@/components/layout/DatasetScope'
 import {
   useAnalytics,
   useTaxonomyAnalytics,
@@ -197,7 +199,17 @@ export function AnalyticsClient({ initialState }: { initialState: AnalyticsUrlSt
 
   return (
     <div className="p-4 sm:p-8">
-      <PageHeader title="Analytics" description="Category-safe trends across your job dataset" />
+      <PageHeader
+        title="Analytics"
+        description="Category-safe demand trends across the shared job catalog"
+      />
+      <DatasetScopeNote scope="catalog">
+        Every chart on this page is <strong>global catalog</strong> supply: it is computed from
+        the shared postings only, so it is identical for every signed-in user and is not
+        affected by which jobs you track. It contains no application state, notes, or
+        contacts — yours or anyone else&apos;s. Your personal application funnel lives on the{' '}
+        <Link href="/" className="underline">Dashboard</Link>.
+      </DatasetScopeNote>
       <div className="mb-6 flex flex-wrap items-end gap-4">
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">From<Input aria-label="From date" type="date" value={state.from} onChange={event => update({ from: event.target.value })} className="w-40" /></label>
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">To<Input aria-label="To date" type="date" value={state.to} onChange={event => update({ to: event.target.value })} className="w-40" /></label>
@@ -208,16 +220,16 @@ export function AnalyticsClient({ initialState }: { initialState: AnalyticsUrlSt
       <section aria-labelledby="taxonomy-report-title" className="mb-6">
         <div role="tablist" aria-label="Taxonomy report category" onKeyDown={moveCategoryFocus} className="mb-4 flex flex-wrap gap-2">{TAXONOMY_CATEGORIES.map(option => <Button key={option.value} id={`taxonomy-tab-${option.value}`} type="button" role="tab" aria-controls="taxonomy-report-panel" aria-selected={state.category === option.value} tabIndex={state.category === option.value ? 0 : -1} variant={state.category === option.value ? 'default' : 'outline'} onClick={() => update({ category: option.value as TaxonomyCategory })}>{option.label}</Button>)}</div>
         <Card id="taxonomy-report-panel" role="tabpanel" aria-labelledby={`taxonomy-tab-${state.category}`}>
-          <CardHeader className="flex-row items-center justify-between gap-3"><div><CardTitle id="taxonomy-report-title" className="text-sm">Top 15 {category.label} Demand</CardTitle><p className="mt-1 text-xs text-muted-foreground">Percentages use {taxonomy.data?.percentage_denominator ?? 'this category’s filtered job-to-value assignments'}; categories are never combined.</p></div><Button type="button" variant="outline" size="sm" disabled={!taxonomy.data?.values?.length} onClick={exportRows}><Download aria-hidden /> Export {category.label} CSV</Button></CardHeader>
+          <CardHeader className="flex-row items-center justify-between gap-3"><div><div className="flex items-center gap-2"><CardTitle id="taxonomy-report-title" className="text-sm">Top 15 {category.label} Demand</CardTitle><DatasetScopeBadge scope="catalog" /></div><p className="mt-1 text-xs text-muted-foreground">Percentages use {taxonomy.data?.percentage_denominator ?? 'this category’s filtered job-to-value assignments'}; categories are never combined.</p></div><Button type="button" variant="outline" size="sm" disabled={!taxonomy.data?.values?.length} onClick={exportRows}><Download aria-hidden /> Export {category.label} CSV</Button></CardHeader>
           <CardContent>{taxonomy.isLoading ? <Skeleton aria-label={`Loading ${category.label} report`} className="h-60 w-full" /> : taxonomy.isError ? <ErrorState label={`${category.label} report`} retry={() => void taxonomy.refetch()} /> : <TaxonomyChart rows={taxonomy.data?.values ?? []} categoryLabel={category.label} />}</CardContent>
         </Card>
       </section>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card className="lg:col-span-2"><CardHeader><CardTitle className="text-sm">Top 15 Skill Demand Over Time</CardTitle></CardHeader><CardContent>{analytics.isLoading ? <Skeleton className="h-52 w-full" /> : analytics.isError ? <ErrorState label="Analytics" retry={() => void analytics.refetch()} /> : <SkillDemandChart data={analytics.data?.skillDemandOverTime ?? []} />}</CardContent></Card>
-        <Card><CardHeader><CardTitle className="text-sm">Salary Distribution</CardTitle></CardHeader><CardContent>{analytics.isLoading ? <Skeleton className="h-52 w-full" /> : <SalaryChart data={analytics.data?.salaryDistribution ?? []} />}</CardContent></Card>
-        <Card><CardHeader><CardTitle className="text-sm">Platform Breakdown</CardTitle></CardHeader><CardContent>{analytics.isLoading ? <Skeleton className="h-52 w-full" /> : <PlatformChart data={analytics.data?.platformBreakdown ?? []} />}</CardContent></Card>
-        <Card className="lg:col-span-2"><CardHeader><CardTitle className="text-sm">Remote vs On-site by Week</CardTitle></CardHeader><CardContent>{analytics.isLoading ? <Skeleton className="h-52 w-full" /> : <RemoteChart data={analytics.data?.remoteVsOnsiteByWeek ?? []} />}</CardContent></Card>
+        <Card className="lg:col-span-2"><CardHeader><div className="flex items-center gap-2"><CardTitle className="text-sm">Top 15 Skill Demand Over Time</CardTitle><DatasetScopeBadge scope="catalog" /></div></CardHeader><CardContent>{analytics.isLoading ? <Skeleton className="h-52 w-full" /> : analytics.isError ? <ErrorState label="Analytics" retry={() => void analytics.refetch()} /> : <SkillDemandChart data={analytics.data?.skillDemandOverTime ?? []} />}</CardContent></Card>
+        <Card><CardHeader><div className="flex items-center gap-2"><CardTitle className="text-sm">Salary Distribution</CardTitle><DatasetScopeBadge scope="catalog" /></div></CardHeader><CardContent>{analytics.isLoading ? <Skeleton className="h-52 w-full" /> : <SalaryChart data={analytics.data?.salaryDistribution ?? []} />}</CardContent></Card>
+        <Card><CardHeader><div className="flex items-center gap-2"><CardTitle className="text-sm">Platform Breakdown</CardTitle><DatasetScopeBadge scope="catalog" /></div></CardHeader><CardContent>{analytics.isLoading ? <Skeleton className="h-52 w-full" /> : <PlatformChart data={analytics.data?.platformBreakdown ?? []} />}</CardContent></Card>
+        <Card className="lg:col-span-2"><CardHeader><div className="flex items-center gap-2"><CardTitle className="text-sm">Remote vs On-site by Week</CardTitle><DatasetScopeBadge scope="catalog" /></div></CardHeader><CardContent>{analytics.isLoading ? <Skeleton className="h-52 w-full" /> : <RemoteChart data={analytics.data?.remoteVsOnsiteByWeek ?? []} />}</CardContent></Card>
       </div>
     </div>
   )

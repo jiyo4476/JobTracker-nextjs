@@ -1,228 +1,134 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import React from 'react'
 import Link from 'next/link'
-import { useForm, useWatch, Controller } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { useCompanies, useCreateJob } from '@/lib/queries'
-import { manualJobSchema } from '@/lib/schemas'
-import { jobTypeOptions as JOB_TYPES, experienceLevelOptions as EXPERIENCE_LEVELS } from '@/lib/enums'
+import { useIsAdmin, useJobs, useJobStateAction } from '@/lib/queries'
+import { formatSalary } from '@/lib/salary-format'
+import { formatJobLocation } from '@/lib/job-location-format'
 
-type ManualJobFormValues = z.infer<typeof manualJobSchema>
+/**
+ * PAGE-017 — `Add Job` is now catalog search/select → `Save to My Jobs`.
+ *
+ * The previous flow POSTed a free-text manual job, which published a private listing to
+ * the SHARED catalog for every user. That is exactly the boundary violation this task
+ * closes, and a hybrid/private-listing model has not been designed or approved, so the
+ * ordinary path is: find the posting that already exists, then track it.
+ *
+ * Only verified admins additionally get `Create catalog job` (`/admin/jobs/new`). The
+ * control is hidden for everyone else, and `POST /api/admin/jobs` re-authorizes anyway.
+ */
+export default function AddJobPage() {
+  const isAdmin = useIsAdmin()
+  const [input, setInput] = React.useState('')
+  const [query, setQuery] = React.useState('')
+  const debounceTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
-const SELECT_CLASS =
-  'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+  React.useEffect(() => () => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+  }, [])
 
-
-export default function NewJobPage() {
-  const router = useRouter()
-  const { data: companies } = useCompanies()
-  const createJob = useCreateJob()
-
-  const {
-    register,
-    handleSubmit,
-    control,
-    setValue,
-    formState: { errors },
-  } = useForm<ManualJobFormValues>({
-    resolver: zodResolver(manualJobSchema),
-  })
-
-  const priority = useWatch({ control, name: 'priority' })
-
-  async function onSubmit(values: ManualJobFormValues) {
-    const body = Object.fromEntries(
-      Object.entries(values).filter(([, v]) => v !== undefined && v !== '')
-    ) as Record<string, unknown>
-
-    try {
-      await createJob.mutateAsync(body)
-      router.push('/jobs')
-    } catch {
-      // Error surfaced via createJob.isError / createJob.error below
-    }
+  function handleSearch(value: string) {
+    setInput(value)
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    debounceTimer.current = setTimeout(() => {
+      debounceTimer.current = null
+      setQuery(value.trim())
+    }, 300)
   }
 
-  const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
-  const errorClass = 'mt-1 text-xs text-red-600'
+  const { data, isLoading } = useJobs({ scope: 'catalog', q: query })
+  const stateAction = useJobStateAction()
+  const results = data?.jobs ?? []
 
   return (
-    <div className="p-8 max-w-3xl">
-      <PageHeader title="Add Job" description="Manually add a job listing to track" />
+    <div className="p-8 max-w-4xl">
+      <PageHeader
+        title="Add job"
+        description="Search the shared catalog and save a posting to My Jobs"
+        action={isAdmin ? (
+          <Link
+            href="/admin/jobs/new"
+            className="inline-flex items-center justify-center rounded-md bg-slate-900 text-white px-4 h-9 text-sm font-medium hover:bg-slate-700 transition-colors"
+          >
+            Create catalog job
+          </Link>
+        ) : undefined}
+      />
+
+      <div className="mb-4 rounded-md border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+        Postings are shared by everyone. Saving one to <strong>My Jobs</strong> creates only
+        your own private application state — stage, priority, notes, and contacts stay
+        visible to you alone.
+      </div>
+
+      <div className="mb-4">
+        <label htmlFor="catalog-search" className="block text-sm font-medium text-slate-700 mb-1.5">
+          Search the catalog
+        </label>
+        <Input
+          id="catalog-search"
+          className="max-w-md"
+          placeholder="Search by title or company…"
+          value={input}
+          onChange={(e) => handleSearch(e.target.value)}
+        />
+      </div>
+
       <Card>
         <CardContent className="pt-6">
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="company_id" className={labelClass}>Company</label>
-                {companies && companies.length > 0 ? (
-                  <Controller
-                    name="company_id"
-                    control={control}
-                    render={({ field }) => (
-                      <select
-                        id="company_id"
-                        value={field.value ?? ''}
-                        onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
-                        className={SELECT_CLASS}
-                      >
-                        <option value="">— Select company —</option>
-                        {companies.map((c) => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
-                    )}
-                  />
-                ) : (
-                  <Input disabled placeholder="No companies yet — add one first" />
-                )}
-                {errors.company_id && <p className={errorClass}>{errors.company_id.message}</p>}
-              </div>
-              <div>
-                <label htmlFor="job_title" className={labelClass}>Job Title *</label>
-                <Input id="job_title" {...register('job_title')} placeholder="e.g. Senior Software Engineer" />
-                {errors.job_title && <p className={errorClass}>{errors.job_title.message}</p>}
-              </div>
+          {isLoading ? (
+            <div className="space-y-3" aria-busy="true">
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
             </div>
-
-            <div>
-              <label htmlFor="job_link" className={labelClass}>Job Link</label>
-              <Input
-                id="job_link"
-                type="url"
-                {...register('job_link', { setValueAs: (v) => (v === '' ? undefined : v) })}
-                placeholder="https://..."
-              />
-              {errors.job_link && <p className={errorClass}>{errors.job_link.message}</p>}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="job_location" className={labelClass}>Location</label>
-                <Input id="job_location" {...register('job_location')} placeholder="e.g. Austin, TX" />
-                {errors.job_location && <p className={errorClass}>{errors.job_location.message}</p>}
-              </div>
-              <div className="flex items-end pb-1 gap-2">
-                <input
-                  id="is_remote"
-                  type="checkbox"
-                  {...register('is_remote')}
-                  className="h-4 w-4 rounded border-slate-300"
-                />
-                <label htmlFor="is_remote" className="text-sm font-medium text-slate-700">Remote</label>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="job_type" className={labelClass}>Job Type</label>
-                <select
-                  id="job_type"
-                  {...register('job_type', { setValueAs: (v) => (v === '' ? undefined : v) })}
-                  className={SELECT_CLASS}
-                >
-                  <option value="">— Select —</option>
-                  {JOB_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>{t.label}</option>
-                  ))}
-                </select>
-                {errors.job_type && <p className={errorClass}>{errors.job_type.message}</p>}
-              </div>
-              <div>
-                <label htmlFor="experience_level" className={labelClass}>Experience Level</label>
-                <select
-                  id="experience_level"
-                  {...register('experience_level', { setValueAs: (v) => (v === '' ? undefined : v) })}
-                  className={SELECT_CLASS}
-                >
-                  <option value="">— Select —</option>
-                  {EXPERIENCE_LEVELS.map((l) => (
-                    <option key={l.value} value={l.value}>{l.label}</option>
-                  ))}
-                </select>
-                {errors.experience_level && <p className={errorClass}>{errors.experience_level.message}</p>}
-              </div>
-            </div>
-
-            <div>
-              <label className={labelClass}>Priority</label>
-              <div className="flex gap-3 items-center h-9">
-                <Controller
-                  name="priority"
-                  control={control}
-                  render={({ field }) => (
-                    <>
-                      {[1, 2, 3, 4, 5].map((n) => (
-                        <label key={n} className="flex items-center gap-1.5 text-sm text-slate-700 cursor-pointer">
-                          <input
-                            type="radio"
-                            checked={field.value === n}
-                            onChange={() => field.onChange(n)}
-                            className="h-4 w-4"
-                          />
-                          {n}
-                        </label>
-                      ))}
-                    </>
+          ) : results.length === 0 ? (
+            <p className="py-8 text-center text-sm text-slate-600">
+              {query
+                ? `No catalog postings match “${query}”.`
+                : 'No catalog postings yet.'}
+              {isAdmin && ' You can create one with “Create catalog job”.'}
+            </p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {results.map((job) => (
+                <li key={job.id} className="flex items-center gap-3 py-3">
+                  <div className="min-w-0 flex-1">
+                    <Link href={`/jobs/${job.id}`} className="text-sm font-medium text-blue-600 hover:underline">
+                      {job.jobTitle}
+                    </Link>
+                    <p className="text-xs text-slate-600">
+                      {job.companyName ?? '—'} · {formatJobLocation(job.jobLocation, job.isRemote)} · {formatSalary(job)}
+                    </p>
+                  </div>
+                  {job.isTracked ? (
+                    <Badge variant="secondary" className="text-xs">Already in My Jobs</Badge>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-3 text-xs"
+                      disabled={stateAction.isPending}
+                      aria-label={`Save ${job.jobTitle} to My Jobs`}
+                      onClick={() => stateAction.mutate({ id: job.id, action: 'save' })}
+                    >
+                      Save to My Jobs
+                    </Button>
                   )}
-                />
-                {priority != null && (
-                  <button
-                    type="button"
-                    onClick={() => setValue('priority', undefined)}
-                    className="text-xs text-slate-600 hover:text-slate-800"
-                  >
-                    clear
-                  </button>
-                )}
-              </div>
-              {errors.priority && <p className={errorClass}>{errors.priority.message}</p>}
-            </div>
-
-            <div>
-              <label htmlFor="salary_text" className={labelClass}>Salary</label>
-              <Input id="salary_text" {...register('salary_text')} placeholder="e.g. $120k–$160k/yr" />
-              {errors.salary_text && <p className={errorClass}>{errors.salary_text.message}</p>}
-            </div>
-
-            <div>
-              <label htmlFor="notes" className={labelClass}>Notes</label>
-              <Textarea
-                id="notes"
-                {...register('notes')}
-                placeholder="Any notes about this job…"
-                className="min-h-[100px]"
-              />
-              {errors.notes && <p className={errorClass}>{errors.notes.message}</p>}
-            </div>
-
-            {createJob.isError && (
-              <p className="text-sm text-red-600">
-                {createJob.error instanceof Error ? createJob.error.message : 'Failed to save job.'}
-              </p>
-            )}
-
-            <div className="flex gap-3 pt-2">
-              <Button type="submit" disabled={createJob.isPending}>
-                {createJob.isPending ? 'Saving…' : 'Save Job'}
-              </Button>
-              <Link
-                href="/jobs"
-                className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 h-9 text-sm font-medium text-slate-900 hover:bg-slate-50 transition-colors"
-              >
-                Cancel
-              </Link>
-            </div>
-          </form>
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
+
+      <div className="mt-6">
+        <Link href="/jobs" className="text-sm text-blue-600 underline">Back to jobs</Link>
+      </div>
     </div>
   )
 }

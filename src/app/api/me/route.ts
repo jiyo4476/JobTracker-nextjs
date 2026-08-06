@@ -11,9 +11,16 @@ import { resolveRequestUser } from '@/lib/resolved-user'
  * personal data when the signed-in identity changes. This endpoint closes that gap.
  *
  * Contract (stable — PAGE-017 keys React Query on it):
- *   200 { user_id: number, email: string | null, display_name: string | null }
+ *   200 { user_id: number, email: string | null, display_name: string | null,
+ *         is_admin: boolean }
  *   401 { error: 'Unauthorized' }   — unauthenticated OR a service principal
  *   403 { error: 'Forbidden' }      — a resolved but deactivated account
+ *
+ * `is_admin` mirrors the SERVER-side catalog-admin decision (`identityIsAdmin`, derived
+ * only from the verified token's groups/scopes). It exists so the UI can hide catalog
+ * mutation affordances from non-admins. It is a PRESENTATION hint only — every catalog
+ * mutation is independently re-authorized by `resolveAdminUser` on the admin routes, so
+ * a tampered client gains nothing.
  *
  * Security invariants:
  *   - Interactive-only. `resolveRequestUser` → `requireUser` REJECTS service
@@ -31,11 +38,12 @@ export async function GET(req: NextRequest) {
   const auth = await resolveRequestUser(req)
   if (!auth.ok) return auth.response
 
-  const { id, email, displayName } = auth.user
+  const { id, email, displayName, principal } = auth.user
 
   return privateJson({
     user_id: id,
     email,
     display_name: displayName,
+    is_admin: principal?.isAdmin === true,
   })
 }

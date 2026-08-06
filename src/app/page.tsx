@@ -45,6 +45,11 @@ export default function DashboardPage() {
   const kpiValues = data
     ? [data.trackedJobs, data.applied, data.activeInterviews, data.staleListings]
     : null
+  // A personal query is disabled until the identity provider validates /api/me.
+  // React Query reports that state with no data but not necessarily `isLoading`, so
+  // treat it as pending and never enter data-only render branches during prerender.
+  const statsPending = isLoading || (!data && !isError)
+  const activityPending = activityLoading || (!activityData && !activityError)
 
   return (
     <div className="p-8">
@@ -59,7 +64,7 @@ export default function DashboardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {isLoading ? (
+              {statsPending ? (
                 <KpiSkeleton />
               ) : isError ? (
                 <span className="text-sm text-red-500">—</span>
@@ -82,7 +87,7 @@ export default function DashboardPage() {
             <p className="text-xs font-normal text-slate-500">Global catalog demand across all postings</p>
           </CardHeader>
           <CardContent>
-            {isLoading ? <ChartSkeleton height="h-56" /> : isError ? (
+            {statsPending ? <ChartSkeleton height="h-56" /> : isError ? (
               <p className="text-sm text-red-500">Failed to load</p>
             ) : (
               <ResponsiveContainer width="100%" height={224}>
@@ -103,7 +108,7 @@ export default function DashboardPage() {
             <p className="text-xs font-normal text-slate-500">Your tracked applications by stage</p>
           </CardHeader>
           <CardContent>
-            {isLoading ? <ChartSkeleton height="h-56" /> : isError ? (
+            {statsPending ? <ChartSkeleton height="h-56" /> : isError ? (
               <p className="text-sm text-red-500">Failed to load</p>
             ) : (
               <ResponsiveContainer width="100%" height={224}>
@@ -124,7 +129,7 @@ export default function DashboardPage() {
             <p className="text-xs font-normal text-slate-500">Global catalog intake across all postings</p>
           </CardHeader>
           <CardContent>
-            {isLoading ? <ChartSkeleton height="h-40" /> : isError ? (
+            {statsPending ? <ChartSkeleton height="h-40" /> : isError ? (
               <p className="text-sm text-red-500">Failed to load</p>
             ) : (
               <ResponsiveContainer width="100%" height={160}>
@@ -151,7 +156,7 @@ export default function DashboardPage() {
             <p className="text-xs font-normal text-slate-500">Global catalog split across all postings</p>
           </CardHeader>
           <CardContent>
-            {isLoading ? <ChartSkeleton height="h-40" /> : isError ? (
+            {statsPending ? <ChartSkeleton height="h-40" /> : isError ? (
               <p className="text-sm text-red-500">Failed to load</p>
             ) : (
               <ResponsiveContainer width="100%" height={160}>
@@ -181,7 +186,7 @@ export default function DashboardPage() {
       <Card>
         <CardHeader><CardTitle className="text-sm">Recent Activity</CardTitle></CardHeader>
         <CardContent>
-          {activityLoading ? (
+          {activityPending ? (
             <div className="space-y-3">
               {Array.from({ length: 5 }).map((_, i) => (
                 <Skeleton key={i} className="h-10 w-full" />

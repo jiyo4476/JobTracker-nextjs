@@ -15,7 +15,14 @@
 
 # next.js
 /.next/
+/.next-e2e-*/
 /out/
+
+# playwright (PAGE-017 e2e harness)
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
 
 # production
 /build

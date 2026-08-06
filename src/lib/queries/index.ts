@@ -8,6 +8,7 @@ import type {
   CompanyRow, CompanyDetail,
   JobDetail, JobsResponse, JobsParams,
   LookupItem, StatsResponse, ResumeVersion, UserSkill,
+  TagLookupType,
   UserTaxonomyCategory, UserTaxonomyCreateVariables, UserTaxonomyGapResponse,
   UserTaxonomyPatchVariables, UserTaxonomyResponse,
   AnalyticsParams, AnalyticsResponse,
@@ -16,6 +17,8 @@ import type {
   SalaryPatchResponse, TagsPatchResponse,
 } from '@/types/queries'
 import { optimisticJobsUpdate, type JobStateAction } from '@/lib/job-state'
+import { catalogKeys, personalKeys, personalRoots, type UserScopeId } from '@/lib/queries/keys'
+import { useUserScope } from '@/lib/identity-scope'
 
 // Re-export all types so consumers can import from '@/lib/queries' unchanged
 export type {
@@ -24,7 +27,8 @@ export type {
   Contact,
   JobDetail, JobListItem, JobsResponse, JobsParams, JobScope,
   UserJobState, SelectedResume,
-  LookupItem, StatsResponse, StatsCatalog, ResumeVersion, UserSkill,
+  LookupItem, MeResponse, StatsResponse, StatsCatalog, ResumeVersion, UserSkill,
+  TagLookupType,
   UserTaxonomyCategory, UserTaxonomyCreatePayload, UserTaxonomyCreateVariables,
   UserTaxonomyGapItem, UserTaxonomyGapResponse, UserTaxonomyItem, UserTaxonomyPatchPayload,
   UserTaxonomyPatchVariables, UserTaxonomyResponse,
@@ -35,30 +39,76 @@ export type {
   SalaryPatchResponse, TagsPatchResponse,
 } from '@/types/queries'
 
+export {
+  catalogKeys, personalKeys, personalRoots,
+  isPersonalKeyFor, isUserScopedKey, USER_SCOPE_SEGMENT,
+} from '@/lib/queries/keys'
+export type { UserScopeId } from '@/lib/queries/keys'
+export {
+  useIdentity, useIdentityIsStale, useIsAdmin, useMe, useUserScope,
+} from '@/lib/identity-scope'
+
+// ── Identity (PAGE-017) ──────────────────────────────────────────────────────
+// `GET /api/me` is the ONLY source of the client-visible `users.id`. Every personal
+// query key embeds it, and every personal query stays disabled until it resolves, so
+// a request is never issued — and a cache entry never written — without a known owner.
+
+// ── Catalog-global reads (identity-free keys — see lib/queries/keys.ts) ───────
+
 export function useCompanies() {
   return useQuery<CompanyRow[]>({
-    queryKey: ['companies'],
+    queryKey: catalogKeys.companies(),
     queryFn: () => api.get<CompanyRow[]>('/companies'),
   })
 }
 
+// Company DETAIL is personal: it carries `trackedJobCount` and the caller's own
+// tracked jobs at the company, so it is keyed by owner (unlike the company list).
 export function useCompany(id: number) {
+  const userId = useUserScope()
   return useQuery<CompanyDetail>({
-    queryKey: ['companies', id],
+    queryKey: personalKeys.company(userId as UserScopeId, id),
     queryFn: () => api.get<CompanyDetail>(`/companies/${id}`),
-    enabled: Number.isInteger(id) && id > 0,
+    enabled: userId !== undefined && Number.isInteger(id) && id > 0,
   })
 }
 
-export function useCreateJob() {
+// ── Admin catalog mutations (PAGE-017 / API-013 `/api/admin/jobs`) ───────────
+// These are the ONLY hooks that write shared catalog facts. They target the canonical
+// admin namespace rather than the deprecated `/api/jobs[/id]` aliases.
+//
+// `useIsAdmin()` (from GET /api/me) only decides whether the UI renders the controls.
+// It is a presentation hint: every call below is independently re-authorized server-side
+// by `resolveAdminUser` (401 unauthenticated, 403 non-admin/inactive), so a tampered
+// client that forces the request still cannot mutate the catalog.
+export function useCreateCatalogJob() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: Record<string, unknown>) => api.post('/jobs', body),
+    mutationFn: (body: Record<string, unknown>) =>
+      api.post<{ job_id: number }>('/admin/jobs', body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['jobs'] })
+      qc.invalidateQueries({ queryKey: personalRoots.jobs() })
+      qc.invalidateQueries({ queryKey: catalogKeys.companies() })
     },
     onError: () => {
-      toast.error('Failed to create job')
+      toast.error('Failed to create catalog job')
+    },
+  })
+}
+
+export function usePatchCatalogJob() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string | number; body: Record<string, unknown> }) =>
+      api.patch(`/admin/jobs/${id}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: personalRoots.job() })
+      qc.invalidateQueries({ queryKey: personalRoots.jobs() })
+      qc.invalidateQueries({ queryKey: personalRoots.companies() })
+      toast.success('Catalog posting updated')
+    },
+    onError: () => {
+      toast.error('Failed to update catalog posting')
     },
   })
 }
@@ -79,25 +129,11 @@ export function usePatchCompany() {
 }
 
 export function useJob(id: string) {
+  const userId = useUserScope()
   return useQuery<JobDetail>({
-    queryKey: ['job', id],
+    queryKey: personalKeys.job(userId as UserScopeId, id),
     queryFn: () => api.get<JobDetail>(`/jobs/${id}`),
-    enabled: !!id,
-  })
-}
-
-export function usePatchJob() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ id, body }: { id: string | number; body: Record<string, unknown> }) =>
-      api.patch(`/jobs/${id}`, body),
-    onSuccess: (_data, { id }) => {
-      qc.invalidateQueries({ queryKey: ['job', String(id)] })
-      qc.invalidateQueries({ queryKey: ['jobs'] })
-    },
-    onError: () => {
-      toast.error('Failed to save job changes')
-    },
+    enabled: userId !== undefined && !!id,
   })
 }
 
@@ -105,12 +141,12 @@ export function usePatchJob() {
 // These replace the old global PATCH /api/jobs/[id] for every personal field. They
 // invalidate the full set of personal caches so the list, detail, dashboard, and
 // activity feed all reflect the change.
-function invalidatePersonalState(qc: ReturnType<typeof useQueryClient>, id: string | number) {
-  qc.invalidateQueries({ queryKey: ['jobs'] })
-  qc.invalidateQueries({ queryKey: ['job', String(id)] })
-  qc.invalidateQueries({ queryKey: ['stats'] })
-  qc.invalidateQueries({ queryKey: ['activity'] })
-  qc.invalidateQueries({ queryKey: ['companies'] })
+function invalidatePersonalState(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: personalRoots.jobs() })
+  qc.invalidateQueries({ queryKey: personalRoots.job() })
+  qc.invalidateQueries({ queryKey: personalRoots.stats() })
+  qc.invalidateQueries({ queryKey: personalRoots.activity() })
+  qc.invalidateQueries({ queryKey: personalRoots.companies() })
 }
 
 // General-purpose PATCH of the caller's user_job_state. Used by the job-detail
@@ -121,7 +157,7 @@ export function usePatchJobState() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string | number; body: Record<string, unknown> }) =>
       api.patch(`/jobs/${id}/state`, body),
-    onSuccess: (_data, { id }) => invalidatePersonalState(qc, id),
+    onSuccess: () => invalidatePersonalState(qc),
     onError: () => {
       toast.error('Failed to save your application changes')
     },
@@ -153,17 +189,15 @@ export function useJobStateAction() {
       const verb = action === 'remove' ? 'remove' : action
       toast.error(`Failed to ${verb} job`)
     },
-    onSettled: (_data, _err, { id }) => invalidatePersonalState(qc, id),
+    onSettled: () => invalidatePersonalState(qc),
   })
 }
-
-export type TagLookupType = 'skills' | 'software' | 'keywords' | 'certifications'
 
 export function useTagLookup(type: TagLookupType, q: string) {
   const qs = new URLSearchParams({ type })
   if (q.trim()) qs.set('q', q.trim())
   return useQuery<LookupItem[]>({
-    queryKey: ['tags', type, q.trim()],
+    queryKey: catalogKeys.tags(type, q.trim()),
     queryFn: () => api.get<LookupItem[]>(`/tags?${qs.toString()}`),
   })
 }
@@ -171,7 +205,7 @@ export function useTagLookup(type: TagLookupType, q: string) {
 export function useTagLookupByIds(type: TagLookupType, ids: readonly number[]) {
   const canonicalIds = [...new Set(ids)].sort((a, b) => a - b)
   return useQuery<LookupItem[]>({
-    queryKey: ['tags', type, 'ids', canonicalIds.join(',')],
+    queryKey: catalogKeys.tagsByIds(type, canonicalIds.join(',')),
     queryFn: () => api.get<LookupItem[]>(`/tags?${new URLSearchParams({
       type,
       ids: canonicalIds.join(','),
@@ -180,13 +214,14 @@ export function useTagLookupByIds(type: TagLookupType, ids: readonly number[]) {
   })
 }
 
+// Admin-only catalog tag mutation (see the admin-namespace note above).
 export function usePatchJobTags() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, body }: { id: string | number; body: Record<string, string[]> }) =>
-      api.patch<TagsPatchResponse>(`/jobs/${id}/tags`, body),
-    onSuccess: (_data, { id }) => {
-      qc.invalidateQueries({ queryKey: ['job', String(id)] })
+      api.patch<TagsPatchResponse>(`/admin/jobs/${id}/tags`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: personalRoots.job() })
       qc.invalidateQueries({ queryKey: ['jobs'] })
       toast.success('Job qualifications and keywords updated')
     },
@@ -196,13 +231,14 @@ export function usePatchJobTags() {
   })
 }
 
+// Admin-only catalog salary mutation (see the admin-namespace note above).
 export function usePatchJobSalary() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, body }: { id: string | number; body: Record<string, unknown> }) =>
-      api.patch<SalaryPatchResponse>(`/jobs/${id}/salary`, body),
-    onSuccess: (_data, { id }) => {
-      qc.invalidateQueries({ queryKey: ['job', String(id)] })
+      api.patch<SalaryPatchResponse>(`/admin/jobs/${id}/salary`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: personalRoots.job() })
       qc.invalidateQueries({ queryKey: ['jobs'] })
       toast.success('Salary updated')
     },
@@ -244,17 +280,18 @@ function shouldShowDeleteErrorToast(variables: unknown) {
     variables.showErrorToast === false)
 }
 
+// Admin-only GLOBAL soft delete of a catalog posting (see the admin-namespace note
+// above). This is NOT "remove from my tracker" — that is `useJobStateAction('remove')`.
 export function useDeleteJob() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (variables: DeleteJobVariables) => {
       const id = getDeleteJobId(variables)
-      return api.delete(`/jobs/${id}`)
+      return api.delete(`/admin/jobs/${id}`)
     },
-    onSuccess: (_data, variables) => {
-      const id = getDeleteJobId(variables)
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['jobs'] })
-      qc.invalidateQueries({ queryKey: ['job', String(id)] })
+      qc.invalidateQueries({ queryKey: personalRoots.job() })
     },
     onError: (err, variables) => {
       if (!shouldShowDeleteErrorToast(variables)) return
@@ -271,8 +308,8 @@ export function useCreateContact() {
   return useMutation({
     mutationFn: ({ jobId, body }: { jobId: string | number; body: Record<string, unknown> }) =>
       api.post(`/jobs/${jobId}/contacts`, body),
-    onSuccess: (_data, { jobId }) => {
-      qc.invalidateQueries({ queryKey: ['job', String(jobId)] })
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: personalRoots.job() })
     },
     onError: () => {
       toast.error('Failed to add contact')
@@ -292,8 +329,8 @@ export function usePatchContact() {
       contactId: string | number
       body: Record<string, unknown>
     }) => api.patch(`/jobs/${jobId}/contacts/${contactId}`, body),
-    onSuccess: (_data, { jobId }) => {
-      qc.invalidateQueries({ queryKey: ['job', String(jobId)] })
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: personalRoots.job() })
     },
     onError: () => {
       toast.error('Failed to update contact')
@@ -306,8 +343,8 @@ export function useDeleteContact() {
   return useMutation({
     mutationFn: ({ jobId, contactId }: { jobId: string | number; contactId: string | number }) =>
       api.delete(`/jobs/${jobId}/contacts/${contactId}`),
-    onSuccess: (_data, { jobId }) => {
-      qc.invalidateQueries({ queryKey: ['job', String(jobId)] })
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: personalRoots.job() })
     },
     onError: () => {
       toast.error('Failed to delete contact')
@@ -316,6 +353,7 @@ export function useDeleteContact() {
 }
 
 export function useJobs(params: JobsParams = {}) {
+  const userId = useUserScope()
   const qs = new URLSearchParams()
   if (params.scope) qs.set('scope', params.scope)
   if (params.has_applied) qs.set('has_applied', params.has_applied)
@@ -340,15 +378,18 @@ export function useJobs(params: JobsParams = {}) {
   if (params.sort_order) qs.set('sort_order', params.sort_order)
 
   return useQuery<JobsResponse>({
-    queryKey: ['jobs', params],
+    queryKey: personalKeys.jobs(userId as UserScopeId, params),
     queryFn: () => api.get<JobsResponse>(`/jobs?${qs.toString()}`),
+    enabled: userId !== undefined,
   })
 }
 
 export function useStats() {
+  const userId = useUserScope()
   return useQuery<StatsResponse>({
-    queryKey: ['stats'],
+    queryKey: personalKeys.stats(userId as UserScopeId),
     queryFn: () => api.get<StatsResponse>('/stats'),
+    enabled: userId !== undefined,
     staleTime: 60_000,
   })
 }
@@ -361,7 +402,7 @@ export function useAnalytics(params?: AnalyticsParams) {
   if (params?.security_clearance !== undefined) qs.set('security_clearance', String(params.security_clearance))
   const query = qs.toString()
   return useQuery<AnalyticsResponse>({
-    queryKey: ['analytics', params],
+    queryKey: catalogKeys.analytics(params),
     queryFn: () => api.get<AnalyticsResponse>(`/analytics${query ? `?${query}` : ''}`),
   })
 }
@@ -378,7 +419,7 @@ export function useTaxonomyAnalytics(params: TaxonomyAnalyticsParams) {
   }
 
   return useQuery<TaxonomyAnalyticsResponse>({
-    queryKey: ['analytics', 'taxonomy', params],
+    queryKey: catalogKeys.taxonomyAnalytics(params),
     queryFn: () => api.get<TaxonomyAnalyticsResponse>(`/analytics/taxonomy?${qs.toString()}`),
     staleTime: 60 * 60 * 1000,
   })
@@ -386,7 +427,7 @@ export function useTaxonomyAnalytics(params: TaxonomyAnalyticsParams) {
 
 export function useTaxonomyClearanceComparison(category: TaxonomyCategory) {
   return useQuery<TaxonomyClearanceComparison>({
-    queryKey: ['analytics', 'taxonomy-clearance-comparison', category],
+    queryKey: catalogKeys.taxonomyClearanceComparison(category),
     queryFn: async () => {
       if (category === 'skills') {
         const response = await api.get<{
@@ -412,17 +453,21 @@ export function useTaxonomyClearanceComparison(category: TaxonomyCategory) {
 }
 
 export function useActivity() {
+  const userId = useUserScope()
   return useQuery<ActivityItem[]>({
-    queryKey: ['activity'],
+    queryKey: personalKeys.activity(userId as UserScopeId),
     queryFn: () => api.get<ActivityItem[]>('/activity'),
+    enabled: userId !== undefined,
     staleTime: 30_000,
   })
 }
 
 export function useResumeVersions() {
+  const userId = useUserScope()
   return useQuery<ResumeVersion[]>({
-    queryKey: ['resume-versions'],
+    queryKey: personalKeys.resumeVersions(userId as UserScopeId),
     queryFn: () => api.get<ResumeVersion[]>('/resume-versions'),
+    enabled: userId !== undefined,
   })
 }
 
@@ -468,15 +513,17 @@ export function useDeleteResumeVersion() {
 
 export function useSkills() {
   return useQuery<LookupItem[]>({
-    queryKey: ['skills'],
+    queryKey: catalogKeys.skills(),
     queryFn: () => api.get<LookupItem[]>('/skills'),
   })
 }
 
 export function useUserSkills() {
+  const userId = useUserScope()
   return useQuery<UserSkill[]>({
-    queryKey: ['user-skills'],
+    queryKey: personalKeys.userSkills(userId as UserScopeId),
     queryFn: () => api.get<UserSkill[]>('/user-skills'),
+    enabled: userId !== undefined,
   })
 }
 
@@ -510,16 +557,20 @@ export function useDeleteUserSkill() {
 }
 
 export function useUserTaxonomies(category: UserTaxonomyCategory) {
+  const userId = useUserScope()
   return useQuery<UserTaxonomyResponse>({
-    queryKey: ['user-taxonomies', category],
+    queryKey: personalKeys.userTaxonomies(userId as UserScopeId, category),
     queryFn: () => api.get<UserTaxonomyResponse>(`/user-taxonomies/${category}`),
+    enabled: userId !== undefined,
   })
 }
 
 export function useUserTaxonomyGap(category: UserTaxonomyCategory) {
+  const userId = useUserScope()
   return useQuery<UserTaxonomyGapResponse>({
-    queryKey: ['user-taxonomies', category, 'gap'],
+    queryKey: personalKeys.userTaxonomyGap(userId as UserScopeId, category),
     queryFn: () => api.get<UserTaxonomyGapResponse>(`/user-taxonomies/${category}/gap?limit=100`),
+    enabled: userId !== undefined,
   })
 }
 
@@ -529,8 +580,7 @@ export function useCreateUserTaxonomy() {
     mutationFn: ({ category, body }: UserTaxonomyCreateVariables) =>
       api.post(`/user-taxonomies/${category}`, body),
     onSuccess: (_data, { category }) => {
-      qc.invalidateQueries({ queryKey: ['user-taxonomies', category] })
-      qc.invalidateQueries({ queryKey: ['user-taxonomies', category, 'gap'] })
+      qc.invalidateQueries({ queryKey: personalRoots.userTaxonomies() })
       qc.invalidateQueries({ queryKey: ['tags', category] })
     },
     onError: () => {
@@ -544,9 +594,8 @@ export function usePatchUserTaxonomy() {
   return useMutation({
     mutationFn: ({ category, taxonomyId, body }: UserTaxonomyPatchVariables) =>
       api.patch(`/user-taxonomies/${category}/${taxonomyId}`, body),
-    onSuccess: (_data, { category }) => {
-      qc.invalidateQueries({ queryKey: ['user-taxonomies', category] })
-      qc.invalidateQueries({ queryKey: ['user-taxonomies', category, 'gap'] })
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: personalRoots.userTaxonomies() })
     },
     onError: () => {
       toast.error('Failed to update profile item')
@@ -561,9 +610,8 @@ export function useDeleteUserTaxonomy() {
       category: UserTaxonomyCategory
       taxonomyId: number
     }) => api.delete(`/user-taxonomies/${category}/${taxonomyId}`),
-    onSuccess: (_data, { category }) => {
-      qc.invalidateQueries({ queryKey: ['user-taxonomies', category] })
-      qc.invalidateQueries({ queryKey: ['user-taxonomies', category, 'gap'] })
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: personalRoots.userTaxonomies() })
     },
     onError: () => {
       toast.error('Failed to remove profile item')
@@ -573,14 +621,14 @@ export function useDeleteUserTaxonomy() {
 
 export function useSoftware() {
   return useQuery<LookupItem[]>({
-    queryKey: ['software'],
+    queryKey: catalogKeys.software(),
     queryFn: () => api.get<LookupItem[]>('/software'),
   })
 }
 
 export function useCertifications() {
   return useQuery<LookupItem[]>({
-    queryKey: ['certifications'],
+    queryKey: catalogKeys.certifications(),
     queryFn: () => api.get<LookupItem[]>('/certifications'),
   })
 }
