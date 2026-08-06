@@ -46,7 +46,12 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
+  projects: [
+    // Functional suite. The @perf budgets are opt-in — they throttle to mobile-4G with a
+    // 4x CPU slowdown and are slow by design.
+    { name: 'chromium', use: { browserName: 'chromium' }, grepInvert: /@perf/ },
+    { name: 'perf', use: { browserName: 'chromium' }, grep: /@perf/ },
+  ],
   webServer: IDENTITIES.map((identity) => ({
     command: `npx next dev --port ${port(identity)}`,
     url: `${identity.origin}/api/health/live`,
