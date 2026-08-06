@@ -15,7 +15,8 @@ const nextConfig: NextConfig = {
    * PAGE-017 — deep-link map for the catalog/personal split.
    *
    * The full map (including the routes whose PATH is unchanged but whose capability
-   * moved) is documented in the vault at `.obsidian/App/Page Routes.md`. Only the
+   * moved) is documented in the vault at `.obsidian/App/Technical Architecture.md`
+   * under "UI Route Map and Deep-Link Redirects (PAGE-017)". Only the
    * genuinely non-resolving paths need a real redirect, and they are all in the new
    * `/admin` namespace:
    *
