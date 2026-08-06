@@ -202,6 +202,19 @@ describe('query hooks', () => {
     expect(api.get).toHaveBeenCalledWith('/tags?type=skills&ids=4%2C99')
   })
 
+  it('keys and encodes job-title gap scope independently of taxonomy search', async () => {
+    const query = asQueryConfig(useUserTaxonomyGap('skills', { jobTitle: '  Data & AI  ' }))
+
+    await query.queryFn()
+
+    expect(query.queryKey).toEqual([
+      'user-taxonomies', 'skills', 'gap', { jobTitle: 'Data & AI' },
+    ])
+    expect(api.get).toHaveBeenCalledWith(
+      '/user-taxonomies/skills/gap?limit=100&job_title=Data+%26+AI',
+    )
+  })
+
   it('writes profile metadata through category-owned routes and refreshes profile and gap data', async () => {
     const create = asMutationConfig<{
       category: 'software'

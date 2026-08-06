@@ -53,6 +53,7 @@ function chain(result: unknown) {
   return value
 }
 const renderParams = (query: unknown) => new PgDialect().sqlToQuery(query as SQL).params
+const renderQuery = (query: unknown) => new PgDialect().sqlToQuery(query as SQL)
 
 function context(category: string): { params: Promise<{ category: string }> }
 function context(category: string, id: string): { params: Promise<{ category: string; id: string }> }
@@ -384,6 +385,7 @@ describe('GET /api/user-taxonomies/[category]/gap', () => {
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual({
       category: 'keywords',
+      jobTitle: null,
       counts: { profile: 3, demanded: 7, matched: 2, excluded: 1, gaps: 4 },
       items: [{
         taxonomyId: 5,
@@ -416,6 +418,61 @@ describe('GET /api/user-taxonomies/[category]/gap', () => {
       request(`/api/user-taxonomies/skills/gap?q=${'a'.repeat(101)}`),
       context('skills'),
     )).status).toBe(400)
+    expect(mockDb.execute).not.toHaveBeenCalled()
+  })
+
+  function gapOk() {
+    mockDb.execute
+      .mockResolvedValueOnce([{ profile: 1, demanded: 1, matched: 0, excluded: 0, gaps: 1 }])
+      .mockResolvedValueOnce([{
+        taxonomyId: 5, name: 'Docker', jobCount: 1, profileStatus: null, matchState: 'gap',
+      }])
+  }
+
+  it('omits an absent or whitespace-only title predicate', async () => {
+    const { GET } = await import('@/app/api/user-taxonomies/[category]/gap/route')
+    for (const path of [
+      '/api/user-taxonomies/skills/gap',
+      '/api/user-taxonomies/skills/gap?job_title=%20%20',
+    ]) {
+      vi.clearAllMocks()
+      setAuth(true)
+      gapOk()
+      const response = await GET(request(path), context('skills'))
+      expect(response.status).toBe(200)
+      await expect(response.json()).resolves.toMatchObject({ jobTitle: null })
+      for (const [query] of mockDb.execute.mock.calls) {
+        expect(renderQuery(query).sql).not.toContain('job_title')
+      }
+    }
+  })
+
+  it('composes escaped job_title demand scope with taxonomy-name q and owner scope', async () => {
+    setAuth(true, 2)
+    gapOk()
+    const { GET } = await import('@/app/api/user-taxonomies/[category]/gap/route')
+    const response = await GET(
+      request('/api/user-taxonomies/skills/gap?job_title=100%25_remote&q=sql'),
+      context('skills'),
+    )
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({ jobTitle: '100%_remote' })
+    expect(mockDb.execute).toHaveBeenCalledTimes(2)
+    for (const [query] of mockDb.execute.mock.calls) {
+      const rendered = renderQuery(query)
+      expect(rendered.sql).toContain('job_title')
+      expect(rendered.sql).toContain('user_job_state')
+      expect(rendered.params).toEqual(expect.arrayContaining(['%100\\%\\_remote%', '%sql%', 2]))
+    }
+  })
+
+  it('rejects an oversized job_title before querying', async () => {
+    const { GET } = await import('@/app/api/user-taxonomies/[category]/gap/route')
+    const response = await GET(
+      request(`/api/user-taxonomies/skills/gap?job_title=${'a'.repeat(201)}`),
+      context('skills'),
+    )
+    expect(response.status).toBe(400)
     expect(mockDb.execute).not.toHaveBeenCalled()
   })
 })

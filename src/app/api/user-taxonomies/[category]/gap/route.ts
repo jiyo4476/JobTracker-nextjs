@@ -1,14 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sql } from 'drizzle-orm'
 import {
-  certifications,
-  jobCertifications,
-  jobKeywords,
-  jobSkills,
-  jobSoftware,
-  keywords,
-  skills,
-  software,
   userCertifications,
   userKeywords,
   userSkills,
@@ -17,20 +9,14 @@ import {
 import { privateJson } from '@/lib/http'
 import { resolveRequestUser } from '@/lib/resolved-user'
 import { withUser } from '@/db/session'
-import { escapeLikePattern } from '@/lib/db-utils'
 import { logger, serializeError } from '@/lib/logger'
 import { profileCategorySchema } from '@/lib/user-taxonomy-profile'
+import { buildGapDemandQuery, GAP_JOB_TITLE_MAX_LENGTH } from '@/lib/taxonomy-gap-demand'
 
 type Context = { params: Promise<{ category: string }> }
 
 const configs = {
   skills: {
-    catalog: skills,
-    catalogId: skills.id,
-    name: skills.name,
-    junction: jobSkills,
-    junctionId: jobSkills.skillId,
-    jobId: jobSkills.jobId,
     profile: userSkills,
     profileId: userSkills.skillId,
     profileStatus: sql<string>`CASE WHEN ${userSkills.skillId} IS NULL THEN NULL WHEN ${userSkills.hasSkill} IS TRUE THEN 'held' ELSE 'not_held' END`,
@@ -38,12 +24,6 @@ const configs = {
     excluded: sql<boolean>`FALSE`,
   },
   software: {
-    catalog: software,
-    catalogId: software.id,
-    name: software.name,
-    junction: jobSoftware,
-    junctionId: jobSoftware.softwareId,
-    jobId: jobSoftware.jobId,
     profile: userSoftware,
     profileId: userSoftware.softwareId,
     profileStatus: sql<string>`CASE WHEN ${userSoftware.softwareId} IS NULL THEN NULL ELSE COALESCE(${userSoftware.familiarity}::text, 'listed') END`,
@@ -51,12 +31,6 @@ const configs = {
     excluded: sql<boolean>`FALSE`,
   },
   certifications: {
-    catalog: certifications,
-    catalogId: certifications.id,
-    name: certifications.name,
-    junction: jobCertifications,
-    junctionId: jobCertifications.certificationId,
-    jobId: jobCertifications.jobId,
     profile: userCertifications,
     profileId: userCertifications.certificationId,
     profileStatus: sql<string>`CASE WHEN ${userCertifications.certificationId} IS NULL THEN NULL ELSE 'held' END`,
@@ -64,12 +38,6 @@ const configs = {
     excluded: sql<boolean>`FALSE`,
   },
   keywords: {
-    catalog: keywords,
-    catalogId: keywords.id,
-    name: keywords.name,
-    junction: jobKeywords,
-    junctionId: jobKeywords.keywordId,
-    jobId: jobKeywords.jobId,
     profile: userKeywords,
     profileId: userKeywords.keywordId,
     profileStatus: sql<string>`${userKeywords.preference}::text`,
@@ -115,21 +83,24 @@ export async function GET(req: NextRequest, context: Context) {
     return NextResponse.json({ error: 'Invalid q: maximum length is 100' }, { status: 400 })
   }
   const query = queryRaw?.trim() ?? ''
-  const searchPattern = `%${escapeLikePattern(query)}%`
+  const jobTitleRaw = req.nextUrl.searchParams.get('job_title')
+  if (jobTitleRaw !== null && jobTitleRaw.length > GAP_JOB_TITLE_MAX_LENGTH) {
+    return NextResponse.json(
+      { error: `Invalid job_title: maximum length is ${GAP_JOB_TITLE_MAX_LENGTH}` },
+      { status: 400 },
+    )
+  }
+  const jobTitle = jobTitleRaw?.trim() || null
   const offset = (page - 1) * limit
   const config = configs[category.data]
 
   try {
-    const demand = sql`
-      SELECT ${config.catalogId} AS taxonomy_id,
-             ${config.name} AS name,
-             CAST(COUNT(DISTINCT jobs.id) AS int) AS job_count
-      FROM ${config.catalog}
-      JOIN ${config.junction} ON ${config.junctionId} = ${config.catalogId}
-      JOIN jobs ON ${config.jobId} = jobs.id AND jobs.is_active IS TRUE
-      WHERE ${config.name} ILIKE ${searchPattern} ESCAPE '\\'
-      GROUP BY ${config.catalogId}, ${config.name}
-    `
+    const demand = buildGapDemandQuery({
+      category: category.data,
+      userId: auth.user.id,
+      nameQuery: query,
+      jobTitle,
+    })
     const { countResult, itemResult } = await withUser(auth.user.id, async (tx) => {
       const countResult = await tx.execute(sql`
       WITH demand AS (${demand}), scoped AS (
@@ -178,6 +149,7 @@ export async function GET(req: NextRequest, context: Context) {
 
     return privateJson({
       category: category.data,
+      jobTitle,
       counts,
       items: rows(itemResult),
       page,

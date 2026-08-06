@@ -489,10 +489,36 @@ export function TaxonomyProfileSettings() {
 
 function GapAnalysis() {
   const [category, setCategory] = useState<UserTaxonomyCategory>('skills')
-  const gap = useUserTaxonomyGap(category)
+  const [titleInput, setTitleInput] = useState('')
+  const [jobTitle, setJobTitle] = useState('')
+  const gap = useUserTaxonomyGap(category, { jobTitle })
   const config = categoryConfig[category]
   const recommendations = (gap.data?.category === category ? gap.data.items : [])
     .filter(item => item.matchState === 'gap')
+  const expectedJobTitle = jobTitle || null
+  const responseMatchesScope = gap.data?.category === category &&
+    gap.data.jobTitle === expectedJobTitle
+
+  function scopeStatus() {
+    if (gap.isError) {
+      return jobTitle
+        ? `Could not confirm demand scope for posting titles containing “${jobTitle}”.`
+        : 'Could not confirm demand across all tracked job titles.'
+    }
+    if (gap.isLoading || !gap.data || gap.data.category !== category) {
+      return jobTitle
+        ? `Loading demand for posting titles containing “${jobTitle}”…`
+        : 'Loading demand across all tracked job titles…'
+    }
+    if (jobTitle) {
+      return responseMatchesScope
+        ? `Demand confirmed for posting titles containing “${gap.data.jobTitle}”.`
+        : `The response did not confirm the requested posting-title scope “${jobTitle}”.`
+    }
+    return responseMatchesScope
+      ? 'Demand confirmed across all tracked job titles.'
+      : `The response unexpectedly applied posting-title scope “${gap.data.jobTitle}”.`
+  }
 
   function selectFromKeyboard(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
     let nextIndex: number | null = null
@@ -516,6 +542,51 @@ function GapAnalysis() {
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
+        <form
+          className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-4"
+          onSubmit={event => {
+            event.preventDefault()
+            setJobTitle(titleInput.trim())
+          }}
+        >
+          <label htmlFor="gap-job-title" className="text-sm font-medium text-slate-800">
+            Target posting title
+          </label>
+          <p id="gap-job-title-help" className="text-xs text-slate-600">
+            Optionally narrow demand to tracked jobs whose scraped posting title contains this text.
+            This does not filter taxonomy names or create a saved search profile.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              id="gap-job-title"
+              value={titleInput}
+              maxLength={200}
+              aria-describedby="gap-job-title-help"
+              placeholder="e.g. Data Engineer"
+              onChange={event => setTitleInput(event.target.value)}
+            />
+            <Button type="submit" size="sm" disabled={titleInput.trim() === jobTitle}>
+              Apply title
+            </Button>
+            {jobTitle && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setTitleInput('')
+                  setJobTitle('')
+                }}
+              >
+                Clear title
+              </Button>
+            )}
+          </div>
+          <p role="status" className="text-xs text-slate-600">
+            {scopeStatus()}
+          </p>
+        </form>
+
         <div role="tablist" aria-label="Gap analysis category" className="flex flex-wrap gap-2">
           {categories.map((option, index) => (
             <Button
@@ -561,6 +632,13 @@ function GapAnalysis() {
             </div>
           ) : !gap.data || gap.data.category !== category ? (
             <p className="text-sm text-slate-500">No analysis is available for this category.</p>
+          ) : !responseMatchesScope ? (
+            <div role="alert" className="space-y-2 text-sm text-red-700">
+              <p>Gap analysis returned a different posting-title scope than requested. Results are hidden.</p>
+              <Button type="button" size="sm" variant="outline" onClick={() => gap.refetch()}>
+                Retry
+              </Button>
+            </div>
           ) : (
             <>
               <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">

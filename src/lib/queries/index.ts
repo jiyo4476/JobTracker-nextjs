@@ -8,7 +8,7 @@ import type {
   CompanyRow, CompanyDetail,
   JobDetail, JobsResponse, JobsParams,
   LookupItem, StatsResponse, ResumeVersion, UserSkill,
-  UserTaxonomyCategory, UserTaxonomyCreateVariables, UserTaxonomyGapResponse,
+  UserTaxonomyCategory, UserTaxonomyCreateVariables, UserTaxonomyGapParams, UserTaxonomyGapResponse,
   UserTaxonomyPatchVariables, UserTaxonomyResponse,
   AnalyticsParams, AnalyticsResponse,
   TaxonomyAnalyticsParams, TaxonomyAnalyticsResponse,
@@ -26,7 +26,7 @@ export type {
   UserJobState, SelectedResume,
   LookupItem, StatsResponse, StatsCatalog, ResumeVersion, UserSkill,
   UserTaxonomyCategory, UserTaxonomyCreatePayload, UserTaxonomyCreateVariables,
-  UserTaxonomyGapItem, UserTaxonomyGapResponse, UserTaxonomyItem, UserTaxonomyPatchPayload,
+  UserTaxonomyGapItem, UserTaxonomyGapParams, UserTaxonomyGapResponse, UserTaxonomyItem, UserTaxonomyPatchPayload,
   UserTaxonomyPatchVariables, UserTaxonomyResponse,
   AnalyticsParams, AnalyticsResponse,
   TaxonomyCategory, TaxonomyAnalyticsParams, TaxonomyAnalyticsResponse, TaxonomyAnalyticsRow,
@@ -516,10 +516,18 @@ export function useUserTaxonomies(category: UserTaxonomyCategory) {
   })
 }
 
-export function useUserTaxonomyGap(category: UserTaxonomyCategory) {
+export function useUserTaxonomyGap(
+  category: UserTaxonomyCategory,
+  params: UserTaxonomyGapParams = {},
+) {
+  const jobTitle = params.jobTitle?.trim() ?? ''
+  const searchParams = new URLSearchParams({ limit: '100' })
+  if (jobTitle) searchParams.set('job_title', jobTitle)
   return useQuery<UserTaxonomyGapResponse>({
-    queryKey: ['user-taxonomies', category, 'gap'],
-    queryFn: () => api.get<UserTaxonomyGapResponse>(`/user-taxonomies/${category}/gap?limit=100`),
+    queryKey: ['user-taxonomies', category, 'gap', { jobTitle }],
+    queryFn: () => api.get<UserTaxonomyGapResponse>(
+      `/user-taxonomies/${category}/gap?${searchParams.toString()}`,
+    ),
   })
 }
 
