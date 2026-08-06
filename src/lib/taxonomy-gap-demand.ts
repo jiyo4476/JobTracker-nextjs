@@ -8,10 +8,22 @@ import { escapeLikePattern } from '@/lib/db-utils'
 export const GAP_JOB_TITLE_MAX_LENGTH = 200
 
 const demandConfigs = {
-  skills: { catalog: skills, catalogId: skills.id, name: skills.name, junction: jobSkills, junctionId: jobSkills.skillId, jobId: jobSkills.jobId },
-  software: { catalog: software, catalogId: software.id, name: software.name, junction: jobSoftware, junctionId: jobSoftware.softwareId, jobId: jobSoftware.jobId },
-  certifications: { catalog: certifications, catalogId: certifications.id, name: certifications.name, junction: jobCertifications, junctionId: jobCertifications.certificationId, jobId: jobCertifications.jobId },
-  keywords: { catalog: keywords, catalogId: keywords.id, name: keywords.name, junction: jobKeywords, junctionId: jobKeywords.keywordId, jobId: jobKeywords.jobId },
+  skills: {
+    catalog: skills, catalogId: skills.id, name: skills.name,
+    junction: jobSkills, junctionId: jobSkills.skillId, jobId: jobSkills.jobId,
+  },
+  software: {
+    catalog: software, catalogId: software.id, name: software.name,
+    junction: jobSoftware, junctionId: jobSoftware.softwareId, jobId: jobSoftware.jobId,
+  },
+  certifications: {
+    catalog: certifications, catalogId: certifications.id, name: certifications.name,
+    junction: jobCertifications, junctionId: jobCertifications.certificationId, jobId: jobCertifications.jobId,
+  },
+  keywords: {
+    catalog: keywords, catalogId: keywords.id, name: keywords.name,
+    junction: jobKeywords, junctionId: jobKeywords.keywordId, jobId: jobKeywords.jobId,
+  },
 } as const
 
 export type GapDemandCategory = keyof typeof demandConfigs

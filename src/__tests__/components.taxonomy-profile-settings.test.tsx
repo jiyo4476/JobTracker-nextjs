@@ -321,8 +321,41 @@ describe('TaxonomyProfileSettings', () => {
     expect(alert.textContent).toContain('different posting-title scope')
     expect(screen.queryByText('Demanded')).toBeNull()
     expect(screen.queryByText('Must not render')).toBeNull()
+    // The alert is the single explanation — the status line must not repeat it.
+    expect(screen.queryByText(/Demand confirmed/)).toBeNull()
+    const status = screen.getAllByRole('status').find(node => node.tagName === 'P')
+    expect(status?.textContent?.trim()).toBe('')
     await user.click(within(alert).getByRole('button', { name: 'Retry' }))
     expect(mocks.refetch).toHaveBeenCalled()
+  })
+
+  it('treats a response with no jobTitle field as unscoped rather than a mismatch', () => {
+    mocks.useUserTaxonomyGap.mockImplementation((category: UserTaxonomyCategory) => ({
+      // Older build / rolled-back deploy / stale cached 200: no `jobTitle` key at all.
+      data: {
+        category,
+        counts: { profile: 1, demanded: 3, matched: 1, excluded: 0, gaps: 2 },
+        items: [{
+          taxonomyId: 90,
+          name: 'Renders normally',
+          jobCount: 3,
+          profileStatus: null,
+          matchState: 'gap',
+        }],
+        page: 1,
+        totalPages: 1,
+      },
+      isLoading: false,
+      isError: false,
+      refetch: mocks.refetch,
+    }))
+    const { container } = render(<TaxonomyProfileAndGapSettings />)
+
+    expect(screen.queryByText(/different posting-title scope/)).toBeNull()
+    expect(screen.getByText('Demanded')).toBeTruthy()
+    expect(screen.getByText('Renders normally')).toBeTruthy()
+    expect(screen.getByText('Demand confirmed across all tracked job titles.')).toBeTruthy()
+    expect(container.textContent).not.toContain('undefined')
   })
 
   it('renders gap loading, failure/retry, excluded-keyword, and no-demand states', async () => {

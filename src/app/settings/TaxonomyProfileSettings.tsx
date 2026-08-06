@@ -496,8 +496,11 @@ function GapAnalysis() {
   const recommendations = (gap.data?.category === category ? gap.data.items : [])
     .filter(item => item.matchState === 'gap')
   const expectedJobTitle = jobTitle || null
+  // A response that omits `jobTitle` entirely (rolled-back deploy, stale cached
+  // 200, older build) means "unscoped" — not a scope mismatch.
+  const echoedJobTitle = gap.data?.jobTitle ?? null
   const responseMatchesScope = gap.data?.category === category &&
-    gap.data.jobTitle === expectedJobTitle
+    echoedJobTitle === expectedJobTitle
 
   function scopeStatus() {
     if (gap.isError) {
@@ -510,14 +513,12 @@ function GapAnalysis() {
         ? `Loading demand for posting titles containing “${jobTitle}”…`
         : 'Loading demand across all tracked job titles…'
     }
-    if (jobTitle) {
-      return responseMatchesScope
-        ? `Demand confirmed for posting titles containing “${gap.data.jobTitle}”.`
-        : `The response did not confirm the requested posting-title scope “${jobTitle}”.`
-    }
-    return responseMatchesScope
-      ? 'Demand confirmed across all tracked job titles.'
-      : `The response unexpectedly applied posting-title scope “${gap.data.jobTitle}”.`
+    // On a scope mismatch the alert inside the results panel is the single
+    // explanation — do not render a second, competing sentence here.
+    if (!responseMatchesScope) return ''
+    return jobTitle
+      ? `Demand confirmed for posting titles containing “${echoedJobTitle}”.`
+      : 'Demand confirmed across all tracked job titles.'
   }
 
   function selectFromKeyboard(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {

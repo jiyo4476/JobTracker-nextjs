@@ -10,7 +10,12 @@ const describePostgres = testDatabaseUrl ? describe : describe.skip
 type DemandRow = { taxonomy_id: number; name: string; job_count: number }
 class Rollback extends Error {}
 
-/** Opt-in real-PostgreSQL proof of owner and title scoping. */
+/**
+ * Opt-in check that the generated owner/title-scoping SQL behaves correctly on a real
+ * PostgreSQL engine. It runs against `ON COMMIT DROP` TEMP tables that shadow `jobs` and
+ * `user_job_state`, so it exercises query logic only — not the real schema, its constraints,
+ * or the RLS policies added in migration 0009.
+ */
 describePostgres('taxonomy gap demand PostgreSQL integration', () => {
   let client: ReturnType<typeof postgres>
 
