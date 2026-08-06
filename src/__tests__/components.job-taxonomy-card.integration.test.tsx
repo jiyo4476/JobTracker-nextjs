@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { IdentityScopeProvider } from '@/lib/identity-scope'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -121,12 +122,13 @@ describe('JobTaxonomyCard integration', () => {
     vi.clearAllMocks()
     serverJob = makeJob()
     mocks.get.mockImplementation(async (path: string) => {
+      if (path === '/me') return { user_id: 27, email: null, display_name: null, is_admin: false }
       if (path === '/jobs/7') return serverJob
       if (path.startsWith('/tags?')) return []
       throw new Error(`Unexpected GET ${path}`)
     })
     mocks.patch.mockImplementation(async (path: string, body: Record<string, string[]>) => {
-      if (path !== '/jobs/7/tags') throw new Error(`Unexpected PATCH ${path}`)
+      if (path !== '/admin/jobs/7/tags') throw new Error(`Unexpected PATCH ${path}`)
       serverJob = makeJob({
         skills: body.skills.map((name, index) => ({ id: 100 + index, name })),
         software: body.software.map((name, index) => ({ id: 200 + index, name })),
@@ -144,7 +146,7 @@ describe('JobTaxonomyCard integration', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <JobHarness />
+        <IdentityScopeProvider><JobHarness /></IdentityScopeProvider>
       </QueryClientProvider>,
     )
 
@@ -156,11 +158,11 @@ describe('JobTaxonomyCard integration', () => {
     await waitFor(() => {
       expect(mocks.get.mock.calls.filter(([path]) => path === '/jobs/7')).toHaveLength(2)
     })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['job', '7'] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['job'] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['jobs'] })
     expect(screen.getByRole('button', { name: 'Remove TypeScript from Skills' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Remove Python from Skills' })).toBeNull()
-    expect(queryClient.getQueryData<JobDetail>(['job', '7'])?.skills).toEqual([
+    expect(queryClient.getQueryData<JobDetail>(['job', '__user__', 27, '7'])?.skills).toEqual([
       { id: 100, name: 'TypeScript' },
     ])
   })

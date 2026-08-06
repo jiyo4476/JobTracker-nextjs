@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DatasetScopeBadge } from '@/components/layout/DatasetScope'
 import { taxonomyFilterParams, type TaxonomyCategory } from '@/lib/taxonomy'
 import type { CompanyTaxonomyDemand as CompanyTaxonomyDemandData } from '@/types/queries'
 
@@ -26,9 +27,14 @@ export function CompanyTaxonomyDemand({
   return (
     <Card aria-labelledby="company-demand-heading">
       <CardHeader>
-        <CardTitle id="company-demand-heading" className="text-sm">
-          Job qualifications &amp; keywords
-        </CardTitle>
+        <div className="flex items-center gap-2">
+          <CardTitle id="company-demand-heading" className="text-sm">
+            Job qualifications &amp; keywords
+          </CardTitle>
+          {/* Catalog-wide demand: counted across every active posting at this company,
+              independent of who tracks what. */}
+          <DatasetScopeBadge scope="catalog" />
+        </div>
         <p className="text-sm text-slate-600">
           {demand.activeJobCount === 0
             ? 'No active jobs are available to summarize.'

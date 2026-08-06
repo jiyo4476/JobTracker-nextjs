@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   useQuery: vi.fn(),
   useMutation: vi.fn(),
   invalidateQueries: vi.fn(),
+  userScope: vi.fn<() => number | undefined>(),
 }))
 
 vi.mock('@tanstack/react-query', () => ({
@@ -13,7 +14,13 @@ vi.mock('@tanstack/react-query', () => ({
 }))
 
 vi.mock('sonner', () => ({
-  toast: { error: vi.fn() },
+  toast: { error: vi.fn(), success: vi.fn() },
+}))
+
+vi.mock('@/lib/identity-scope', () => ({
+  useUserScope: mocks.userScope,
+  useMe: vi.fn(),
+  useIsAdmin: vi.fn(() => false),
 }))
 
 vi.mock('@/lib/api', () => ({
@@ -34,7 +41,7 @@ import {
   useCompanies,
   useCompany,
   useCreateContact,
-  useCreateJob,
+  useCreateCatalogJob,
   useCreateResumeVersion,
   useCreateUserSkill,
   useDeleteContact,
@@ -45,7 +52,9 @@ import {
   useJobs,
   usePatchCompany,
   usePatchContact,
-  usePatchJob,
+  usePatchCatalogJob,
+  usePatchJobSalary,
+  usePatchJobTags,
   usePatchResumeVersion,
   useResumeVersions,
   useSkills,
@@ -70,6 +79,7 @@ import {
 type QueryConfig = {
   queryKey: readonly unknown[]
   queryFn: () => Promise<unknown>
+  enabled?: boolean
 }
 
 type MutationConfig<TVariables> = {
@@ -90,6 +100,7 @@ describe('query hooks', () => {
     vi.clearAllMocks()
     mocks.useQuery.mockImplementation((config) => config)
     mocks.useMutation.mockImplementation((config) => config)
+    mocks.userScope.mockReturnValue(27)
   })
 
   it('serializes every supported jobs filter into the API query string', async () => {
@@ -136,6 +147,31 @@ describe('query hooks', () => {
     expect(params.get('salary_min')).toBe('9000000')
     expect(params.get('salary_max')).toBe('15000000')
     expect(params.get('priority_min')).toBe('3')
+  })
+
+  it.each([
+    ['jobs', () => useJobs({ scope: 'tracked' }), ['jobs', '__user__', 27, { scope: 'tracked' }]],
+    ['job detail', () => useJob('42'), ['job', '__user__', 27, '42']],
+    ['stats', () => useStats(), ['stats', '__user__', 27]],
+    ['activity', () => useActivity(), ['activity', '__user__', 27]],
+    ['company detail', () => useCompany(7), ['companies', '__user__', 27, 7]],
+    ['resume versions', () => useResumeVersions(), ['resume-versions', '__user__', 27]],
+    ['user skills', () => useUserSkills(), ['user-skills', '__user__', 27]],
+    ['user taxonomy', () => useUserTaxonomies('skills'), ['user-taxonomies', '__user__', 27, 'skills']],
+    ['user taxonomy gap', () => useUserTaxonomyGap('skills'), ['user-taxonomies', '__user__', 27, 'skills', 'gap', '']],
+  ])('scopes %s cache data to the resolved user', (_name, makeQuery, expectedKey) => {
+    const query = asQueryConfig(makeQuery())
+
+    expect(query.queryKey).toEqual(expectedKey)
+    expect(query.enabled).toBe(true)
+  })
+
+  it('does not issue personal reads before identity resolves', () => {
+    mocks.userScope.mockReturnValue(undefined)
+    const query = asQueryConfig(useJobs())
+
+    expect(query.queryKey).toEqual(['jobs', '__user__', undefined, {}])
+    expect(query.enabled).toBe(false)
   })
 
   it.each([
@@ -207,12 +243,28 @@ describe('query hooks', () => {
 
     await query.queryFn()
 
+    // Owner segment (PAGE-017) AND applied job title (API-015) both key the entry.
     expect(query.queryKey).toEqual([
-      'user-taxonomies', 'skills', 'gap', { jobTitle: 'Data & AI' },
+      'user-taxonomies', '__user__', 27, 'skills', 'gap', 'Data & AI',
     ])
+    expect(query.enabled).toBe(true)
     expect(api.get).toHaveBeenCalledWith(
       '/user-taxonomies/skills/gap?limit=100&job_title=Data+%26+AI',
     )
+  })
+
+  it('separates gap cache entries per job title while the broad root still matches', () => {
+    const unscoped = asQueryConfig(useUserTaxonomyGap('skills')).queryKey as unknown[]
+    const scoped = asQueryConfig(
+      useUserTaxonomyGap('skills', { jobTitle: 'Data Engineer' }),
+    ).queryKey as unknown[]
+
+    expect(scoped).not.toEqual(unscoped)
+    // Every broad prefix invalidation still clears both titles for this owner.
+    for (const key of [unscoped, scoped]) {
+      expect(key.slice(0, 1)).toEqual(['user-taxonomies'])
+      expect(key.slice(0, 5)).toEqual(['user-taxonomies', '__user__', 27, 'skills', 'gap'])
+    }
   })
 
   it('writes profile metadata through category-owned routes and refreshes profile and gap data', async () => {
@@ -226,8 +278,7 @@ describe('query hooks', () => {
       name: 'Kubernetes',
       familiarity: 'learning',
     })
-    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['user-taxonomies', 'software'] })
-    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['user-taxonomies', 'software', 'gap'] })
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['user-taxonomies'] })
 
     const patch = asMutationConfig<{
       category: 'keywords'
@@ -242,9 +293,7 @@ describe('query hooks', () => {
     await remove.mutationFn({ category: 'certifications', taxonomyId: 7 })
     remove.onSuccess(undefined, { category: 'certifications', taxonomyId: 7 })
     expect(api.delete).toHaveBeenCalledWith('/user-taxonomies/certifications/7')
-    expect(mocks.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ['user-taxonomies', 'certifications', 'gap'],
-    })
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['user-taxonomies'] })
   })
 
   it('serializes the category-safe taxonomy analytics contract', async () => {
@@ -298,18 +347,20 @@ describe('query hooks', () => {
     await mutation.mutationFn({ id: 42 })
     mutation.onSuccess(undefined, { id: 42 })
 
-    expect(api.delete).toHaveBeenCalledWith('/jobs/42')
+    expect(api.delete).toHaveBeenCalledWith('/admin/jobs/42')
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['jobs'] })
-    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['job', '42'] })
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['job'] })
   })
 
   it.each([
-    ['useCreateJob', () => useCreateJob(), { title: 'Engineer' }, 'post', '/jobs', { title: 'Engineer' }, [['jobs']]],
+    ['useCreateCatalogJob', () => useCreateCatalogJob(), { job_title: 'Engineer' }, 'post', '/admin/jobs', { job_title: 'Engineer' }, [['jobs'], ['companies']]],
     ['usePatchCompany', () => usePatchCompany(), { id: 7, name: 'Acme' }, 'patch', '/companies/7', { name: 'Acme' }, [['companies'], ['companies', 7]]],
-    ['usePatchJob', () => usePatchJob(), { id: 42, body: { job_title: 'Senior Engineer' } }, 'patch', '/jobs/42', { job_title: 'Senior Engineer' }, [['job', '42'], ['jobs']]],
-    ['useCreateContact', () => useCreateContact(), { jobId: 42, body: { name: 'Ada' } }, 'post', '/jobs/42/contacts', { name: 'Ada' }, [['job', '42']]],
-    ['usePatchContact', () => usePatchContact(), { jobId: 42, contactId: 3, body: { title: 'Recruiter' } }, 'patch', '/jobs/42/contacts/3', { title: 'Recruiter' }, [['job', '42']]],
-    ['useDeleteContact', () => useDeleteContact(), { jobId: 42, contactId: 3 }, 'delete', '/jobs/42/contacts/3', undefined, [['job', '42']]],
+    ['usePatchCatalogJob', () => usePatchCatalogJob(), { id: 42, body: { job_title: 'Senior Engineer' } }, 'patch', '/admin/jobs/42', { job_title: 'Senior Engineer' }, [['job'], ['jobs'], ['companies']]],
+    ['usePatchJobTags', () => usePatchJobTags(), { id: 42, body: { skills: ['TypeScript'] } }, 'patch', '/admin/jobs/42/tags', { skills: ['TypeScript'] }, [['job'], ['jobs']]],
+    ['usePatchJobSalary', () => usePatchJobSalary(), { id: 42, body: { salary_min: 90000 } }, 'patch', '/admin/jobs/42/salary', { salary_min: 90000 }, [['job'], ['jobs']]],
+    ['useCreateContact', () => useCreateContact(), { jobId: 42, body: { name: 'Ada' } }, 'post', '/jobs/42/contacts', { name: 'Ada' }, [['job']]],
+    ['usePatchContact', () => usePatchContact(), { jobId: 42, contactId: 3, body: { title: 'Recruiter' } }, 'patch', '/jobs/42/contacts/3', { title: 'Recruiter' }, [['job']]],
+    ['useDeleteContact', () => useDeleteContact(), { jobId: 42, contactId: 3 }, 'delete', '/jobs/42/contacts/3', undefined, [['job']]],
     ['useCreateResumeVersion', () => useCreateResumeVersion(), { label: 'Backend' }, 'post', '/resume-versions', { label: 'Backend' }, [['resume-versions']]],
     ['usePatchResumeVersion', () => usePatchResumeVersion(), { id: 5, body: { notes: 'Updated' } }, 'patch', '/resume-versions/5', { notes: 'Updated' }, [['resume-versions']]],
     ['useDeleteResumeVersion', () => useDeleteResumeVersion(), 5, 'delete', '/resume-versions/5', undefined, [['resume-versions']]],

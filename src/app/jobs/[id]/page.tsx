@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils'
 import { formatSalary } from '@/lib/salary-format'
 import { JobDescriptionMarkdown } from '@/components/jobs/JobDescriptionMarkdown'
 import {
+  useIsAdmin,
   useJob,
   usePatchJobState,
   useJobStateAction,
@@ -154,6 +155,7 @@ export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const { data: job, isLoading } = useJob(id)
+  const isAdmin = useIsAdmin()
   const patchState = usePatchJobState()
   const stateAction = useJobStateAction()
   const { data: resumeVersions = [] } = useResumeVersions()
@@ -316,6 +318,16 @@ export default function JobDetailPage() {
             >
               Open Posting
             </a>
+          )}
+          {/* Catalog mutation affordance — verified admins only. Hidden for everyone
+              else; the /api/admin/* routes re-authorize regardless. */}
+          {isAdmin && (
+            <Link
+              href={`/admin/jobs/${id}/edit`}
+              className="inline-flex items-center justify-center h-9 px-3 text-sm rounded-md border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-medium transition-colors"
+            >
+              Edit catalog posting
+            </Link>
           )}
         </div>
       </div>
@@ -545,13 +557,18 @@ export default function JobDetailPage() {
             <CardContent className="space-y-3">
               {showContactForm && (
                 <form onSubmit={handleCreateContact} className="space-y-2 rounded border p-3">
-                  <Input value={contactForm.name} onChange={e => updateContactField('name', e.target.value)} placeholder="Name" required />
-                  <Input value={contactForm.title} onChange={e => updateContactField('title', e.target.value)} placeholder="Title" />
-                  <Input value={contactForm.email} onChange={e => updateContactField('email', e.target.value)} placeholder="Email" type="email" />
-                  <Input value={contactForm.phone} onChange={e => updateContactField('phone', e.target.value)} placeholder="Phone" />
-                  <Input value={contactForm.linkedin_url} onChange={e => updateContactField('linkedin_url', e.target.value)} placeholder="LinkedIn URL" type="url" />
-                  <Textarea value={contactForm.notes} onChange={e => updateContactField('notes', e.target.value)} placeholder="Notes" className="min-h-20 text-sm" />
-                  <Button size="sm" type="submit" disabled={createContact.isPending || !contactForm.name.trim()}>
+                  <Input aria-label="Contact name" value={contactForm.name} onChange={e => updateContactField('name', e.target.value)} placeholder="Name" required />
+                  <Input aria-label="Contact title" value={contactForm.title} onChange={e => updateContactField('title', e.target.value)} placeholder="Title" />
+                  <Input aria-label="Contact email" value={contactForm.email} onChange={e => updateContactField('email', e.target.value)} placeholder="Email" type="email" />
+                  <Input aria-label="Contact phone" value={contactForm.phone} onChange={e => updateContactField('phone', e.target.value)} placeholder="Phone" />
+                  <Input aria-label="Contact LinkedIn URL" value={contactForm.linkedin_url} onChange={e => updateContactField('linkedin_url', e.target.value)} placeholder="LinkedIn URL" type="url" />
+                  <Textarea aria-label="Contact notes" value={contactForm.notes} onChange={e => updateContactField('notes', e.target.value)} placeholder="Notes" className="min-h-20 text-sm" />
+                  <Button
+                    size="sm"
+                    type="submit"
+                    aria-label="Save new contact"
+                    disabled={createContact.isPending || !contactForm.name.trim()}
+                  >
                     {createContact.isPending ? 'Adding...' : 'Add contact'}
                   </Button>
                 </form>
@@ -564,12 +581,12 @@ export default function JobDetailPage() {
                   <div key={c.id} className="text-sm border rounded p-3 space-y-2">
                     {editingContactId === c.id ? (
                       <form onSubmit={handlePatchContact} className="space-y-2">
-                        <Input value={editingContactForm.name} onChange={e => updateEditingContactField('name', e.target.value)} placeholder="Name" required />
-                        <Input value={editingContactForm.title} onChange={e => updateEditingContactField('title', e.target.value)} placeholder="Title" />
-                        <Input value={editingContactForm.email} onChange={e => updateEditingContactField('email', e.target.value)} placeholder="Email" type="email" />
-                        <Input value={editingContactForm.phone} onChange={e => updateEditingContactField('phone', e.target.value)} placeholder="Phone" />
-                        <Input value={editingContactForm.linkedin_url} onChange={e => updateEditingContactField('linkedin_url', e.target.value)} placeholder="LinkedIn URL" type="url" />
-                        <Textarea value={editingContactForm.notes} onChange={e => updateEditingContactField('notes', e.target.value)} placeholder="Notes" className="min-h-20 text-sm" />
+                        <Input aria-label="Edit contact name" value={editingContactForm.name} onChange={e => updateEditingContactField('name', e.target.value)} placeholder="Name" required />
+                        <Input aria-label="Edit contact title" value={editingContactForm.title} onChange={e => updateEditingContactField('title', e.target.value)} placeholder="Title" />
+                        <Input aria-label="Edit contact email" value={editingContactForm.email} onChange={e => updateEditingContactField('email', e.target.value)} placeholder="Email" type="email" />
+                        <Input aria-label="Edit contact phone" value={editingContactForm.phone} onChange={e => updateEditingContactField('phone', e.target.value)} placeholder="Phone" />
+                        <Input aria-label="Edit contact LinkedIn URL" value={editingContactForm.linkedin_url} onChange={e => updateEditingContactField('linkedin_url', e.target.value)} placeholder="LinkedIn URL" type="url" />
+                        <Textarea aria-label="Edit contact notes" value={editingContactForm.notes} onChange={e => updateEditingContactField('notes', e.target.value)} placeholder="Notes" className="min-h-20 text-sm" />
                         <div className="flex gap-2">
                           <Button size="sm" type="submit" disabled={patchContact.isPending || !editingContactForm.name.trim()}>
                             {patchContact.isPending ? 'Saving...' : 'Save'}

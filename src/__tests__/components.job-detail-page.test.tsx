@@ -5,6 +5,7 @@ import type { JobDetail } from '@/types/queries'
 
 const mocks = vi.hoisted(() => ({
   useJob: vi.fn(),
+  useIsAdmin: vi.fn(() => false),
   patchState: vi.fn(),
   removeAction: vi.fn(),
 }))
@@ -23,6 +24,7 @@ vi.mock('@/components/jobs/JobDescriptionMarkdown', () => ({
 }))
 vi.mock('@/lib/queries', () => ({
   useJob: mocks.useJob,
+  useIsAdmin: mocks.useIsAdmin,
   usePatchJobState: () => ({ mutate: mocks.patchState, isPending: false }),
   useJobStateAction: () => ({ mutate: mocks.removeAction, isPending: false }),
   useResumeVersions: () => ({ data: [{ id: 1, label: 'v1-swe' }] }),
@@ -87,7 +89,10 @@ function makeJob(overrides: Partial<JobDetail> = {}): JobDetail {
 }
 
 describe('JobDetailPage — posting/application split', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.useIsAdmin.mockReturnValue(false)
+  })
 
   it('shows a read-only Job posting section and a Not-tracked empty state for untracked jobs', () => {
     mocks.useJob.mockReturnValue({ data: makeJob(), isLoading: false })
@@ -125,5 +130,24 @@ describe('JobDetailPage — posting/application split', () => {
     expect(html).toContain('My contacts')
     expect(html).toContain('Saved to My Jobs')
     expect(html).toContain('Remove')
+  })
+
+  // PAGE-017: catalog mutation affordances are admin-only.
+  it('hides the catalog editor link from non-admins', () => {
+    mocks.useIsAdmin.mockReturnValue(false)
+    mocks.useJob.mockReturnValue({ data: makeJob(), isLoading: false })
+    const html = renderToStaticMarkup(<JobDetailPage />)
+
+    expect(html).not.toContain('Edit catalog posting')
+    expect(html).not.toContain('/admin/jobs/')
+  })
+
+  it('links verified admins to the distinct catalog editor', () => {
+    mocks.useIsAdmin.mockReturnValue(true)
+    mocks.useJob.mockReturnValue({ data: makeJob(), isLoading: false })
+    const html = renderToStaticMarkup(<JobDetailPage />)
+
+    expect(html).toContain('Edit catalog posting')
+    expect(html).toContain('href="/admin/jobs/5/edit"')
   })
 })

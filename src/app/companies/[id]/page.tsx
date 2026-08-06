@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { DatasetScopeBadge } from '@/components/layout/DatasetScope'
 import { CompanyTaxonomyDemand } from '@/components/companies/CompanyTaxonomyDemand'
 import { useCompany, usePatchCompany } from '@/lib/queries'
 import { interviewStageBadgeVariants, interviewStageLabels } from '@/lib/enums'
@@ -21,6 +22,9 @@ export default function CompanyDetailPage() {
   const companyId = Number(id)
   const { data: company, isLoading } = useCompany(companyId)
   const patch = usePatchCompany()
+  // The caller's OWN tracked postings, derived from the owner-scoped overlay the API
+  // returns. This is a filter of the caller's own rows — never a widened query.
+  const trackedJobs = (company?.jobs ?? []).filter(job => job.isTracked)
 
   function handleBlur(field: string, value: string, currentValue: string | null) {
     const nextValue = field === 'name' ? value.trim() : value.trim() || null
@@ -49,7 +53,7 @@ export default function CompanyDetailPage() {
           </Card>
           <div className="col-span-2">
             <Card>
-              <CardHeader><CardTitle className="text-sm">Jobs at this Company</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-sm">Global posting demand</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <div key={i} className="flex items-center gap-3 p-2 border border-slate-100 rounded-md">
@@ -142,20 +146,32 @@ export default function CompanyDetailPage() {
         </div>
 
         <div className="space-y-6 lg:col-span-2">
+          {/* ── Global posting demand (shared catalog) ─────────────────────── */}
           <CompanyTaxonomyDemand companyId={company.id} demand={company.taxonomyDemand} />
+
           <Card>
-            <CardHeader><CardTitle className="text-sm">Jobs at this Company</CardTitle></CardHeader>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-sm">Global posting demand</CardTitle>
+                <DatasetScopeBadge scope="catalog" />
+              </div>
+              <p className="text-xs font-normal text-slate-500">
+                Every active posting this company has in the shared catalog ({company.jobs.length} shown)
+                — the same list for every user. No other user&apos;s applications, notes, or contacts
+                appear here.
+              </p>
+            </CardHeader>
             <CardContent className="space-y-2">
               {company.jobs.length === 0
-                ? <p className="text-sm text-slate-500">No jobs tracked yet.</p>
+                ? <p className="text-sm text-slate-500">No active catalog postings for this company.</p>
                 : company.jobs.map(job => (
                     <div key={job.id} className="flex items-center gap-3 p-2 border border-slate-100 rounded-md hover:bg-slate-50">
                       <Link href={`/jobs/${job.id}`} className="flex-1 text-sm text-blue-600 hover:underline font-medium">
                         {job.jobTitle}
                       </Link>
-                      <Badge variant={isInterviewStage(job.interviewStage) ? interviewStageBadgeVariants[job.interviewStage] : 'default'}>
-                        {isInterviewStage(job.interviewStage) ? interviewStageLabels[job.interviewStage] : job.interviewStage}
-                      </Badge>
+                      {job.isTracked
+                        ? <Badge variant="secondary" className="text-xs">In My Jobs</Badge>
+                        : <span className="text-xs text-slate-500 italic">Not tracked</span>}
                       <span className="text-sm text-slate-500 w-28 text-right">
                         {formatSalaryRangeShort(job.salaryMin, job.salaryMax)}
                       </span>
@@ -164,6 +180,53 @@ export default function CompanyDetailPage() {
                       </span>
                     </div>
                   ))}
+            </CardContent>
+          </Card>
+
+          {/* ── My tracked jobs at this company (owner-scoped) ──────────────── */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-sm">My tracked jobs at this company</CardTitle>
+                <DatasetScopeBadge scope="personal" />
+              </div>
+              <p className="text-xs font-normal text-slate-500">
+                {company.trackedJobCount === 1
+                  ? 'You track 1 posting at this company.'
+                  : `You track ${company.trackedJobCount} postings at this company.`}
+                {' '}Stage is your own — nobody else can see it, and you cannot see theirs.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {trackedJobs.length === 0
+                ? (
+                    <p className="text-sm text-slate-500">
+                      You have not saved any of this company&apos;s postings yet. Save one from the
+                      list above or from <Link href="/jobs?scope=catalog" className="text-blue-600 underline">Browse Catalog</Link>.
+                    </p>
+                  )
+                : trackedJobs.map(job => (
+                    <div key={job.id} className="flex items-center gap-3 p-2 border border-slate-100 rounded-md hover:bg-slate-50">
+                      <Link href={`/jobs/${job.id}`} className="flex-1 text-sm text-blue-600 hover:underline font-medium">
+                        {job.jobTitle}
+                      </Link>
+                      <Badge variant={job.interviewStage && isInterviewStage(job.interviewStage) ? interviewStageBadgeVariants[job.interviewStage] : 'default'}>
+                        {job.interviewStage && isInterviewStage(job.interviewStage)
+                          ? interviewStageLabels[job.interviewStage]
+                          : 'Not applied'}
+                      </Badge>
+                      <span className="text-xs text-slate-600 w-24 text-right">
+                        {new Date(job.dateFound).toLocaleDateString()}
+                      </span>
+                    </div>
+                  ))}
+              {company.trackedJobCount > trackedJobs.length && (
+                <p className="text-xs text-slate-500">
+                  Showing the {trackedJobs.length} tracked postings inside this company&apos;s most
+                  recent catalog listings. See all of them in{' '}
+                  <Link href={`/jobs?company_id=${company.id}`} className="text-blue-600 underline">My Jobs</Link>.
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>

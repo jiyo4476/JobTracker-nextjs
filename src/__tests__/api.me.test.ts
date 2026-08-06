@@ -18,6 +18,7 @@ function resolveAs(user: {
   id: number
   email?: string | null
   displayName?: string | null
+  isAdmin?: boolean
 }) {
   vi.mocked(resolveRequestUser).mockResolvedValue({
     ok: true,
@@ -27,7 +28,7 @@ function resolveAs(user: {
       subject: `sub-${user.id}`,
       email: user.email ?? null,
       displayName: user.displayName ?? null,
-      principal: {} as never,
+      principal: { isAdmin: user.isAdmin ?? false } as never,
     },
   })
 }
@@ -63,6 +64,7 @@ describe('GET /api/me', () => {
       user_id: 42,
       email: 'jane@example.com',
       display_name: 'Jane',
+      is_admin: false,
     })
   })
 
@@ -71,7 +73,36 @@ describe('GET /api/me', () => {
     const { GET } = await import('@/app/api/me/route')
     const res = await GET(makeReq())
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ user_id: 7, email: null, display_name: null })
+    expect(await res.json()).toEqual({
+      user_id: 7,
+      email: null,
+      display_name: null,
+      is_admin: false,
+    })
+  })
+
+  it('mirrors the verified catalog-admin claim so the UI can gate admin affordances', async () => {
+    resolveAs({ id: 3, isAdmin: true })
+    const { GET } = await import('@/app/api/me/route')
+    const res = await GET(makeReq())
+    expect(await res.json()).toMatchObject({ user_id: 3, is_admin: true })
+  })
+
+  it('defaults is_admin to false when the principal carries no admin claim', async () => {
+    vi.mocked(resolveRequestUser).mockResolvedValue({
+      ok: true,
+      user: {
+        id: 11,
+        issuer: 'https://issuer.example/',
+        subject: 'sub-11',
+        email: null,
+        displayName: null,
+        principal: {} as never,
+      },
+    })
+    const { GET } = await import('@/app/api/me/route')
+    const res = await GET(makeReq())
+    expect(await res.json()).toMatchObject({ is_admin: false })
   })
 
   it('never leaks the OAuth identity keys, principal, or token', async () => {
@@ -79,7 +110,7 @@ describe('GET /api/me', () => {
     const { GET } = await import('@/app/api/me/route')
     const res = await GET(makeReq())
     const body = await res.json()
-    expect(Object.keys(body).sort()).toEqual(['display_name', 'email', 'user_id'])
+    expect(Object.keys(body).sort()).toEqual(['display_name', 'email', 'is_admin', 'user_id'])
     // The verified (issuer, subject) identity keys and principal are server-only.
     expect(body).not.toHaveProperty('issuer')
     expect(body).not.toHaveProperty('subject')
